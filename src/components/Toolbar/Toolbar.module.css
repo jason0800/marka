@@ -1,22 +1,22 @@
 .toolbar {
     width: 60px;
-    background: #252525;
-    border-right: 1px solid #333;
+    background: var(--bg-secondary);
+    border-right: 1px solid var(--border-color);
     display: flex;
     flex-direction: column;
     align-items: center;
     padding-top: 16px;
-    gap: 16px;
+    gap: 12px;
     z-index: 10;
 }
 
 .toolButton {
-    width: 40px;
-    height: 40px;
-    border-radius: 8px;
+    width: 36px;
+    height: 36px;
+    border-radius: 6px;
     border: none;
     background: transparent;
-    color: #aaa;
+    color: var(--text-secondary);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -24,13 +24,12 @@
 }
 
 .toolButton:hover {
-    background: rgba(255, 255, 255, 0.1);
-    color: #fff;
+    background: var(--btn-hover);
+    color: var(--text-primary);
 }
 
 .active {
-    background: #3498db !important;
-    /* Primary color */
-    color: #fff !important;
-    box-shadow: 0 0 10px rgba(52, 152, 219, 0.5);
+    background: var(--primary-color) !important;
+    color: var(--text-active) !important;
+    box-shadow: 0 0 10px rgba(var(--primary-color-rgb), 0.5);
 }

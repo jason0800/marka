@@ -3,7 +3,7 @@
     height: 100%;
     overflow: hidden;
     /* We handle pan manually via transform, so hide native scrollbars */
-    background-color: #333;
+    background-color: var(--viewer-bg);
     /* Dark background behind pages */
     cursor: grab;
     position: relative;
@@ -22,8 +22,9 @@
     will-change: transform;
     display: flex;
     flex-direction: column;
-    align-items: center;
-    /* Center pages horizontally */
+    /* align-items: center; removed to prevent layout shift during zoom */
+    width: fit-content;
+    /* Ensure it wraps content tightly so transform-origin 0 0 works */
     min-width: 100%;
     /* Ensure centering works */
     padding: 50px;

@@ -6,11 +6,25 @@ import RightPanel from './components/Panels/RightPanel';
 import PersistenceManager from './components/Persistence/PersistenceManager';
 import html2canvas from 'html2canvas';
 import useAppStore from './stores/useAppStore';
+import TopMenu from './components/TopMenu/TopMenu';
 import './App.css';
 
 function App() {
   const [pdfDocument, setPdfDocument] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
+  const { theme } = useAppStore();
+
+  // Apply theme globally to body
+  useState(() => {
+    // Initial set
+    document.documentElement.setAttribute('data-theme', useAppStore.getState().theme);
+  }, []);
+
+  // Update when theme changes
+  const currentTheme = useAppStore(s => s.theme);
+  if (document.documentElement.getAttribute('data-theme') !== currentTheme) {
+    document.documentElement.setAttribute('data-theme', currentTheme);
+  }
 
   const handleFileUpload = async (e) => {
     const file = e.target.files[0];
@@ -76,16 +90,9 @@ function App() {
   };
 
   return (
-    <div className="app-container">
+    <div className="app-container" data-theme={useAppStore(s => s.theme)}>
       <PersistenceManager projectId="default" />
-      <header className="top-bar">
-        <h1 style={{ fontSize: '1.2rem', fontWeight: 600, marginRight: '20px' }}>Scalario</h1>
-        <button onClick={handleExportPNG} style={{ marginRight: '10px', padding: '4px 8px', background: '#444', border: '1px solid #555', color: '#fff', borderRadius: '4px' }}>Export PNG</button>
-        <button onClick={handleExportCSV} style={{ padding: '4px 8px', background: '#444', border: '1px solid #555', color: '#fff', borderRadius: '4px' }}>Export CSV</button>
-        <div style={{ marginLeft: 'auto' }}>
-          <input type="file" accept="application/pdf" onChange={handleFileUpload} />
-        </div>
-      </header>
+      <TopMenu setPdfDocument={setPdfDocument} setIsLoading={setIsLoading} />
       <div className="workspace-container">
         <Toolbar />
         <main className="main-content">

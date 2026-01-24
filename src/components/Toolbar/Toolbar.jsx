@@ -1,17 +1,27 @@
-import { MousePointer2, Hand, Ruler, Scaling, Square, Milestone, Hash, MessageSquare } from 'lucide-react';
+import {
+    MousePointer2, Hand, Ruler, Scaling, Square, Milestone, Hash, MessageSquare,
+    Box, Circle, Minus, ArrowRight
+} from 'lucide-react';
 import useAppStore from '../../stores/useAppStore';
 import classes from './Toolbar.module.css';
 import { useEffect } from 'react';
 
 const TOOLS = [
-    { id: 'select', icon: MousePointer2, label: 'Select (1)', key: '1' },
-    { id: 'pan', icon: Hand, label: 'Pan (2)', key: '2' },
-    { id: 'calibrate', icon: Scaling, label: 'Calibrate (3)', key: '3' },
-    { id: 'length', icon: Ruler, label: 'Length (4)', key: '4' },
-    { id: 'area', icon: Square, label: 'Area (5)', key: '5' },
-    { id: 'perimeter', icon: Milestone, label: 'Perimeter (6)', key: '6' },
-    { id: 'count', icon: Hash, label: 'Count (7)', key: '7' },
-    { id: 'comment', icon: MessageSquare, label: 'Comment (8)', key: '8' },
+    { id: 'select', icon: MousePointer2, label: 'Select (V)', key: 'v' },
+    { id: 'pan', icon: Hand, label: 'Pan (H)', key: 'h' },
+    { id: 'calibrate', icon: Scaling, label: 'Calibrate (C)', key: 'c' },
+    { type: 'separator' },
+    { id: 'length', icon: Ruler, label: 'Length (L)', key: 'l' },
+    { id: 'area', icon: Square, label: 'Area (A)', key: 'a' },
+    { id: 'perimeter', icon: Milestone, label: 'Perimeter (P)', key: 'p' },
+    { id: 'count', icon: Hash, label: 'Count (N)', key: 'n' },
+    { type: 'separator' },
+    { id: 'rectangle', icon: Square, label: 'Rectangle (R)', key: 'r' },
+    { id: 'circle', icon: Circle, label: 'Circle (O)', key: 'o' },
+    { id: 'line', icon: Minus, label: 'Line (I)', key: 'i' },
+    { id: 'arrow', icon: ArrowRight, label: 'Arrow (Y)', key: 'y' },
+    { type: 'separator' },
+    { id: 'comment', icon: MessageSquare, label: 'Comment (M)', key: 'm' },
 ];
 
 const Toolbar = () => {
@@ -34,16 +44,21 @@ const Toolbar = () => {
 
     return (
         <aside className={classes.toolbar}>
-            {TOOLS.map((tool) => (
-                <button
-                    key={tool.id}
-                    className={`${classes.toolButton} ${activeTool === tool.id ? classes.active : ''}`}
-                    onClick={() => setActiveTool(tool.id)}
-                    title={tool.label}
-                >
-                    <tool.icon size={24} />
-                </button>
-            ))}
+            {TOOLS.map((tool, i) => {
+                if (tool.type === 'separator') {
+                    return <div key={i} style={{ width: '60%', height: '1px', background: 'var(--border-color)', margin: '4px 0' }} />;
+                }
+                return (
+                    <button
+                        key={tool.id}
+                        className={`${classes.toolButton} ${activeTool === tool.id ? classes.active : ''}`}
+                        onClick={() => setActiveTool(tool.id)}
+                        title={tool.label}
+                    >
+                        <tool.icon size={20} />
+                    </button>
+                );
+            })}
         </aside>
     );
 };

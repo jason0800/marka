@@ -1,11 +1,10 @@
-/* App.css cleared for Scalario styles */
 .app-container {
   display: flex;
   flex-direction: column;
   width: 100vw;
   height: 100vh;
-  background: #1e1e1e;
-  color: #fff;
+  background: var(--bg-color);
+  color: var(--text-primary);
 }
 
 .top-bar {
@@ -29,7 +28,8 @@
   display: flex;
   overflow: hidden;
   position: relative;
-  background: #111;
+  background: var(--bg-color);
+  /* Was #111 */
 }
 
 .pdf-viewer-placeholder {

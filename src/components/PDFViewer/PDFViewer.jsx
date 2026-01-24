@@ -1,109 +1,203 @@
-import { useEffect, useRef, useState } from 'react';
-import useAppStore from '../../stores/useAppStore';
-import PDFPage from './PDFPage';
-import classes from './PDFViewer.module.css';
+import { useEffect, useRef, useState } from "react";
+import useAppStore from "../../stores/useAppStore";
+import PDFPage from "./PDFPage";
+import classes from "./PDFViewer.module.css";
 
 const PDFViewer = ({ document }) => {
-    const { zoom, pan, setZoom, setPan, activeTool } = useAppStore();
-    const containerRef = useRef(null);
-    const [pages, setPages] = useState([]);
+    // --- Store (NEW viewport-based store) ---
+    const { viewport, setViewport, activeTool } = useAppStore();
+    const zoom = viewport.scale;
+    const pan = { x: viewport.x, y: viewport.y };
+
+    // --- Local Visual State (smooth zoom) ---
+    const [visualScale, setVisualScale] = useState(1.0);
+    const [renderScale, setRenderScale] = useState(1.0);
+
+    // --- Drag State ---
     const [isDragging, setIsDragging] = useState(false);
     const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
 
+    // --- Space key state (MouseEvent doesn't have e.code) ---
+    const spaceDownRef = useRef(false);
+
+    // --- Refs ---
+    const containerRef = useRef(null);
+    const renderTimeoutRef = useRef(null);
+
+    // --- Pages State ---
+    const [pages, setPages] = useState([]);
+
+    // Load Pages + initial centering
     useEffect(() => {
         if (!document) return;
 
         const loadPages = async () => {
             const numPages = document.numPages;
             const loadedPages = [];
+
             for (let i = 1; i <= numPages; i++) {
                 const page = await document.getPage(i);
                 loadedPages.push(page);
             }
+
             setPages(loadedPages);
+
+            // Initial centering (uses store viewport scale)
+            if (containerRef.current && loadedPages.length > 0) {
+                const page0 = loadedPages[0];
+                const scale0 = useAppStore.getState().viewport.scale;
+                const vp0 = page0.getViewport({ scale: scale0 });
+
+                const containerWidth = containerRef.current.clientWidth;
+
+                const initialPanX = Math.max(0, (containerWidth - vp0.width) / 2);
+                const initialPanY = 20;
+
+                setViewport((v) => ({ ...v, x: initialPanX, y: initialPanY }));
+            }
         };
 
         loadPages();
-    }, [document]);
+    }, [document, setViewport]);
 
-    const handleWheel = (e) => {
-        if (e.ctrlKey || e.metaKey) {
-            e.preventDefault();
-            const zoomFactor = -e.deltaY * 0.002;
-            const newZoom = Math.min(Math.max(0.1, zoom + zoomFactor), 5.0);
-            setZoom(newZoom);
-        } else {
-            // Normal scroll if not zooming? 
-            // Or if we implementing "Space+Drag" for pan, maybe wheel shouldn't scroll?
-            // User requirements: "Smooth zoom (mouse wheel) and pan (space + drag)"
-            // Usually wheel zooms, or wheel scrolls vertical. 
-            // Photopea: Wheel = scroll vertical, Alt+Wheel = scroll horizontal, Ctrl+Wheel = Zoom
-            // "Smooth zoom (mouse wheel)" -> Implies Wheel zooms directly? 
-            // Let's implement Wheel = Zoom for simplicity if requested, or Ctrl+Wheel.
-            // Prompt says "Smooth zoom (mouse wheel)". I will assume direct wheel or standard Ctrl+Wheel. 
-            // Most apps use Ctrl+Wheel. Direct wheel prevents scrolling. 
-            // I will implement Ctrl+Wheel for zoom, and Wheel for Pan Y / Shift+Wheel Pan X unless dragging.
+    // Initialize local scales from store once
+    useEffect(() => {
+        const s = useAppStore.getState().viewport.scale;
+        setVisualScale(s);
+        setRenderScale(s);
+    }, []);
 
-            // Actually adhering literally: "Smooth zoom (mouse wheel)"
-            // I'll stick to Ctrl+Wheel to be safe for usability, but maybe add a toggle.
-            // For now: Ctrl+Wheel.
-        }
-    };
+    // Keep a ref in sync for wheel math (avoid stale closures)
+    const stateRef = useRef({ visualScale: 1.0, pan: { x: 0, y: 0 } });
+    useEffect(() => {
+        stateRef.current = { visualScale, pan };
+    }, [visualScale, pan]);
 
-    // Custom Zoom handler to ensure it works without Ctrl if preferred, 
-    // but let's stick to standard patterns first.
+    // Space key tracking (global)
+    useEffect(() => {
+        const onKeyDown = (e) => {
+            if (e.code === "Space") spaceDownRef.current = true;
+        };
+        const onKeyUp = (e) => {
+            if (e.code === "Space") spaceDownRef.current = false;
+        };
+
+        window.addEventListener("keydown", onKeyDown);
+        window.addEventListener("keyup", onKeyUp);
+        return () => {
+            window.removeEventListener("keydown", onKeyDown);
+            window.removeEventListener("keyup", onKeyUp);
+        };
+    }, []);
+
+    // Wheel listener (non-passive so we can preventDefault)
+    useEffect(() => {
+        const container = containerRef.current;
+        if (!container) return;
+
+        const onWheel = (e) => {
+            // Your rule: Ctrl/Meta OR NOT Shift => zoom
+            if (e.ctrlKey || e.metaKey || !e.shiftKey) {
+                e.preventDefault();
+
+                const rect = container.getBoundingClientRect();
+                const mouseX = e.clientX - rect.left;
+                const mouseY = e.clientY - rect.top;
+
+                const { visualScale: currentScale, pan: currentPan } = stateRef.current;
+
+                // screen -> world
+                const worldX = (mouseX - currentPan.x) / currentScale;
+                const worldY = (mouseY - currentPan.y) / currentScale;
+
+                // additive zoom (kept from your code)
+                const zoomFactor = -e.deltaY * 0.002 * currentScale;
+                const newScale = Math.min(Math.max(0.1, currentScale + zoomFactor), 8.0);
+
+                // world -> screen (keep cursor point stable)
+                const newPanX = mouseX - worldX * newScale;
+                const newPanY = mouseY - worldY * newScale;
+
+                // Smooth CSS zoom immediately
+                setVisualScale(newScale);
+
+                // Update pan atomically in store
+                setViewport((v) => ({ ...v, x: newPanX, y: newPanY }));
+
+                // Debounce expensive PDF render
+                if (renderTimeoutRef.current) clearTimeout(renderTimeoutRef.current);
+                renderTimeoutRef.current = setTimeout(() => {
+                    setRenderScale(newScale);
+                    // Commit scale to store
+                    setViewport((v) => ({ ...v, scale: newScale }));
+                }, 300);
+            }
+        };
+
+        container.addEventListener("wheel", onWheel, { passive: false });
+        return () => {
+            container.removeEventListener("wheel", onWheel);
+        };
+    }, [setViewport]);
 
     const handleMouseDown = (e) => {
-        // Space + Drag OR Middle Mouse OR Pan Tool
-        if (e.button === 1 || (e.code === 'Space') || activeTool === 'pan' || e.shiftKey) { // Simplified trigger
+        const shouldPan =
+            e.button === 1 || // middle mouse
+            spaceDownRef.current || // space + drag
+            activeTool === "pan" ||
+            (e.shiftKey && activeTool !== "select"); // your extra rule
+
+        if (shouldPan) {
             setIsDragging(true);
             setDragStart({ x: e.clientX - pan.x, y: e.clientY - pan.y });
-            e.preventDefault(); // Prevent text selection
+            e.preventDefault();
         }
-        // Also handle Space key global detection if needed, but here simple check
     };
 
     const handleMouseMove = (e) => {
-        if (isDragging) {
-            setPan({
-                x: e.clientX - dragStart.x,
-                y: e.clientY - dragStart.y
-            });
-        }
+        if (!isDragging) return;
+
+        const nx = e.clientX - dragStart.x;
+        const ny = e.clientY - dragStart.y;
+
+        setViewport((v) => ({ ...v, x: nx, y: ny }));
     };
 
     const handleMouseUp = () => {
         setIsDragging(false);
     };
 
-    // Global space key listener to toggle cursor? 
-    // For MVP, just use the event in the container
+    // CSS bridge between fast visual zoom and slower PDF render zoom
+    const cssScale = renderScale === 0 ? 1 : visualScale / renderScale;
 
     return (
         <div
             className={classes.viewerContainer}
             ref={containerRef}
-            onWheel={handleWheel}
             onMouseDown={handleMouseDown}
             onMouseMove={handleMouseMove}
             onMouseUp={handleMouseUp}
             onMouseLeave={handleMouseUp}
         >
+            {/* OUTER: pan only (never scaled) */}
             <div
                 className={classes.contentLayer}
                 style={{
-                    transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
+                    transform: `translate(${pan.x}px, ${pan.y}px)`,
                     transformOrigin: '0 0'
                 }}
             >
-                {pages.map((page, index) => (
-                    <PDFPage key={index} page={page} scale={1.0} />
-                    // Note: scale passed to PDFPage is content render scale. 
-                    // If we want crisp text at high zoom, we should pass 'zoom' here?
-                    // But that triggers re-render. 
-                    // For MVP performance, let's keep render scale 1.0 or 1.5 and use transform.
-                    // Or dynamic: Use a debounced zoom value for rendering.
-                ))}
+                {/* INNER: visual-only scale bridge */}
+                <div
+                    style={{
+                        transform: `scale(${cssScale})`,
+                        transformOrigin: '0 0'
+                    }}
+                >
+                    {pages.map((page, index) => (
+                        <PDFPage key={index} page={page} scale={renderScale} />
+                    ))}
+                </div>
             </div>
         </div>
     );
