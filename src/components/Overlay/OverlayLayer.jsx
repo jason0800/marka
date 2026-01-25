@@ -36,26 +36,26 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0 }) => {
     const calibrationScale = calibrationScales[pageIndex] || 1.0;
     const unit = pageUnits[pageIndex] || 'px';
 
+    // --- Coordinate System ---
+    // We set viewBox to the UN-SCALED Page Dimensions (PDF Points).
+    // The SVG 'width' and 'height' props are SCALED (Physical Pixels).
+    // This lets SVG handle the visual scaling automatically.
+    // getScreenCTM() naturally maps Screen -> viewBox coordinates.
+    const unscaledViewport = page.getViewport({ scale: 1.0 });
+    const viewBox = `0 0 ${unscaledViewport.width} ${unscaledViewport.height}`;
+
+    // Helper: Stroke width should visually remain constant (~2px)
+    // Formula: DesiredPixels / viewScale
+    const dynamicStroke = 2 / viewScale;
+    const handleRadius = 5 / viewScale;
+
     const getPagePoint = (e, svg) => {
         const point = svg.createSVGPoint();
         point.x = e.clientX;
         point.y = e.clientY;
         const matrix = svg.getScreenCTM().inverse();
-        const p = point.matrixTransform(matrix);
-        // Correct for viewScale?
-        // If SVG is scaled by `viewScale`, then internal points are 1:1 with PDF points (72 DPI).
-        // If SVG is NOT scaled but sized `width` (zoomed), then getScreenCTM handles it?
-        // Let's rely on getScreenCTM which maps screen pixels to SVG local coords.
-        // If we set SVG width/height to zoomed pixels, but viewBox to 0 0 PDFp PDFp, then internal units are PDF points.
-        // BUT we are NOT using viewBox in OverlayLayer currently. We set width/height.
-        // So internal units are Pixels.
-        // We SHOULD use a group transform to scale logic?
-        // OR we just use getScreenCTM which gives us "Zoomed Pixels". And we store "Zoomed Pixels"?
-        // NO. Measurements/Shapes must be Zoom Invariant (Stored in PDF Points).
-        // Solution: Apply `scale(${ viewScale })` to a Group wrapping everything.
-        // Then `handleMouseDown` etc need to divide by `viewScale`.
-
-        return { x: p.x / viewScale, y: p.y / viewScale };
+        return point.matrixTransform(matrix);
+        // Correct! Point is now in PDF Points (viewBox units).
     };
 
     const finishDrawing = () => {
@@ -89,10 +89,12 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0 }) => {
 
 
     // Selection & Dragging State
-    // const [selectedIds, setSelectedIds] = useState([]); // Removed local
-    const [selectionStart, setSelectionStart] = useState(null); // For box selection
-    const [dragStart, setDragStart] = useState(null); // For moving items
+    const [selectionStart, setSelectionStart] = useState(null);
+    const [dragStart, setDragStart] = useState(null);
     const [isDraggingItems, setIsDraggingItems] = useState(false);
+
+    // Resize State
+    const [resizingState, setResizingState] = useState(null); // { id, handle: 'nw'|'n'|'ne'..., startShape, startPoint }
 
     const handleMouseDown = (e) => {
         if (e.target.tagName === 'TEXTAREA' || e.target.closest('.foreignObject')) return;
@@ -101,20 +103,24 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0 }) => {
         const point = getPagePoint(e, svgRef.current);
         const isShift = e.shiftKey;
 
+        // Check Resize Handlers First
+        const resizeHandle = e.target.getAttribute('data-resize-handle');
+        const resizeId = e.target.getAttribute('data-resize-id');
+        if (resizeHandle && resizeId) {
+            const shape = shapes.find(s => s.id === resizeId);
+            if (shape) {
+                setResizingState({
+                    id: resizeId,
+                    handle: resizeHandle,
+                    startShape: { ...shape },
+                    startPoint: point
+                });
+                return;
+            }
+        }
+
         // --- Select Tool Logic ---
         if (activeTool === 'select') {
-            // Check if clicked on an existing shape
-            // (Simple hit testing for MVP: check if point inside bounding box of known shapes)
-            // Ideally we use event delegation or complex hit test. 
-            // Here, we can rely on SVG events if we attach handlers to shapes, OR do math.
-            // Let's do math for "Canvas" feel, or check event target?
-            // Checking event target is easier if shapes have pointer-events.
-
-            // Actually, let's use the event target to see if we clicked a shape.
-            // But strict requirement: "incorporate selection features from Orbis... drag select".
-            // So we need background click = drag select. Shape click = select/drag shape.
-
-            // Identifying shape from target:
             const targetShapeId = e.target.getAttribute('data-shape-id');
             const targetMeasId = e.target.getAttribute('data-meas-id');
 
@@ -123,7 +129,6 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0 }) => {
                 const isSelected = selectedIds.includes(id);
 
                 if (isShift) {
-                    // Toggle selection
                     setSelectedIds(prev => isSelected ? prev.filter(i => i !== id) : [...prev, id]);
                 } else {
                     if (!isSelected) {
@@ -131,12 +136,10 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0 }) => {
                     }
                 }
 
-                // Start Dragging
                 setDragStart(point);
                 setIsDraggingItems(true);
             } else {
-                // Background click -> Start Box Selection
-                if (!isShift) setSelectedIds([]); // Clear if not shift
+                if (!isShift) setSelectedIds([]);
                 setSelectionStart(point);
             }
             return;
@@ -147,15 +150,12 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0 }) => {
             setIsDrawing(true);
             setShapeStart(point);
             setCursor(point);
-            // Auto-deselect when starting new drawing
             setSelectedIds([]);
             return;
         }
 
         // --- Measurement Tools ---
         if (['length', 'calibrate', 'area', 'perimeter', 'count', 'comment'].includes(activeTool)) {
-            // ... (Keep existing Logic, ensure drawingPoints updated)
-            // Copy-paste existing logic here for brevity in replacement, or just adapt:
             if (activeTool === 'comment') {
                 if (!isDrawing) { setIsDrawing(true); setDrawingPoints([point]); }
             } else if (['length', 'calibrate'].includes(activeTool)) {
@@ -163,7 +163,6 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0 }) => {
                 else {
                     const start = drawingPoints[0];
                     if (activeTool === 'length') addMeasurement({ id: Date.now().toString(), type: 'length', pageIndex, points: [start, point] });
-                    // Calibrate logic omitted for brevity, assume similar flow or separate function
                     setIsDrawing(false); setDrawingPoints([]);
                 }
             } else if (['area', 'perimeter'].includes(activeTool)) {
@@ -180,21 +179,103 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0 }) => {
         const point = getPagePoint(e, svgRef.current);
         setCursor(point);
 
+        // --- Resizing Logic ---
+        if (resizingState) {
+            const { id, handle, startShape, startPoint } = resizingState;
+            const dx = point.x - startPoint.x;
+            const dy = point.y - startPoint.y;
+
+            if (startShape.type === "line" || startShape.type === "arrow") {
+                // Line logic (start/end) — keep as-is
+                let newStart = { ...startShape.start };
+                let newEnd = { ...startShape.end };
+                if (handle === "start") {
+                    newStart.x += dx;
+                    newStart.y += dy;
+                }
+                if (handle === "end") {
+                    newEnd.x += dx;
+                    newEnd.y += dy;
+                }
+                updateShape(id, { start: newStart, end: newEnd });
+            } else {
+                // Box logic (x, y, w, h) with Rotation — UPDATED to match your “correct” ShapeNode math
+                const { x: startX, y: startY, width: w0, height: h0, rotation: rot0 = 0 } = startShape;
+
+                // Rotation handle (keep same behavior)
+                if (handle === "rotate") {
+                    const cx = startX + w0 / 2;
+                    const cy = startY + h0 / 2;
+                    const currentAngle = (Math.atan2(point.y - cy, point.x - cx) * 180) / Math.PI;
+                    let newRot = currentAngle + 90;
+                    if (e.shiftKey) newRot = Math.round(newRot / 15) * 15;
+                    updateShape(id, { rotation: newRot });
+                    return;
+                }
+
+                // Project delta into local *unrotated* space using -rotation
+                const rotRad = (rot0 * Math.PI) / 180;
+                const cos = Math.cos(-rotRad);
+                const sin = Math.sin(-rotRad);
+
+                const localDx = dx * cos - dy * sin;
+                const localDy = dx * sin + dy * cos;
+
+                // Local bounds (start): L=0, T=0, R=w0, B=h0
+                let newL = 0,
+                    newT = 0,
+                    newR = w0,
+                    newB = h0;
+
+                // Apply delta based on handle direction
+                if (handle.includes("n")) newT += localDy;
+                if (handle.includes("s")) newB += localDy;
+                if (handle.includes("w")) newL += localDx;
+                if (handle.includes("e")) newR += localDx;
+
+                // Normalize (flip support)
+                const finalL = Math.min(newL, newR);
+                const finalR = Math.max(newL, newR);
+                const finalT = Math.min(newT, newB);
+                const finalB = Math.max(newT, newB);
+
+                const finalW = Math.max(1, finalR - finalL);
+                const finalH = Math.max(1, finalB - finalT);
+
+                // New local center
+                const midX = (finalL + finalR) / 2;
+                const midY = (finalT + finalB) / 2;
+
+                // Offset from original local center (w0/2, h0/2)
+                const diffX = midX - w0 / 2;
+                const diffY = midY - h0 / 2;
+
+                // Rotate that offset back to global space using +rotation
+                // We already have cos/sin for -rot, so:
+                // cos(+rot) = cos(-rot) ; sin(+rot) = -sin(-rot)
+                const posCos = cos;
+                const posSin = -sin;
+
+                const globalDiffX = diffX * posCos - diffY * posSin;
+                const globalDiffY = diffX * posSin + diffY * posCos;
+
+                const newCenterX = startX + w0 / 2 + globalDiffX;
+                const newCenterY = startY + h0 / 2 + globalDiffY;
+
+                const finalX = newCenterX - finalW / 2;
+                const finalY = newCenterY - finalH / 2;
+
+                updateShape(id, { x: finalX, y: finalY, width: finalW, height: finalH });
+            }
+            return;
+        }
+
         if (activeTool === 'select') {
             if (isDraggingItems && dragStart && selectedIds.length > 0) {
-                // Determine Delta
                 const dx = point.x - dragStart.x;
                 const dy = point.y - dragStart.y;
 
-                // Move Shapes
-                // We need to update store via 'updateShape' or 'updateMeasurement'
-                // But doing this on every render frame is expensive usually. 
-                // For MVP React state: fine.
-                // We should batch updates or use local state overlay until mouse up?
-                // Let's direct update for simplicity as requested "incorporate features".
-
                 selectedIds.forEach(id => {
-                    // Try finding in shapes
                     const shape = shapes.find(s => s.id === id);
                     if (shape) {
                         if (shape.type === 'line' || shape.type === 'arrow') {
@@ -206,19 +287,20 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0 }) => {
                             updateShape(id, { x: shape.x + dx, y: shape.y + dy });
                         }
                     }
-                    // Try measurements (if draggable)
-                    // ... (omitted for now unless requested, assume shapes mostly)
                 });
-
-                setDragStart(point); // Reset drag start to current (incremental)
+                setDragStart(point);
             }
         }
     };
 
     const handleMouseUp = (e) => {
+        if (resizingState) {
+            setResizingState(null);
+            return;
+        }
+
         if (activeTool === 'select') {
             if (selectionStart) {
-                // Finalize Box Selection
                 const point = getPagePoint(e, svgRef.current);
                 const x = Math.min(selectionStart.x, point.x);
                 const y = Math.min(selectionStart.y, point.y);
@@ -227,10 +309,7 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0 }) => {
 
                 if (w > 2 && h > 2) {
                     const newSelected = [];
-                    // Check intersection with all page shapes
-                    // Simple Box-Box intersection
                     pageShapes.forEach(s => {
-                        // Get shape bounding box
                         let sb = { x: 0, y: 0, w: 0, h: 0 };
                         if (s.type === 'line' || s.type === 'arrow') {
                             sb.x = Math.min(s.start.x, s.end.x);
@@ -240,18 +319,13 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0 }) => {
                         } else {
                             sb.x = s.x; sb.y = s.y; sb.w = s.width; sb.h = s.height;
                         }
-
-                        // Intersection Test
                         if (x < sb.x + sb.w && x + w > sb.x && y < sb.y + sb.h && y + h > sb.y) {
                             newSelected.push(s.id);
                         }
                     });
 
-                    if (e.shiftKey) {
-                        setSelectedIds(prev => [...new Set([...prev, ...newSelected])]);
-                    } else {
-                        setSelectedIds(newSelected);
-                    }
+                    if (e.shiftKey) setSelectedIds(prev => [...new Set([...prev, ...newSelected])]);
+                    else setSelectedIds(newSelected);
                 }
                 setSelectionStart(null);
             }
@@ -259,22 +333,28 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0 }) => {
             setDragStart(null);
         }
 
-        // ... (Existing Draw/Measure cleanup)
-        // Re-implement or call existing "finishDrawing" check logic if needed
+        // Draw Finalize Logic
         if (['rectangle', 'circle', 'line', 'arrow'].includes(activeTool) && isDrawing && shapeStart) {
             const point = getPagePoint(e, svgRef.current);
             if (calculateDistance(shapeStart, point) > 5) {
-                // Create Shape Logic (Same as before)
                 let shape = {
                     id: Date.now().toString(),
                     type: activeTool,
                     pageIndex,
                     stroke: 'var(--shape-stroke, #000)',
-                    strokeWidth: 2,
+                    strokeWidth: 2, // Standard width, visual compensation handled by dynamicStroke if needed or just scaling
+                    // Actually, if we use viewBox, strokeWidth=2 is 2 Points.
+                    // This is ~2/72 inch. It will scale with zoom.
+                    // If user wants "Hairline", we use vector-effect.
+                    // Let's stick to standard scaling strokes for WYSIWYG printing?
+                    // User said "objects are transforming", likely meant shifting.
+                    // Let's keep strokes scalable for now, or fixed?
+                    // Usually PDF annotations scale stroke.
                     fill: 'none',
-                    opacity: 1
+                    opacity: 1,
+                    rotation: 0
                 };
-                // ... populate shape props ...
+
                 if (activeTool === 'line' || activeTool === 'arrow') {
                     shape.start = shapeStart; shape.end = point;
                 } else {
@@ -289,9 +369,8 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0 }) => {
             setIsDrawing(false);
             setShapeStart(null);
         }
-
+        // ... (Keep comment logic)
         if (activeTool === 'comment' && isDrawing) {
-            // ... (Same as before)
             const point = getPagePoint(e, svgRef.current);
             const tip = drawingPoints[0];
             const id = Date.now().toString();
@@ -303,52 +382,137 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0 }) => {
     const pageMeasurements = measurements.filter(m => m.pageIndex === pageIndex);
     const pageShapes = (shapes || []).filter(s => s.pageIndex === pageIndex);
 
-    // Shape Render Helper
+    const renderSelectionFrame = (s) => {
+        const isLine = s.type === 'line' || s.type === 'arrow';
+
+        // ORBIS HANDLES: Square, 8x8px visual (scaled by viewScale)
+        // Green fill #b4e6a0, Dark Green Border #3a6b24
+        const handleSize = 8 / viewScale;
+        const half = handleSize / 2;
+
+        const styleCommon = {
+            fill: "#b4e6a0",
+            stroke: "#3a6b24",
+            strokeWidth: 1 / viewScale,
+        };
+
+        const renderHandle = (x, y, cursor, hName) => (
+            <rect
+                key={hName}
+                x={x - half}
+                y={y - half}
+                width={handleSize}
+                height={handleSize}
+                {...styleCommon}
+                cursor={cursor}
+                data-resize-id={s.id}
+                data-resize-handle={hName}
+            />
+        );
+
+        const handles = [];
+
+        if (isLine) {
+            handles.push(renderHandle(s.start.x, s.start.y, "move", "start"));
+            handles.push(renderHandle(s.end.x, s.end.y, "move", "end"));
+        } else {
+            const { width: w, height: h } = s;
+            // Bounding Box (unscaled stroke)
+            handles.push(<rect key="frame" x={0} y={0} width={w} height={h} fill="none" stroke="var(--primary-color)" strokeWidth={1 / viewScale} pointerEvents="none" vectorEffect="non-scaling-stroke" />);
+
+            // 8 Resize Handles
+            handles.push(renderHandle(0, 0, "nw-resize", "nw"));
+            handles.push(renderHandle(w / 2, 0, "n-resize", "n"));
+            handles.push(renderHandle(w, 0, "ne-resize", "ne"));
+            handles.push(renderHandle(w, h / 2, "e-resize", "e"));
+            handles.push(renderHandle(w, h, "se-resize", "se"));
+            handles.push(renderHandle(w / 2, h, "s-resize", "s"));
+            handles.push(renderHandle(0, h, "sw-resize", "sw"));
+            handles.push(renderHandle(0, h / 2, "w-resize", "w"));
+
+            // Rotation Handle
+            // Circle, top center, offset by 20px visual
+            const rotOffset = 20 / viewScale;
+            handles.push(
+                <circle
+                    key="rotate"
+                    cx={w / 2}
+                    cy={-rotOffset}
+                    r={4 / viewScale} // 8px diameter
+                    fill="#b4e6a0"
+                    stroke="#3a6b24"
+                    strokeWidth={1 / viewScale}
+                    cursor="grab"
+                    data-resize-id={s.id}
+                    data-resize-handle="rotate"
+                />
+            );
+        }
+
+        return <g>{handles}</g>;
+    };
+
     const renderShape = (s) => {
         const isSelected = selectedIds.includes(s.id);
         const style = {
-            stroke: isSelected ? 'var(--primary-color)' : s.stroke,
-            strokeWidth: isSelected ? Math.max(s.strokeWidth, 3) : s.strokeWidth,
+            stroke: s.stroke,
+            strokeWidth: s.strokeWidth, // Let it scale? Yes.
             fill: s.fill,
             opacity: s.opacity,
-            vectorEffect: 'non-scaling-stroke',
             cursor: activeTool === 'select' ? 'move' : 'default',
-            pointerEvents: 'all' // Ensure we can click it
+            pointerEvents: 'all'
         };
 
-        const props = {
-            'data-shape-id': s.id,
-            ...style
-        };
+        const props = { 'data-shape-id': s.id, ...style };
 
-        if (s.type === 'rectangle') {
-            return <rect key={s.id} x={s.x} y={s.y} width={s.width} height={s.height} {...props} />;
+        // ... (Render logic same mostly)
+        // Note: vector-effect="non-scaling-stroke" removed to allow print-accurate scaling if desired.
+        // Or keep it? If zoom in, stroke stays thin?
+        // User probably wants WYSIWYG. Line width 2 = 2 points = 1/36 inch. 
+        // If zoom in, it should look thick.
+        // So NO vector-effect.
+
+        let elem = null;
+        if (s.type === 'rectangle') elem = <rect x={0} y={0} width={s.width} height={s.height} {...props} />;
+        else if (s.type === 'circle') {
+            const cx = s.width / 2;
+            const cy = s.height / 2;
+            elem = <ellipse cx={cx} cy={cy} rx={s.width / 2} ry={s.height / 2} {...props} />;
         }
-        if (s.type === 'circle') {
-            const cx = s.x + s.width / 2;
-            const cy = s.y + s.height / 2;
-            const rx = s.width / 2;
-            const ry = s.height / 2;
-            return <ellipse key={s.id} cx={cx} cy={cy} rx={rx} ry={ry} {...props} />;
-        }
-        if (s.type === 'line') {
-            return <line key={s.id} x1={s.start.x} y1={s.start.y} x2={s.end.x} y2={s.end.y} {...props} strokeLinecap="round" />;
-        }
-        if (s.type === 'arrow') {
-            return (
-                <g key={s.id} data-shape-id={s.id}>
+        else if (s.type === 'line') elem = <line x1={s.start.x} y1={s.start.y} x2={s.end.x} y2={s.end.y} {...props} strokeLinecap="round" />;
+        else if (s.type === 'arrow') {
+            elem = (
+                <g data-shape-id={s.id}>
                     <defs>
                         <marker id={`arrow-${s.id}`} markerWidth="6" markerHeight="4" refX="5" refY="2" orient="auto">
                             <polygon points="0 0, 6 2, 0 4" fill={style.stroke} />
                         </marker>
                     </defs>
                     <line x1={s.start.x} y1={s.start.y} x2={s.end.x} y2={s.end.y} {...props} markerEnd={`url(#arrow-${s.id})`} strokeLinecap="round" />
-                    {/* Invisible hit line for easier selection */}
                     <line x1={s.start.x} y1={s.start.y} x2={s.end.x} y2={s.end.y} stroke="transparent" strokeWidth="15" pointerEvents="all" data-shape-id={s.id} />
                 </g>
             );
         }
-        return null;
+
+        // For Lines/Arrows, return directly (no rotation/group yet)
+        if (s.type === 'line' || s.type === 'arrow') {
+            return (
+                <g key={s.id}>
+                    {elem}
+                    {isSelected && renderSelectionFrame(s)}
+                </g>
+            );
+        }
+
+        // For Rect/Circle: Wrap in Group with Transform
+        const rotation = s.rotation || 0;
+
+        return (
+            <g key={s.id} transform={`translate(${s.x}, ${s.y}) rotate(${rotation}, ${s.width / 2}, ${s.height / 2})`}>
+                {elem}
+                {isSelected && renderSelectionFrame(s)}
+            </g>
+        );
     };
 
     return (
@@ -357,11 +521,11 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0 }) => {
             className={classes.overlaySvg}
             width={width}
             height={height}
+            viewBox={viewBox}
             onMouseDown={handleMouseDown}
             onMouseUp={handleMouseUp}
             onDoubleClick={() => finishDrawing()}
             onMouseMove={handleMouseMove}
-            style={{ width, height }}
         >
             {/* Shapes */}
             {pageShapes.map(renderShape)}
@@ -464,6 +628,21 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0 }) => {
                         <line x1={shapeStart.x} y1={shapeStart.y} x2={cursor.x} y2={cursor.y} stroke="var(--primary-color)" strokeWidth="2" strokeDasharray="5,5" />
                     )}
                 </g>
+            )}
+
+            {/* Selection Box */}
+            {selectionStart && cursor && activeTool === 'select' && (
+                <rect
+                    x={Math.min(selectionStart.x, cursor.x)}
+                    y={Math.min(selectionStart.y, cursor.y)}
+                    width={Math.abs(cursor.x - selectionStart.x)}
+                    height={Math.abs(cursor.y - selectionStart.y)}
+                    fill="rgba(0, 120, 215, 0.1)"
+                    stroke="rgba(0, 120, 215, 0.5)"
+                    strokeWidth="1"
+                    strokeDasharray="3,3"
+                    pointerEvents="none"
+                />
             )}
         </svg>
     );

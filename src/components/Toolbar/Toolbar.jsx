@@ -1,6 +1,6 @@
 import {
     MousePointer2, Hand, Ruler, Scaling, Square, Milestone, Hash, MessageSquare,
-    Box, Circle, Minus, ArrowRight
+    Box, Circle, Minus, ArrowRight, Pentagon, RectangleHorizontal
 } from 'lucide-react';
 import useAppStore from '../../stores/useAppStore';
 import classes from './Toolbar.module.css';
@@ -12,11 +12,11 @@ const TOOLS = [
     { id: 'calibrate', icon: Scaling, label: 'Calibrate (C)', key: 'c' },
     { type: 'separator' },
     { id: 'length', icon: Ruler, label: 'Length (L)', key: 'l' },
-    { id: 'area', icon: Square, label: 'Area (A)', key: 'a' },
+    { id: 'area', icon: Pentagon, label: 'Area (A)', key: 'a' },
     { id: 'perimeter', icon: Milestone, label: 'Perimeter (P)', key: 'p' },
     { id: 'count', icon: Hash, label: 'Count (N)', key: 'n' },
     { type: 'separator' },
-    { id: 'rectangle', icon: Square, label: 'Rectangle (R)', key: 'r' },
+    { id: 'rectangle', icon: RectangleHorizontal, label: 'Rectangle (R)', key: 'r' },
     { id: 'circle', icon: Circle, label: 'Circle (O)', key: 'o' },
     { id: 'line', icon: Minus, label: 'Line (I)', key: 'i' },
     { id: 'arrow', icon: ArrowRight, label: 'Arrow (Y)', key: 'y' },

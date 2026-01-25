@@ -17,8 +17,9 @@ const PDFViewer = ({ document }) => {
     const [isDragging, setIsDragging] = useState(false);
     const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
 
-    // --- Space key state (MouseEvent doesn't have e.code) ---
+    // --- Space key state ---
     const spaceDownRef = useRef(false);
+    const [isSpaceDown, setIsSpaceDown] = useState(false);
 
     // --- Refs ---
     const containerRef = useRef(null);
@@ -76,10 +77,16 @@ const PDFViewer = ({ document }) => {
     // Space key tracking (global)
     useEffect(() => {
         const onKeyDown = (e) => {
-            if (e.code === "Space") spaceDownRef.current = true;
+            if (e.code === "Space" && !e.repeat) {
+                spaceDownRef.current = true;
+                setIsSpaceDown(true);
+            }
         };
         const onKeyUp = (e) => {
-            if (e.code === "Space") spaceDownRef.current = false;
+            if (e.code === "Space") {
+                spaceDownRef.current = false;
+                setIsSpaceDown(false);
+            }
         };
 
         window.addEventListener("keydown", onKeyDown);
@@ -170,6 +177,14 @@ const PDFViewer = ({ document }) => {
     // CSS bridge between fast visual zoom and slower PDF render zoom
     const cssScale = renderScale === 0 ? 1 : visualScale / renderScale;
 
+    // Determine Cursor
+    const getCursor = () => {
+        if (isDragging) return 'grabbing';
+        if (activeTool === 'pan' || isSpaceDown) return 'grab';
+        if (activeTool === 'select') return 'default';
+        return 'crosshair'; // drawing tools
+    };
+
     return (
         <div
             className={classes.viewerContainer}
@@ -178,6 +193,7 @@ const PDFViewer = ({ document }) => {
             onMouseMove={handleMouseMove}
             onMouseUp={handleMouseUp}
             onMouseLeave={handleMouseUp}
+            style={{ cursor: getCursor() }}
         >
             {/* OUTER: pan only (never scaled) */}
             <div
