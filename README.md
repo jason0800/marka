@@ -1,6 +1,6 @@
-# Scalario
+# Marka
 
-Scalario is a browser-based PDF measurement + markup tool. It runs fully client-side with no backend dependencies.
+Marka is a browser-based PDF measurement + markup tool. It runs fully client-side with no backend dependencies.
 
 ## Features
 - **PDF Viewer**: Smooth zoom/pan, multi-page rendering.
