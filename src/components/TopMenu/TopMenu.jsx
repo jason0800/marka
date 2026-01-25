@@ -54,7 +54,7 @@ const TopMenu = ({ setPdfDocument, setIsLoading }) => {
         const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
         const link = document.createElement('a');
         link.href = URL.createObjectURL(blob);
-        link.download = `scalario-project-${Date.now()}.json`;
+        link.download = `marka-project-${Date.now()}.json`;
         link.click();
         setActiveMenu(null);
     };
@@ -69,7 +69,7 @@ const TopMenu = ({ setPdfDocument, setIsLoading }) => {
                     ignoreElements: (el) => el.classList.contains('do-not-export')
                 });
                 const link = document.createElement('a');
-                link.download = 'scalario-export.png';
+                link.download = 'marka-export.png';
                 link.href = canvas.toDataURL();
                 link.click();
             } catch (e) {
@@ -110,7 +110,7 @@ const TopMenu = ({ setPdfDocument, setIsLoading }) => {
         const blob = new Blob([csv], { type: 'text/csv' });
         const link = document.createElement('a');
         link.href = URL.createObjectURL(blob);
-        link.download = 'scalario-measurements.csv';
+        link.download = 'marka-measurements.csv';
         link.click();
         setActiveMenu(null);
     };
@@ -123,7 +123,7 @@ const TopMenu = ({ setPdfDocument, setIsLoading }) => {
 
     return (
         <div className={classes.topMenu}>
-            <div className={classes.logo}>Scalario</div>
+            <div className={classes.logo}>Marka</div>
 
             <div className={classes.menuBar}>
                 {/* FILE MENU */}

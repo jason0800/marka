@@ -1,6 +1,6 @@
 import { openDB } from 'idb';
 
-const DB_NAME = 'scalario-db';
+const DB_NAME = 'marka-db';
 const STORE_NAME = 'projects';
 
 export const initDB = async () => {
