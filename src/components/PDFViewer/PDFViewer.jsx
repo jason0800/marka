@@ -52,10 +52,16 @@ const PDFViewer = ({ document }) => {
         const containerH = container.clientHeight;
 
         // Layout height (untransformed). We transform scale ourselves.
-        const contentH = content.scrollHeight;
+        const pages = content.querySelectorAll(".pdf-page-container");
+        if (!pages.length) return;
+
+        const lastPage = pages[pages.length - 1];
+
+        // bottom of last page in content coordinates
+        const lastPageBottom = lastPage.offsetTop + lastPage.offsetHeight;
 
         const scale = stateRef.current.scale;
-        const scaledContentH = contentH * scale;
+        const scaledContentH = lastPageBottom * scale;
 
         const maxY = PADDING;
         const minY = Math.min(maxY, containerH - scaledContentH - PADDING);
@@ -318,6 +324,7 @@ const PDFViewer = ({ document }) => {
     };
 
     // --- Scrollbar (simple, but consistent) ---
+
     const THUMB_H = 60;
     const TRACK_PAD = 4; // matches your scrollbar container padding-ish
 
