@@ -228,10 +228,8 @@ const PDFViewer = ({ document }) => {
         if (!shouldPan) return;
 
         startedPanButtonRef.current = e.button;
-
         isDraggingRef.current = true;
         setDragging(true);
-
         lastMouseRef.current = { x: e.clientX, y: e.clientY };
 
         e.preventDefault();
@@ -325,25 +323,39 @@ const PDFViewer = ({ document }) => {
 
     // --- Scrollbar (simple, but consistent) ---
 
-    const THUMB_H = 60;
+    const MIN_THUMB = 24;
     const TRACK_PAD = 4; // matches your scrollbar container padding-ish
 
-    const getThumbTranslateY = () => {
+    const getThumbHeight = () => {
+        const container = containerRef.current;
+        if (!container) return 60;
+
+        const trackH = container.clientHeight - TRACK_PAD * 2;
+
+        const { minY, maxY } = boundsRef.current;
+        const range = Math.max(0, maxY - minY); // scrollable distance
+
+        // If no scrolling, thumb fills track
+        if (range <= 0) return trackH;
+
+        const visibleFrac = container.clientHeight / (container.clientHeight + range);
+        return clamp(trackH * visibleFrac, MIN_THUMB, trackH);
+    };
+
+    const thumbH = getThumbHeight();
+
+    const getThumbTranslateY = (thumbH) => {
         const container = containerRef.current;
         if (!container) return 0;
 
         const trackH = container.clientHeight - TRACK_PAD * 2;
-        const maxThumb = Math.max(0, trackH - THUMB_H);
+        const maxThumb = Math.max(0, trackH - thumbH);
 
         const { minY, maxY } = boundsRef.current;
-        const range = maxY - minY;
+        const range = Math.max(1, maxY - minY);
 
-        if (range <= 0 || maxThumb === 0) return 0;
-
-        // y=maxY -> thumb=0 (top)
-        // y=minY -> thumb=maxThumb (bottom)
+        // y=maxY -> 0, y=minY -> maxThumb
         const t = ((maxY - stateRef.current.y) / range) * maxThumb;
-
         return clamp(t, 0, maxThumb);
     };
 
@@ -452,11 +464,11 @@ const PDFViewer = ({ document }) => {
                         position: "absolute",
                         top: 0,
                         width: "100%",
-                        height: 60,
+                        height: thumbH,
                         backgroundColor: "rgba(100, 100, 100, 0.6)",
                         borderRadius: 4,
                         cursor: "pointer",
-                        transform: `translateY(${getThumbTranslateY()}px)`,
+                        transform: `translateY(${getThumbTranslateY(thumbH)}px)`,
                     }}
                 />
             </div>
