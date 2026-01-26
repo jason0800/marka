@@ -74,6 +74,12 @@ const useAppStore = create((set, get) => ({
     theme: "light",
     setTheme: (theme) => set({ theme }),
 
+    // --- Page Navigation & View Mode ---
+    currentPage: 1,
+    viewMode: 'continuous', // 'single' | 'continuous'
+    setCurrentPage: (page) => set({ currentPage: page }),
+    setViewMode: (mode) => set({ viewMode: mode }),
+
     // --- History (NOTE: snapshots must be copies, not references) ---
     history: [],
     historyIndex: -1,

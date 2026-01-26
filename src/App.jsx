@@ -7,6 +7,7 @@ import PersistenceManager from './components/Persistence/PersistenceManager';
 import html2canvas from 'html2canvas';
 import useAppStore from './stores/useAppStore';
 import TopMenu from './components/TopMenu/TopMenu';
+import BottomBar from './components/BottomBar/BottomBar';
 import './App.css';
 
 function App() {
@@ -45,6 +46,7 @@ function App() {
         </main>
         <RightPanel />
       </div>
+      <BottomBar totalPages={pdfDocument ? pdfDocument.numPages : 0} />
     </div>
   );
 }
