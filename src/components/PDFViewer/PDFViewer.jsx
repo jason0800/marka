@@ -10,92 +10,140 @@ const PDFViewer = ({ document }) => {
         setViewport,
         activeTool,
         currentPage,
-        setCurrentPage,
-        viewMode
+        viewMode,
     } = useAppStore();
 
-    // --- Local State for Rendering ---
-    const [pages, setPages] = useState([]);
-    const [dragging, setDragging] = useState([false]);
-
-    // --- Interactive State (Refs for performance) ---
-    // We use refs for pan/zoom to avoid React render cycle lag during gestures
-    const state = useRef({
-        scale: storeViewport.scale || 1,
-        x: storeViewport.x || 0,
-        y: storeViewport.y || 0
-    });
-
+    // --- Refs (gesture state + DOM) ---
     const containerRef = useRef(null);
     const contentRef = useRef(null);
     const rafRef = useRef(null);
-    const isDragging = useRef(false);
-    const lastMouse = useRef({ x: 0, y: 0 });
 
-    // Helper to force update if needed (rarely used if we manipulate DOM directly or use useSyncExternalStore pattern, 
-    // but here we might just trigger re-renders on commit)
-    const [, forceRender] = useState({});
+    const isDraggingRef = useRef(false);
+    const lastMouseRef = useRef({ x: 0, y: 0 });
+
+    const stateRef = useRef({
+        scale: storeViewport.scale || 1,
+        x: storeViewport.x || 0,
+        y: storeViewport.y || 0,
+    });
+
+    // --- Local UI state (for cursor re-render) ---
+    const [pages, setPages] = useState([]);
+    const [dragging, setDragging] = useState(false);
 
     // --- Constants ---
-    const PAGE_SPACING = 40; // Total vertical space between pages
     const MIN_SCALE = 0.1;
     const MAX_SCALE = 10;
-    const PADDING = 40; // Viewport padding
+    const PADDING = 40;
 
-    // --- 1. Load Pages ---
-    useEffect(() => {
-        if (!document) return;
-        const load = async () => {
-            const num = document.numPages;
-            const loaded = [];
-            for (let i = 1; i <= num; i++) loaded.push(await document.getPage(i));
-            setPages(loaded);
-        };
-        load();
-    }, [document]);
+    // --- Bounds (vertical clamping) ---
+    const boundsRef = useRef({ minY: PADDING, maxY: PADDING });
 
-    // --- 2. Clamping Logic ---
     const clamp = (val, min, max) => Math.min(Math.max(val, min), max);
 
-    const applyState = (newState, commit = true) => {
-        // Merge and apply scale limits only
+    const updateBounds = () => {
+        const container = containerRef.current;
+        const content = contentRef.current;
+        if (!container || !content) return;
+
+        const containerH = container.clientHeight;
+
+        // Layout height (untransformed). We transform scale ourselves.
+        const contentH = content.scrollHeight;
+
+        const scale = stateRef.current.scale;
+        const scaledContentH = contentH * scale;
+
+        const maxY = PADDING;
+        const minY = Math.min(maxY, containerH - scaledContentH - PADDING);
+
+        boundsRef.current = { minY, maxY };
+    };
+
+    const clampY = (y) => {
+        const { minY, maxY } = boundsRef.current;
+        return Math.min(maxY, Math.max(minY, y));
+    };
+
+    // --- Apply state (single gateway for all pan/zoom) ---
+    const applyState = (partial, commit = true) => {
+        const prev = stateRef.current;
+
+        const nextScale = clamp(partial.scale ?? prev.scale, MIN_SCALE, MAX_SCALE);
+
+        // Build next
         const next = {
-            ...state.current,
-            ...newState,
-            scale: clamp(newState.scale ?? state.current.scale, MIN_SCALE, MAX_SCALE)
+            ...prev,
+            ...partial,
+            scale: nextScale,
         };
 
-        state.current = next;
+        // bounds depend on scale & content/container
+        stateRef.current = next;
+        updateBounds();
 
-        // Apply to DOM (Fast)
+        // clamp Y after bounds are updated
+        next.y = clampY(next.y);
+
+        stateRef.current = next;
+
+        // Fast DOM update
         if (contentRef.current) {
             contentRef.current.style.transform = `translate(${next.x}px, ${next.y}px) scale(${next.scale})`;
-            contentRef.current.style.transformOrigin = '0 0';
+            contentRef.current.style.transformOrigin = "0 0";
         }
 
-        // Sync to Store
+        // Commit to store (throttled)
         if (commit) {
             if (rafRef.current) cancelAnimationFrame(rafRef.current);
-            rafRef.current = requestAnimationFrame(() => {
-                setViewport(next);
-            });
+            rafRef.current = requestAnimationFrame(() => setViewport(next));
         }
     };
 
-    // --- 4. Event Handlers ---
+    // --- 1) Load pages ---
+    useEffect(() => {
+        if (!document) return;
 
-    // --- 4. Event Handlers ---
+        let cancelled = false;
 
-    // Wheel (Zoom + Pan) - Native listener for non-passive behavior
+        const load = async () => {
+            const num = document.numPages;
+            const loaded = [];
+            for (let i = 1; i <= num; i++) {
+                const page = await document.getPage(i);
+                loaded.push(page);
+            }
+            if (!cancelled) setPages(loaded);
+        };
+
+        load();
+        return () => {
+            cancelled = true;
+        };
+    }, [document]);
+
+    // --- 2) Bounds maintenance ---
+    useLayoutEffect(() => {
+        updateBounds();
+    }, [pages.length, viewMode]);
+
+    useEffect(() => {
+        const onResize = () => updateBounds();
+        window.addEventListener("resize", onResize);
+        return () => window.removeEventListener("resize", onResize);
+    }, []);
+
+    // --- 3) Wheel: zoom (ctrl/cmd) + pan ---
     useEffect(() => {
         const container = containerRef.current;
         if (!container) return;
 
         const handleWheel = (e) => {
             e.preventDefault();
-            const { scale, x, y } = state.current;
 
-            // ZOOM (Cmd/Ctrl + Wheel)
+            const { scale, x, y } = stateRef.current;
+
+            // Zoom (Ctrl/Cmd + wheel)
             if (e.ctrlKey || e.metaKey) {
                 const rect = container.getBoundingClientRect();
                 const mx = e.clientX - rect.left;
@@ -114,7 +162,7 @@ const PDFViewer = ({ document }) => {
                 return;
             }
 
-            // PAN (Wheel)
+            // Pan (wheel)
             let dx = e.deltaX;
             let dy = e.deltaY;
 
@@ -126,103 +174,133 @@ const PDFViewer = ({ document }) => {
             applyState({ x: x - dx, y: y - dy });
         };
 
-        container.addEventListener('wheel', handleWheel, { passive: false });
-        return () => container.removeEventListener('wheel', handleWheel);
+        container.addEventListener("wheel", handleWheel, { passive: false });
+        return () => container.removeEventListener("wheel", handleWheel);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
-    // Keyboard Zoom
+    // --- 4) Keyboard zoom (Ctrl/Cmd +/-) ---
     useEffect(() => {
         const handleKeyDown = (e) => {
-            if (e.ctrlKey || e.metaKey) {
-                if (e.key === '=' || e.key === '+' || e.key === '-') {
-                    e.preventDefault();
+            if (!(e.ctrlKey || e.metaKey)) return;
+            if (!(e.key === "=" || e.key === "+" || e.key === "-")) return;
 
-                    const zoomIn = e.key !== '-';
-                    const { scale, x, y } = state.current;
-                    const factor = zoomIn ? 1.25 : 0.8;
-                    const newScale = clamp(scale * factor, MIN_SCALE, MAX_SCALE);
+            e.preventDefault();
 
-                    // Zoom to center of viewport
-                    const rect = containerRef.current.getBoundingClientRect();
-                    const mx = rect.width / 2;
-                    const my = rect.height / 2;
+            const zoomIn = e.key !== "-";
+            const { scale, x, y } = stateRef.current;
+            const factor = zoomIn ? 1.25 : 0.8;
+            const newScale = clamp(scale * factor, MIN_SCALE, MAX_SCALE);
 
-                    // world anchor
-                    const wx = (mx - x) / scale;
-                    const wy = (my - y) / scale;
+            const container = containerRef.current;
+            if (!container) return;
 
-                    const newX = mx - wx * newScale;
-                    const newY = my - wy * newScale;
+            const rect = container.getBoundingClientRect();
+            const mx = rect.width / 2;
+            const my = rect.height / 2;
 
-                    applyState({ scale: newScale, x: newX, y: newY });
-                }
-            }
+            const wx = (mx - x) / scale;
+            const wy = (my - y) / scale;
+
+            const newX = mx - wx * newScale;
+            const newY = my - wy * newScale;
+
+            applyState({ scale: newScale, x: newX, y: newY });
         };
 
-        window.addEventListener('keydown', handleKeyDown);
-        return () => window.removeEventListener('keydown', handleKeyDown);
+        window.addEventListener("keydown", handleKeyDown);
+        return () => window.removeEventListener("keydown", handleKeyDown);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
+    // --- 5) Mouse drag pan ---
     const onMouseDown = (e) => {
-        // Middle click or Space or Tool
-        if (e.button === 1 || activeTool === 'pan' || e.shiftKey) {
-            isDragging.current = true;
-            setDragging(true);
-            lastMouse.current = { x: e.clientX, y: e.clientY };
-            e.preventDefault();
-            e.stopPropagation(); // Prevent measurement tools from activating
-        }
+        const shouldPan = e.button === 1 || activeTool === "pan" || e.shiftKey;
+        if (!shouldPan) return;
+
+        isDraggingRef.current = true;
+        setDragging(true);
+
+        lastMouseRef.current = { x: e.clientX, y: e.clientY };
+
+        e.preventDefault();
+        e.stopPropagation();
     };
 
     const onMouseMove = (e) => {
-        if (!isDragging.current) return;
-        e.stopPropagation(); // Prevent interference with other tools
+        if (!isDraggingRef.current) return;
+        e.stopPropagation();
 
-        const dx = e.clientX - lastMouse.current.x;
-        const dy = e.clientY - lastMouse.current.y;
-        lastMouse.current = { x: e.clientX, y: e.clientY };
+        const dx = e.clientX - lastMouseRef.current.x;
+        const dy = e.clientY - lastMouseRef.current.y;
 
-        const { x, y } = state.current;
+        lastMouseRef.current = { x: e.clientX, y: e.clientY };
+
+        const { x, y } = stateRef.current;
         applyState({ x: x + dx, y: y + dy });
     };
 
-    const onMouseUp = (e) => {
-        isDragging.current = false;
+    const stopDrag = () => {
+        isDraggingRef.current = false;
         setDragging(false);
     };
 
-    // --- 5. Sync from Store (Initial & External Changes) ---
+    const onMouseUp = stopDrag;
+
+    // Global mouseup so middle button release always stops dragging
     useEffect(() => {
-        // Only if significant difference (avoid loops)
-        const dScale = Math.abs(storeViewport.scale - state.current.scale);
-        const dX = Math.abs(storeViewport.x - state.current.x);
-        const dY = Math.abs(storeViewport.y - state.current.y);
+        window.addEventListener("mouseup", stopDrag);
+        return () => window.removeEventListener("mouseup", stopDrag);
+    }, []);
+
+    // --- 6) Sync from store (external changes) ---
+    useEffect(() => {
+        const dScale = Math.abs((storeViewport.scale ?? 1) - stateRef.current.scale);
+        const dX = Math.abs((storeViewport.x ?? 0) - stateRef.current.x);
+        const dY = Math.abs((storeViewport.y ?? 0) - stateRef.current.y);
 
         if (dScale > 0.001 || dX > 1 || dY > 1) {
-            applyState(storeViewport, false); // Don't commit back to store immediately
+            applyState(
+                {
+                    scale: storeViewport.scale ?? stateRef.current.scale,
+                    x: storeViewport.x ?? stateRef.current.x,
+                    y: storeViewport.y ?? stateRef.current.y,
+                },
+                false
+            );
         }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [storeViewport]);
 
-    // --- 6. Page Navigation Sync ---
-    // (Simplified: Scroll current page to top if changed externally)
+    // --- 7) Page navigation sync (continuous) ---
     useEffect(() => {
         if (!contentRef.current) return;
-        // Find page element
-        const pageEl = contentRef.current.querySelector(`[data-page-number="${currentPage}"]`);
-        if (pageEl) {
-            const pageTop = pageEl.offsetTop;
-            const { scale } = state.current;
-            const targetY = 20 - pageTop * scale;
 
-            applyState({ y: targetY });
-        }
+        const pageEl = contentRef.current.querySelector(
+            `[data-page-number="${currentPage}"]`
+        );
+        if (!pageEl) return;
+
+        const pageTop = pageEl.offsetTop;
+        const { scale } = stateRef.current;
+
+        const targetY = PADDING - pageTop * scale;
+        applyState({ y: targetY });
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [currentPage]);
 
-    // --- 7. Cursor ---
+    // --- Cursor ---
     const getCursor = () => {
-        if (isDragging.current) return 'grabbing';
-        if (activeTool === 'pan') return 'grab';
-        return 'default';
+        if (dragging) return "grabbing";
+        if (activeTool === "pan") return "grab";
+        return "default";
+    };
+
+    // --- Scrollbar (simple, but consistent) ---
+    const getThumbTranslateY = () => {
+        // This is still a rough mapping, but now it won't explode.
+        // For a real scrollbar, you’d map y ∈ [minY,maxY] to track space.
+        return Math.max(0, -stateRef.current.y / 10);
     };
 
     return (
@@ -233,28 +311,24 @@ const PDFViewer = ({ document }) => {
             onMouseMove={onMouseMove}
             onMouseUp={onMouseUp}
             onMouseLeave={onMouseUp}
-            style={{
-                cursor: getCursor(),
-                userSelect: 'none' // Prevent text selection during panning
-            }}
+            style={{ cursor: getCursor(), userSelect: "none" }}
         >
-            {/* Content Layer (Transform Applied Here) */}
+            {/* Content Layer (transform is also imperatively updated via applyState) */}
             <div
                 ref={contentRef}
                 className={classes.contentLayer}
                 style={{
-                    // Initial rendering style, updated via ref manipulation
                     transform: `translate(${storeViewport.x}px, ${storeViewport.y}px) scale(${storeViewport.scale})`,
-                    transformOrigin: '0 0',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center', // Center pages in the column
-                    padding: `${PADDING}px` // Inner padding
+                    transformOrigin: "0 0",
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    padding: `${PADDING}px`,
                 }}
             >
-                {viewMode === 'single' ? (
+                {viewMode === "single" ? (
                     pages[currentPage - 1] && (
-                        <div className="pdf-page-container">
+                        <div className="pdf-page-container" data-page-number={currentPage}>
                             <PDFPage page={pages[currentPage - 1]} scale={1} />
                         </div>
                     )
@@ -265,10 +339,10 @@ const PDFViewer = ({ document }) => {
                             data-page-number={index + 1}
                             className="pdf-page-container"
                             style={{
-                                borderBottom: index < pages.length - 1 ? '1px solid #c0c0c0' : 'none',
-                                paddingBottom: index < pages.length - 1 ? '20px' : '0',
-                                marginBottom: index < pages.length - 1 ? '20px' : '0',
-                                width: 'fit-content'
+                                borderBottom: index < pages.length - 1 ? "1px solid #c0c0c0" : "none",
+                                paddingBottom: index < pages.length - 1 ? "20px" : "0",
+                                marginBottom: index < pages.length - 1 ? "20px" : "0",
+                                width: "fit-content",
                             }}
                         >
                             <PDFPage page={page} scale={1} />
@@ -277,49 +351,47 @@ const PDFViewer = ({ document }) => {
                 )}
             </div>
 
-            {/* Custom Scrollbar */}
+            {/* Custom Scrollbar (still simplistic mapping, but drag works correctly) */}
             <div
                 style={{
-                    position: 'absolute',
+                    position: "absolute",
                     right: 4,
                     top: 4,
                     bottom: 4,
                     width: 8,
-                    backgroundColor: 'rgba(0, 0, 0, 0.1)',
+                    backgroundColor: "rgba(0, 0, 0, 0.1)",
                     borderRadius: 4,
                     zIndex: 100,
                 }}
             >
-                {/* Scrollbar Thumb */}
                 <div
                     onMouseDown={(e) => {
                         e.stopPropagation();
                         const startY = e.clientY;
-                        const startPanY = state.current.y;
+                        const startPanY = stateRef.current.y;
 
                         const onDrag = (moveEvent) => {
-                            const deltaY = moveEvent.clientY + startY;
-                            // Multiply by a factor to make scrolling feel natural
+                            const deltaY = moveEvent.clientY - startY; // ✅ FIXED
                             applyState({ y: startPanY + deltaY * 5 });
                         };
 
                         const onUp = () => {
-                            window.removeEventListener('mousemove', onDrag);
-                            window.removeEventListener('mouseup', onUp);
+                            window.removeEventListener("mousemove", onDrag);
+                            window.removeEventListener("mouseup", onUp);
                         };
 
-                        window.addEventListener('mousemove', onDrag);
-                        window.addEventListener('mouseup', onUp);
+                        window.addEventListener("mousemove", onDrag);
+                        window.addEventListener("mouseup", onUp);
                     }}
                     style={{
-                        position: 'absolute',
+                        position: "absolute",
                         top: 0,
-                        width: '100%',
+                        width: "100%",
                         height: 60,
-                        backgroundColor: 'rgba(100, 100, 100, 0.6)',
+                        backgroundColor: "rgba(100, 100, 100, 0.6)",
                         borderRadius: 4,
-                        cursor: 'pointer',
-                        transform: `translateY(${Math.max(0, -state.current.y / 10)}px)`, // Simple position mapping
+                        cursor: "pointer",
+                        transform: `translateY(${getThumbTranslateY()}px)`,
                     }}
                 />
             </div>
