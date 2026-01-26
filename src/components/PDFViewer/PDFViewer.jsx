@@ -318,10 +318,26 @@ const PDFViewer = ({ document }) => {
     };
 
     // --- Scrollbar (simple, but consistent) ---
+    const THUMB_H = 60;
+    const TRACK_PAD = 4; // matches your scrollbar container padding-ish
+
     const getThumbTranslateY = () => {
-        // This is still a rough mapping, but now it won't explode.
-        // For a real scrollbar, you’d map y ∈ [minY,maxY] to track space.
-        return Math.max(0, -stateRef.current.y / 10);
+        const container = containerRef.current;
+        if (!container) return 0;
+
+        const trackH = container.clientHeight - TRACK_PAD * 2;
+        const maxThumb = Math.max(0, trackH - THUMB_H);
+
+        const { minY, maxY } = boundsRef.current;
+        const range = maxY - minY;
+
+        if (range <= 0 || maxThumb === 0) return 0;
+
+        // y=maxY -> thumb=0 (top)
+        // y=minY -> thumb=maxThumb (bottom)
+        const t = ((maxY - stateRef.current.y) / range) * maxThumb;
+
+        return clamp(t, 0, maxThumb);
     };
 
     return (
@@ -387,7 +403,7 @@ const PDFViewer = ({ document }) => {
                 style={{
                     position: "absolute",
                     right: 4,
-                    top: 4,
+                    top: TRACK_PAD,
                     bottom: 4,
                     width: 8,
                     backgroundColor: "rgba(0, 0, 0, 0.1)",
@@ -398,12 +414,23 @@ const PDFViewer = ({ document }) => {
                 <div
                     onMouseDown={(e) => {
                         e.stopPropagation();
+                        e.preventDefault();
                         const startY = e.clientY;
                         const startPanY = stateRef.current.y;
 
                         const onDrag = (moveEvent) => {
-                            const deltaY = moveEvent.clientY - startY; // ✅ FIXED
-                            applyState({ y: startPanY + deltaY * 5 });
+                            const deltaY = moveEvent.clientY - startY;
+
+                            const trackH = containerRef.current.clientHeight - 8; // rough, account for padding
+                            const thumbH = 60;
+                            const maxThumb = Math.max(1, trackH - thumbH);
+
+                            const { minY, maxY } = boundsRef.current;
+                            const contentRange = maxY - minY; // note: minY is usually negative
+
+                            const contentDelta = (deltaY / maxThumb) * contentRange;
+
+                            applyState({ y: startPanY - contentDelta }); // still inverted
                         };
 
                         const onUp = () => {
