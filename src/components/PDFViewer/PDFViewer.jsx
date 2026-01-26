@@ -13,7 +13,7 @@ const PDFViewer = ({ document }) => {
         viewMode,
     } = useAppStore();
 
-    // --- Refs (gesture state + DOM) ---
+    // --- Refs ---
     const containerRef = useRef(null);
     const contentRef = useRef(null);
     const rafRef = useRef(null);
@@ -26,6 +26,9 @@ const PDFViewer = ({ document }) => {
         x: storeViewport.x || 0,
         y: storeViewport.y || 0,
     });
+
+    const startedPanButtonRef = useRef(null);      // which button started the pan
+    const suppressNextClickRef = useRef(false);    // block the click after a middle-pan
 
     // --- Local UI state (for cursor re-render) ---
     const [pages, setPages] = useState([]);
@@ -218,6 +221,8 @@ const PDFViewer = ({ document }) => {
         const shouldPan = e.button === 1 || activeTool === "pan" || e.shiftKey;
         if (!shouldPan) return;
 
+        startedPanButtonRef.current = e.button;
+
         isDraggingRef.current = true;
         setDragging(true);
 
@@ -240,9 +245,25 @@ const PDFViewer = ({ document }) => {
         applyState({ x: x + dx, y: y + dy });
     };
 
-    const stopDrag = () => {
+    const stopDrag = (e) => {
+        if (!isDraggingRef.current) return;
+
         isDraggingRef.current = false;
         setDragging(false);
+
+        // If pan started with middle mouse, block the follow-up auxclick/click
+        if (startedPanButtonRef.current === 1) {
+            suppressNextClickRef.current = true;
+            // release after the current event loop (so it only blocks the immediate click)
+            setTimeout(() => {
+                suppressNextClickRef.current = false;
+            }, 0);
+        }
+
+        startedPanButtonRef.current = null;
+
+        e.preventDefault();
+        e.stopPropagation();
     };
 
     const onMouseUp = stopDrag;
@@ -311,6 +332,16 @@ const PDFViewer = ({ document }) => {
             onMouseMove={onMouseMove}
             onMouseUp={onMouseUp}
             onMouseLeave={onMouseUp}
+            onAuxClickCapture={(e) => {
+                if (!suppressNextClickRef.current) return;
+                e.preventDefault();
+                e.stopPropagation();
+            }}
+            onClickCapture={(e) => {
+                if (!suppressNextClickRef.current) return;
+                e.preventDefault();
+                e.stopPropagation();
+            }}
             style={{ cursor: getCursor(), userSelect: "none" }}
         >
             {/* Content Layer (transform is also imperatively updated via applyState) */}

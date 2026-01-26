@@ -97,6 +97,13 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0 }) => {
     const [resizingState, setResizingState] = useState(null); // { id, handle: 'nw'|'n'|'ne'..., startShape, startPoint }
 
     const handleMouseDown = (e) => {
+        // ✅ only left-click should interact with tools
+        if (e.button !== 0) {
+            // optional: prevent browser middle-click autoscroll
+            if (e.button === 1) e.preventDefault();
+            return;
+        }
+
         if (e.target.tagName === 'TEXTAREA' || e.target.closest('.foreignObject')) return;
         if (!svgRef.current) return;
 
@@ -294,6 +301,8 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0 }) => {
     };
 
     const handleMouseUp = (e) => {
+        if (e.button !== 0) return; // ✅ left only
+
         if (resizingState) {
             setResizingState(null);
             return;
@@ -600,7 +609,7 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0 }) => {
                 return null;
             })}
 
-            {/* Drawing Previews */}
+            Drawing Previews
             {isDrawing && cursor && (
                 <g pointerEvents="none">
                     {/* Measurement Previews */}
