@@ -110,3 +110,31 @@
     border-color: var(--border-color);
     /* Keep border for distinction or remove to match? User said 'nice grey background', let's match toolbar mostly. */
 }
+
+.scaleLabel {
+    opacity: 0.8;
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.scaleInput {
+    background-color: var(--input-bg);
+    border: 1px solid var(--border-color);
+    color: var(--text-color);
+    border-radius: 6px;
+    padding: 6px 8px;
+    width: 80px;
+    text-align: center;
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.scaleInput:focus {
+    outline: none;
+    border-color: #4CAF50;
+    box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.2);
+}
+
+.scaleInput::placeholder {
+    opacity: 0.5;
+}

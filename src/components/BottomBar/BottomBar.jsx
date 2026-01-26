@@ -3,12 +3,31 @@ import useAppStore from '../../stores/useAppStore';
 import classes from './BottomBar.module.css';
 
 const BottomBar = ({ totalPages }) => {
-    const { currentPage, setCurrentPage, viewMode, setViewMode } = useAppStore();
+    const {
+        currentPage,
+        setCurrentPage,
+        viewMode,
+        setViewMode,
+        calibrationScales,
+        setPageScale
+    } = useAppStore();
+
     const [pageInput, setPageInput] = useState(currentPage);
+    const [scaleInput, setScaleInput] = useState('');
 
     useEffect(() => {
         setPageInput(currentPage);
-    }, [currentPage]);
+
+        // Load scale for current page
+        const pageIndex = currentPage - 1;
+        const scale = calibrationScales[pageIndex];
+        if (scale) {
+            // Convert scale back to 1:X format
+            setScaleInput(`1:${Math.round(scale)}`);
+        } else {
+            setScaleInput('');
+        }
+    }, [currentPage, calibrationScales]);
 
     const handlePageChange = (e) => {
         const val = parseInt(e.target.value);
@@ -18,13 +37,57 @@ const BottomBar = ({ totalPages }) => {
         }
     };
 
-    const handleKeyDown = (e) => {
+    const handlePageKeyDown = (e) => {
         if (e.key === 'Enter') {
             let val = parseInt(pageInput);
             if (isNaN(val)) val = currentPage;
             val = Math.max(1, Math.min(val, totalPages));
             setCurrentPage(val);
-            setPageInput(val); // normalize input
+            setPageInput(val);
+            e.currentTarget.blur();
+        }
+    };
+
+    const handleScaleChange = (e) => {
+        setScaleInput(e.target.value);
+    };
+
+    const handleScaleKeyDown = (e) => {
+        if (e.key === 'Enter') {
+            const input = scaleInput.trim();
+
+            // Parse format: 1:X or just X
+            let scale = null;
+            if (input.includes(':')) {
+                const parts = input.split(':');
+                if (parts.length === 2 && parts[0] === '1') {
+                    const denominator = parseFloat(parts[1]);
+                    if (!isNaN(denominator) && denominator > 0) {
+                        scale = denominator;
+                    }
+                }
+            } else {
+                const num = parseFloat(input);
+                if (!isNaN(num) && num > 0) {
+                    scale = num;
+                }
+            }
+
+            if (scale) {
+                const pageIndex = currentPage - 1;
+                setPageScale(pageIndex, scale, 'units');
+                setScaleInput(`1:${Math.round(scale)}`);
+            } else {
+                // Invalid format, revert
+                const pageIndex = currentPage - 1;
+                const existingScale = calibrationScales[pageIndex];
+                if (existingScale) {
+                    setScaleInput(`1:${Math.round(existingScale)}`);
+                } else {
+                    setScaleInput('');
+                }
+            }
+
             e.currentTarget.blur();
         }
     };
@@ -37,7 +100,16 @@ const BottomBar = ({ totalPages }) => {
     return (
         <div className={classes.bottomBar}>
             <div className={classes.leftControls}>
-                {/* Placeholder for future status items */}
+                <span className={classes.scaleLabel}>Scale:</span>
+                <input
+                    type="text"
+                    className={classes.scaleInput}
+                    value={scaleInput}
+                    onChange={handleScaleChange}
+                    onKeyDown={handleScaleKeyDown}
+                    placeholder="1:50"
+                    title="Enter drawing scale (e.g., 1:50, 1:100)"
+                />
             </div>
 
             <div className={classes.centerControls} style={{ visibility: totalPages > 0 ? 'visible' : 'hidden' }}>
@@ -64,7 +136,7 @@ const BottomBar = ({ totalPages }) => {
                     className={classes.pageInput}
                     value={pageInput}
                     onChange={handlePageChange}
-                    onKeyDown={handleKeyDown}
+                    onKeyDown={handlePageKeyDown}
                 />
                 <span className={classes.pageCount}>of {totalPages || 0}</span>
 

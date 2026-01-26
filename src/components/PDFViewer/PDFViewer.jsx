@@ -16,6 +16,7 @@ const PDFViewer = ({ document }) => {
 
     // --- Local State for Rendering ---
     const [pages, setPages] = useState([]);
+    const [dragging, setDragging] = useState([false]);
 
     // --- Interactive State (Refs for performance) ---
     // We use refs for pan/zoom to avoid React render cycle lag during gestures
@@ -166,13 +167,17 @@ const PDFViewer = ({ document }) => {
         // Middle click or Space or Tool
         if (e.button === 1 || activeTool === 'pan' || e.shiftKey) {
             isDragging.current = true;
+            setDragging(true);
             lastMouse.current = { x: e.clientX, y: e.clientY };
             e.preventDefault();
+            e.stopPropagation(); // Prevent measurement tools from activating
         }
     };
 
     const onMouseMove = (e) => {
         if (!isDragging.current) return;
+        e.stopPropagation(); // Prevent interference with other tools
+
         const dx = e.clientX - lastMouse.current.x;
         const dy = e.clientY - lastMouse.current.y;
         lastMouse.current = { x: e.clientX, y: e.clientY };
@@ -181,8 +186,9 @@ const PDFViewer = ({ document }) => {
         applyState({ x: x + dx, y: y + dy });
     };
 
-    const onMouseUp = () => {
+    const onMouseUp = (e) => {
         isDragging.current = false;
+        setDragging(false);
     };
 
     // --- 5. Sync from Store (Initial & External Changes) ---
@@ -204,15 +210,6 @@ const PDFViewer = ({ document }) => {
         // Find page element
         const pageEl = contentRef.current.querySelector(`[data-page-number="${currentPage}"]`);
         if (pageEl) {
-            // We want this page's top to be at approx 20px in viewport
-            // pageTopWorld = pageEl.offsetTop
-            // targetY = 20
-            // transformY = targetY - pageTopWorld * scale
-            // Wait, offsetTop is unscaled relative to contentRef.
-
-            // Check if we are already viewing it to avoid jumps?
-            // For now, just jump.
-
             const pageTop = pageEl.offsetTop;
             const { scale } = state.current;
             const targetY = 20 - pageTop * scale;
