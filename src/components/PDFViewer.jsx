@@ -1,8 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import useAppStore from "../../stores/useAppStore";
+import useAppStore from "../stores/useAppStore";
 import PDFPage from "./PDFPage";
-import OverlayLayer from "../Overlay/OverlayLayer";
-import classes from "./PDFViewer.module.css";
+import OverlayLayer from "./OverlayLayer";
 
 const clamp = (v, min, max) => Math.min(max, Math.max(min, v));
 
@@ -412,7 +411,7 @@ const PDFViewer = ({ document }) => {
     // ---- render ----
     return (
         <div
-            className={classes.viewerContainer}
+            className="w-full h-full overflow-hidden bg-[var(--viewer-bg)] cursor-grab relative touch-none active:cursor-grabbing"
             ref={containerRef}
             onMouseDown={onMouseDown}
             onMouseMove={onMouseMove}
@@ -433,7 +432,7 @@ const PDFViewer = ({ document }) => {
             {/* Content Layer (PDF + SVG overlays move/zoom together) */}
             <div
                 ref={contentRef}
-                className={classes.contentLayer}
+                className="absolute top-0 left-0 will-change-transform flex flex-col w-fit min-w-full p-[50px]"
                 style={{
                     transform: `translate(${storeViewport.x}px, ${storeViewport.y}px) scale(${storeViewport.scale})`,
                     transformOrigin: "0 0",

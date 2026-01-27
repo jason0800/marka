@@ -1,8 +1,7 @@
 import React, { useState } from 'react';
 import { Trash2, ChevronDown, ChevronUp, Copy, Minus, Plus } from 'lucide-react';
-import useAppStore from '../../stores/useAppStore';
-import classes from './RightPanel.module.css';
-import { calculatePolygonArea } from '../../geometry/transforms';
+import useAppStore from '../stores/useAppStore';
+import { calculatePolygonArea } from '../geometry/transforms';
 
 const STROKE_COLORS = ['#000000', '#FF9999', '#77BBFF', '#88DD88', '#FFDD66'];
 const FILL_COLORS = ['none', '#FF9999', '#77BBFF', '#88DD88', '#FFDD66'];
@@ -52,28 +51,29 @@ const RightPanel = () => {
     const opacity = firstItem?.opacity ?? 1;
 
     // --- Renderers ---
+    // --- Renderers ---
     const renderProperties = () => (
-        <div className={classes.propertiesContent}>
-            <div className={classes.section}>
-                <label className={classes.label}>Stroke</label>
-                <div className={classes.colorGrid}>
+        <div className="p-4 flex flex-col gap-4 overflow-y-auto">
+            <div className="flex flex-col gap-1">
+                <label className="text-xs text-[var(--text-secondary)] font-medium">Stroke</label>
+                <div className="flex gap-2 flex-wrap items-center">
                     {STROKE_COLORS.map(c => (
                         <button
                             key={c}
-                            className={`${classes.colorBtn} ${stroke === c ? classes.activeColor : ''}`}
+                            className={`w-5 h-5 rounded border-2 border-transparent cursor-pointer transition-transform duration-100 hover:scale-110 ${stroke === c ? '!border-[var(--text-primary)]' : ''}`}
                             style={{ backgroundColor: c }}
                             onClick={() => updateProp('stroke', c)}
                         />
                     ))}
 
                     {/* Hex Input */}
-                    <div className={classes.hexInputGroup}>
-                        <span className={classes.hexPrefix}>#</span>
+                    <div className="flex items-center bg-[var(--bg-color)] border border-transparent rounded-[6px] px-2 py-0.5 flex-1 h-6 transition-colors duration-200 focus-within:bg-[var(--bg-secondary)] focus-within:border-[var(--primary-color)]">
+                        <span className="text-[0.8em] text-[var(--text-secondary)] mr-1 select-none">#</span>
                         <input
                             type="text"
                             value={(stroke || '').replace('#', '')}
                             onChange={(e) => updateProp('stroke', '#' + e.target.value)}
-                            className={classes.hexInput}
+                            className="w-full text-[0.85em] border-none bg-transparent text-[var(--text-primary)] outline-none font-mono"
                             maxLength={6}
                             placeholder="000000"
                         />
@@ -81,13 +81,13 @@ const RightPanel = () => {
                 </div>
             </div>
 
-            <div className={classes.section}>
-                <label className={classes.label}>Fill</label>
-                <div className={classes.colorGrid}>
+            <div className="flex flex-col gap-1">
+                <label className="text-xs text-[var(--text-secondary)] font-medium">Fill</label>
+                <div className="flex gap-2 flex-wrap items-center">
                     {FILL_COLORS.map(c => (
                         <button
                             key={c}
-                            className={`${classes.colorBtn} ${fill === c ? classes.activeColor : ''}`}
+                            className={`w-5 h-5 rounded border-2 border-transparent cursor-pointer transition-transform duration-100 hover:scale-110 ${fill === c ? '!border-[var(--text-primary)]' : ''}`}
                             style={{
                                 backgroundColor: c === 'none' ? '#fff' : c,
                                 background: c === 'none'
@@ -100,13 +100,13 @@ const RightPanel = () => {
                     ))}
 
                     {/* Hex Input */}
-                    <div className={classes.hexInputGroup}>
-                        <span className={classes.hexPrefix}>#</span>
+                    <div className="flex items-center bg-[var(--bg-color)] border border-transparent rounded-[6px] px-2 py-0.5 flex-1 h-6 transition-colors duration-200 focus-within:bg-[var(--bg-secondary)] focus-within:border-[var(--primary-color)]">
+                        <span className="text-[0.8em] text-[var(--text-secondary)] mr-1 select-none">#</span>
                         <input
                             type="text"
                             value={(fill === 'none' ? '' : (fill || '')).replace('#', '')}
                             onChange={(e) => updateProp('fill', e.target.value ? '#' + e.target.value : 'none')}
-                            className={classes.hexInput}
+                            className="w-full text-[0.85em] border-none bg-transparent text-[var(--text-primary)] outline-none font-mono"
                             maxLength={6}
                             placeholder="None"
                         />
@@ -114,13 +114,13 @@ const RightPanel = () => {
                 </div>
             </div>
 
-            <div className={classes.section}>
-                <label className={classes.label}>Stroke Width</label>
-                <div className={classes.buttonGroup}>
+            <div className="flex flex-col gap-1">
+                <label className="text-xs text-[var(--text-secondary)] font-medium">Stroke Width</label>
+                <div className="flex gap-1 bg-[var(--bg-color)] p-0.5 rounded-md border border-[var(--border-color)]">
                     {[1, 2, 4].map(w => (
                         <button
                             key={w}
-                            className={`${classes.groupBtn} ${strokeWidth === w ? classes.activeBtn : ''}`}
+                            className={`flex-1 h-6 border-none bg-transparent rounded cursor-pointer flex items-center justify-center text-[var(--text-secondary)] hover:bg-[var(--btn-hover)] hover:text-[var(--text-primary)] ${strokeWidth === w ? '!bg-[var(--bg-secondary)] !text-[var(--primary-color)] shadow-sm' : ''}`}
                             onClick={() => updateProp('strokeWidth', w)}
                         >
                             <div style={{ height: w, width: '20px', background: 'currentColor', borderRadius: 2 }}></div>
@@ -129,11 +129,11 @@ const RightPanel = () => {
                 </div>
             </div>
 
-            <div className={classes.section}>
-                <label className={classes.label}>Stroke Style</label>
-                <div className={classes.buttonGroup}>
+            <div className="flex flex-col gap-1">
+                <label className="text-xs text-[var(--text-secondary)] font-medium">Stroke Style</label>
+                <div className="flex gap-1 bg-[var(--bg-color)] p-0.5 rounded-md border border-[var(--border-color)]">
                     <button
-                        className={`${classes.groupBtn} ${strokeDasharray === 'none' ? classes.activeBtn : ''}`}
+                        className={`flex-1 h-6 border-none bg-transparent rounded cursor-pointer flex items-center justify-center text-[var(--text-secondary)] hover:bg-[var(--btn-hover)] hover:text-[var(--text-primary)] ${strokeDasharray === 'none' ? '!bg-[var(--bg-secondary)] !text-[var(--primary-color)] shadow-sm' : ''}`}
                         onClick={() => updateProp('strokeDasharray', 'none')}
                         title="Continuous"
                     >
@@ -142,7 +142,7 @@ const RightPanel = () => {
                         </svg>
                     </button>
                     <button
-                        className={`${classes.groupBtn} ${strokeDasharray === '6,3' ? classes.activeBtn : ''}`}
+                        className={`flex-1 h-6 border-none bg-transparent rounded cursor-pointer flex items-center justify-center text-[var(--text-secondary)] hover:bg-[var(--btn-hover)] hover:text-[var(--text-primary)] ${strokeDasharray === '6,3' ? '!bg-[var(--bg-secondary)] !text-[var(--primary-color)] shadow-sm' : ''}`}
                         onClick={() => updateProp('strokeDasharray', '6,3')}
                         title="Dashed"
                     >
@@ -151,7 +151,7 @@ const RightPanel = () => {
                         </svg>
                     </button>
                     <button
-                        className={`${classes.groupBtn} ${strokeDasharray === '2,2' ? classes.activeBtn : ''}`}
+                        className={`flex-1 h-6 border-none bg-transparent rounded cursor-pointer flex items-center justify-center text-[var(--text-secondary)] hover:bg-[var(--btn-hover)] hover:text-[var(--text-primary)] ${strokeDasharray === '2,2' ? '!bg-[var(--bg-secondary)] !text-[var(--primary-color)] shadow-sm' : ''}`}
                         onClick={() => updateProp('strokeDasharray', '2,2')}
                         title="Dotted"
                     >
@@ -162,10 +162,10 @@ const RightPanel = () => {
                 </div>
             </div>
 
-            <div className={classes.section}>
-                <div className={classes.rowBetween}>
-                    <label className={classes.label}>Opacity</label>
-                    <span className={classes.valueLabel}>{Math.round(opacity * 100)}%</span>
+            <div className="flex flex-col gap-1">
+                <div className="flex justify-between items-center">
+                    <label className="text-xs text-[var(--text-secondary)] font-medium">Opacity</label>
+                    <span className="text-xs text-[var(--text-primary)] bg-[var(--bg-color)] px-1.5 py-0.5 rounded">{Math.round(opacity * 100)}%</span>
                 </div>
                 <input
                     type="range"
@@ -174,7 +174,7 @@ const RightPanel = () => {
                     step="0.05"
                     value={opacity}
                     onChange={(e) => updateProp('opacity', parseFloat(e.target.value))}
-                    className={classes.slider}
+                    className="w-full h-1 bg-[var(--border-color)] rounded-sm appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3.5 [&::-webkit-slider-thumb]:h-3.5 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-[var(--text-primary)] [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-[var(--bg-secondary)] [&::-webkit-slider-thumb]:shadow-md"
                 />
             </div>
         </div>
@@ -193,7 +193,7 @@ const RightPanel = () => {
 
         if (m.type === 'length') {
             const dist = Math.sqrt(Math.pow(m.points[1].x - m.points[0].x, 2) + Math.pow(m.points[1].y - m.points[0].y, 2));
-            return `${(dist / scale).toFixed(2)} ${unit}`;
+            return `${(dist / scale).toFixed(2)} ${unit} `;
         }
         if (m.type === 'area') {
             const area = calculatePolygonArea(m.points);
@@ -204,7 +204,7 @@ const RightPanel = () => {
             for (let i = 0; i < m.points.length - 1; i++) {
                 len += Math.sqrt(Math.pow(m.points[i + 1].x - m.points[i].x, 2) + Math.pow(m.points[i + 1].y - m.points[i].y, 2));
             }
-            return `${(len / scale).toFixed(2)} ${unit}`;
+            return `${(len / scale).toFixed(2)} ${unit} `;
         }
         if (m.type === 'comment') return m.text || "(Untitled)";
         if (m.type === 'count') return `Point`;
@@ -212,18 +212,18 @@ const RightPanel = () => {
     };
 
     const renderMeasurementList = () => (
-        <div className={classes.listContent}>
+        <div className="flex-1 overflow-y-auto p-3">
             {Object.entries(grouped).map(([type, items]) => (
-                <div key={type} className={classes.group}>
-                    <h3 className={classes.groupHeader}>{type.charAt(0).toUpperCase() + type.slice(1)}s ({items.length})</h3>
-                    <ul className={classes.list}>
+                <div key={type} className="mb-6">
+                    <h3 className="text-[11px] uppercase text-[var(--text-secondary)] m-0 mb-2 ml-1 tracking-[0.5px]">{type.charAt(0).toUpperCase() + type.slice(1)}s ({items.length})</h3>
+                    <ul className="list-none p-0 m-0 flex flex-col gap-1">
                         {items.map(m => (
-                            <li key={m.id} className={classes.item}>
-                                <div className={classes.itemInfo}>
-                                    <span className={classes.itemPage}>Pg {m.pageIndex + 1}</span>
-                                    <span className={classes.itemValue}>{renderValue(m)}</span>
+                            <li key={m.id} className="flex items-center justify-between p-2 px-3 bg-[var(--bg-color)] rounded-md border border-transparent transition-all duration-200 hover:border-[var(--border-color)] group">
+                                <div className="flex flex-col gap-0.5">
+                                    <span className="text-[10px] text-[var(--text-secondary)]">Pg {m.pageIndex + 1}</span>
+                                    <span className="text-[13px] font-medium text-[var(--text-primary)]">{renderValue(m)}</span>
                                 </div>
-                                <button className={classes.deleteIcon} onClick={() => deleteMeasurement(m.id)}>
+                                <button className="bg-transparent border-none text-[var(--text-secondary)] cursor-pointer p-1 rounded opacity-0 transition-all duration-200 group-hover:opacity-100 hover:text-[#ff4444] hover:bg-red-500/10" onClick={() => deleteMeasurement(m.id)}>
                                     <Trash2 size={14} />
                                 </button>
                             </li>
@@ -231,13 +231,13 @@ const RightPanel = () => {
                     </ul>
                 </div>
             ))}
-            {measurements.length === 0 && <p className={classes.empty}>No measurements yet.</p>}
+            {measurements.length === 0 && <p className="p-8 text-center text-[var(--text-secondary)] text-[13px]">No measurements yet.</p>}
         </div>
     );
 
     return (
-        <aside className={classes.panel}>
-            <h2 className={classes.header}>
+        <aside className="w-[260px] bg-[var(--bg-secondary)] border-l border-[var(--border-color)] flex flex-col h-full overflow-hidden text-[var(--text-primary)]">
+            <h2 className="p-3 px-4 text-sm font-semibold border-b border-[var(--border-color)] m-0 bg-[var(--bg-secondary)] shrink-0">
                 {showProperties ? "Properties" : "Measurements"}
             </h2>
             {showProperties ? renderProperties() : renderMeasurementList()}

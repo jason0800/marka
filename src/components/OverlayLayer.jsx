@@ -1,7 +1,6 @@
 import { useMemo, useRef, useState, useEffect, useCallback } from "react";
-import useAppStore from "../../stores/useAppStore";
-import { calculateDistance, calculatePolygonArea } from "../../geometry/transforms";
-import classes from "./OverlayLayer.module.css";
+import useAppStore from "../stores/useAppStore";
+import { calculateDistance, calculatePolygonArea } from "../geometry/transforms";
 
 const OverlayLayer = ({ page, width, height, viewScale = 1.0 }) => {
     const {
@@ -869,7 +868,7 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0 }) => {
     return (
         <svg
             ref={svgRef}
-            className={classes.overlaySvg}
+            className="absolute top-0 left-0 w-full h-full select-none z-10"
             width={width}
             height={height}
             viewBox={viewBox}

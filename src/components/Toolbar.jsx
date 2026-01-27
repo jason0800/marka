@@ -2,8 +2,7 @@ import {
     MousePointer2, Hand, Ruler, Scaling, Square, Milestone, Hash, MessageSquare,
     Box, Circle, Minus, ArrowRight, Pentagon, RectangleHorizontal
 } from 'lucide-react';
-import useAppStore from '../../stores/useAppStore';
-import classes from './Toolbar.module.css';
+import useAppStore from '../stores/useAppStore';
 import { useEffect } from 'react';
 
 const TOOLS = [
@@ -46,15 +45,19 @@ const Toolbar = () => {
     }, [setActiveTool]);
 
     return (
-        <aside className={classes.toolbar}>
+        <aside className="w-[60px] bg-[var(--bg-secondary)] border-r border-[var(--border-color)] flex flex-col items-center pt-4 gap-3 z-10">
             {TOOLS.map((tool, i) => {
                 if (tool.type === 'separator') {
-                    return <div key={i} style={{ width: '60%', height: '1px', background: 'var(--border-color)', margin: '4px 0' }} />;
+                    return <div key={i} className="w-[60%] h-px bg-[var(--border-color)] my-1" />;
                 }
+                const isActive = activeTool === tool.id;
                 return (
                     <button
                         key={tool.id}
-                        className={`${classes.toolButton} ${activeTool === tool.id ? classes.active : ''}`}
+                        className={`w-9 h-9 rounded-md border-none bg-transparent text-[var(--text-secondary)] flex items-center justify-center transition-all duration-200 hover:bg-[var(--btn-hover)] hover:text-[var(--text-primary)] ${isActive
+                                ? '!bg-[var(--primary-color)] !text-[var(--text-active)] shadow-[0_0_10px_rgba(var(--primary-color-rgb),0.5)]'
+                                : ''
+                            }`}
                         onClick={() => setActiveTool(tool.id)}
                         title={tool.label}
                     >

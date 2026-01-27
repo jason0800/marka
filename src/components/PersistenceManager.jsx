@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
-import useAppStore from '../../stores/useAppStore';
-import { saveProjectData, loadProjectData } from '../../services/db-service';
+import useAppStore from '../stores/useAppStore';
+import { saveProjectData, loadProjectData } from '../services/db-service';
 
 const PersistenceManager = ({ projectId = 'default' }) => {
     const {

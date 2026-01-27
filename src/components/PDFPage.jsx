@@ -1,6 +1,5 @@
 import { useRef, useEffect, memo, useMemo } from "react";
-import OverlayLayer from "../Overlay/OverlayLayer";
-import classes from "./PDFPage.module.css";
+import OverlayLayer from "./OverlayLayer";
 
 const PDFPage = memo(
     ({ page, scale = 1.0, renderScale = 1.0 }) => {
@@ -84,9 +83,9 @@ const PDFPage = memo(
         }, [page, scale, renderScale, width, height]);
 
         return (
-            <div className={classes.pageContainer} style={{ width, height, position: "relative" }}>
-                <canvas ref={canvasRef} className={classes.pageCanvas} />
-                <div ref={textLayerRef} className="textLayer" />
+            <div className="relative shadow-[0_2px_10px_rgba(0,0,0,0.3)] mb-5 bg-white leading-[0]" style={{ width, height, position: "relative" }}>
+                <canvas ref={canvasRef} className="block" />
+                <div ref={textLayerRef} className="absolute inset-0 overflow-hidden leading-[1.0] pointer-events-none [&>span]:text-transparent [&>span]:absolute [&>span]:whitespace-pre [&>span]:cursor-text [&>span]:origin-[0%_0%] [&>span]:pointer-events-auto" />
 
                 {width > 0 && (
                     <OverlayLayer page={page} width={width} height={height} viewScale={scale * renderScale} />

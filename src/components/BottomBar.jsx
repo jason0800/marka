@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
-import useAppStore from '../../stores/useAppStore';
-import classes from './BottomBar.module.css';
+import useAppStore from '../stores/useAppStore';
 
 const BottomBar = ({ totalPages }) => {
     const {
@@ -98,12 +97,12 @@ const BottomBar = ({ totalPages }) => {
     const goLast = () => setCurrentPage(totalPages);
 
     return (
-        <div className={classes.bottomBar}>
-            <div className={classes.leftControls}>
-                <span className={classes.scaleLabel}>Scale:</span>
+        <div className="w-full h-[50px] bg-[var(--bg-secondary)] border-t border-[var(--border-color)] grid grid-cols-[1fr_auto_1fr] items-center px-5 box-border text-[var(--text-primary)] text-[15px] select-none">
+            <div className="flex items-center gap-2 justify-self-start">
+                <span className="opacity-80 text-sm font-medium">Scale:</span>
                 <input
                     type="text"
-                    className={classes.scaleInput}
+                    className="bg-[var(--bg-color)] border border-[var(--border-color)] text-[var(--text-primary)] rounded-md px-2 py-1.5 w-[80px] text-center text-sm font-medium focus:outline-none focus:border-[#4CAF50] focus:ring-2 focus:ring-[#4CAF50]/20 placeholder:opacity-50"
                     value={scaleInput}
                     onChange={handleScaleChange}
                     onKeyDown={handleScaleKeyDown}
@@ -112,9 +111,9 @@ const BottomBar = ({ totalPages }) => {
                 />
             </div>
 
-            <div className={classes.centerControls} style={{ visibility: totalPages > 0 ? 'visible' : 'hidden' }}>
+            <div className="flex items-center gap-3 justify-self-center" style={{ visibility: totalPages > 0 ? 'visible' : 'hidden' }}>
                 <button
-                    className={classes.iconButton}
+                    className="bg-transparent border border-transparent text-[var(--text-secondary)] cursor-pointer py-2 px-3 min-w-[36px] rounded-md flex items-center justify-center text-base font-bold transition-all duration-200 hover:bg-[var(--btn-hover)] hover:text-[var(--text-primary)] disabled:opacity-30 disabled:cursor-not-allowed"
                     onClick={goFirst}
                     disabled={currentPage <= 1}
                     title="First Page"
@@ -122,7 +121,7 @@ const BottomBar = ({ totalPages }) => {
                     «
                 </button>
                 <button
-                    className={classes.iconButton}
+                    className="bg-transparent border border-transparent text-[var(--text-secondary)] cursor-pointer py-2 px-3 min-w-[36px] rounded-md flex items-center justify-center text-base font-bold transition-all duration-200 hover:bg-[var(--btn-hover)] hover:text-[var(--text-primary)] disabled:opacity-30 disabled:cursor-not-allowed"
                     onClick={goPrev}
                     disabled={currentPage <= 1}
                     title="Previous Page"
@@ -130,18 +129,18 @@ const BottomBar = ({ totalPages }) => {
                     ‹
                 </button>
 
-                <span className={classes.pageCount}>Page</span>
+                <span className="opacity-80 text-sm font-medium">Page</span>
                 <input
                     type="text"
-                    className={classes.pageInput}
+                    className="bg-[var(--bg-color)] border border-[var(--border-color)] text-[var(--text-primary)] rounded-md px-2 py-1.5 w-[50px] text-center text-sm font-medium focus:outline-none focus:border-[#4CAF50] focus:ring-2 focus:ring-[#4CAF50]/20"
                     value={pageInput}
                     onChange={handlePageChange}
                     onKeyDown={handlePageKeyDown}
                 />
-                <span className={classes.pageCount}>of {totalPages || 0}</span>
+                <span className="opacity-80 text-sm font-medium">of {totalPages || 0}</span>
 
                 <button
-                    className={classes.iconButton}
+                    className="bg-transparent border border-transparent text-[var(--text-secondary)] cursor-pointer py-2 px-3 min-w-[36px] rounded-md flex items-center justify-center text-base font-bold transition-all duration-200 hover:bg-[var(--btn-hover)] hover:text-[var(--text-primary)] disabled:opacity-30 disabled:cursor-not-allowed"
                     onClick={goNext}
                     disabled={currentPage >= totalPages}
                     title="Next Page"
@@ -149,7 +148,7 @@ const BottomBar = ({ totalPages }) => {
                     ›
                 </button>
                 <button
-                    className={classes.iconButton}
+                    className="bg-transparent border border-transparent text-[var(--text-secondary)] cursor-pointer py-2 px-3 min-w-[36px] rounded-md flex items-center justify-center text-base font-bold transition-all duration-200 hover:bg-[var(--btn-hover)] hover:text-[var(--text-primary)] disabled:opacity-30 disabled:cursor-not-allowed"
                     onClick={goLast}
                     disabled={currentPage >= totalPages}
                     title="Last Page"
@@ -158,9 +157,9 @@ const BottomBar = ({ totalPages }) => {
                 </button>
             </div>
 
-            <div className={classes.rightControls}>
+            <div className="flex items-center gap-2 justify-self-end">
                 <button
-                    className={classes.viewModeButton}
+                    className="bg-[var(--bg-color)] border border-[var(--border-color)] text-[var(--text-primary)] p-1.5 rounded-md text-[13px] cursor-pointer transition-all duration-200 min-w-[36px] h-[36px] flex items-center justify-center hover:bg-[var(--btn-hover)] hover:text-[var(--text-primary)]"
                     onClick={() => setViewMode(viewMode === 'continuous' ? 'single' : 'continuous')}
                     title={viewMode === 'continuous' ? "Switch to Single Page View" : "Switch to Continuous View"}
                 >

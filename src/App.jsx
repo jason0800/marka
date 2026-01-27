@@ -1,13 +1,13 @@
 import { useState } from 'react';
 import { loadPDF } from './services/pdf-service';
-import PDFViewer from './components/PDFViewer/PDFViewer';
-import Toolbar from './components/Toolbar/Toolbar';
-import RightPanel from './components/Panels/RightPanel';
-import PersistenceManager from './components/Persistence/PersistenceManager';
+import PDFViewer from './components/PDFViewer';
+import Toolbar from './components/Toolbar';
+import RightPanel from './components/RightPanel';
+import PersistenceManager from './components/PersistenceManager';
 import html2canvas from 'html2canvas';
 import useAppStore from './stores/useAppStore';
-import TopMenu from './components/TopMenu/TopMenu';
-import BottomBar from './components/BottomBar/BottomBar';
+import TopMenu from './components/TopMenu';
+import BottomBar from './components/BottomBar';
 import './App.css';
 
 function App() {
