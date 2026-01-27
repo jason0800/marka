@@ -1,84 +1,103 @@
-import { useRef, useEffect, memo } from 'react';
-import OverlayLayer from '../Overlay/OverlayLayer';
-import classes from './PDFPage.module.css';
+import { useRef, useEffect, memo, useMemo } from "react";
+import OverlayLayer from "../Overlay/OverlayLayer";
+import classes from "./PDFPage.module.css";
 
-const PDFPage = memo(({ page, scale = 1.0 }) => {
-    const canvasRef = useRef(null);
-    const textLayerRef = useRef(null);
+const PDFPage = memo(
+    ({ page, scale = 1.0, renderScale = 1.0 }) => {
+        const canvasRef = useRef(null);
+        const textLayerRef = useRef(null);
 
-    // Calculate Viewport Synchronously to prevent layout thrashing
-    const viewport = page.getViewport({ scale });
-    const { width, height } = viewport;
+        // CSS/layout size (keep stable, usually scale=1 in your viewer)
+        const cssViewport = useMemo(() => page.getViewport({ scale }), [page, scale]);
+        const { width, height } = cssViewport;
 
-    // Render Canvas Effect
-    useEffect(() => {
-        if (!page || !canvasRef.current || !textLayerRef.current) return;
+        useEffect(() => {
+            if (!page || !canvasRef.current || !textLayerRef.current) return;
 
-        const canvas = canvasRef.current;
-        const context = canvas.getContext('2d');
-        const outputScale = window.devicePixelRatio || 1;
+            const canvas = canvasRef.current;
+            const textLayerDiv = textLayerRef.current;
 
-        // Set Canvas Dimensions (Physical Pixels)
-        canvas.width = Math.floor(width * outputScale);
-        canvas.height = Math.floor(height * outputScale);
+            const dpr = window.devicePixelRatio || 1;
 
-        // CSS Dimensions need to match viewport
-        canvas.style.width = Math.floor(width) + "px";
-        canvas.style.height = Math.floor(height) + "px";
+            // Render at higher resolution to match viewer zoom
+            const effectiveRenderScale = Math.max(0.01, scale * renderScale);
+            const renderViewport = page.getViewport({ scale: effectiveRenderScale });
 
-        // Transform for HiDPI
-        context.scale(outputScale, outputScale);
+            // --- Canvas ---
+            const ctx = canvas.getContext("2d", { alpha: false });
 
-        // Render Canvas
-        const renderContext = {
-            canvasContext: context,
-            viewport: viewport
-        };
-        const renderTask = page.render(renderContext);
+            // IMPORTANT: reset transform each time (prevents stacking blur/scale bugs)
+            ctx.setTransform(1, 0, 0, 1, 0, 0);
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-        // Text Layer Logic
-        const textLayerDiv = textLayerRef.current;
-        textLayerDiv.innerHTML = "";
-        textLayerDiv.style.setProperty('--scale-factor', scale);
+            // Internal bitmap size (physical pixels)
+            canvas.width = Math.floor(renderViewport.width * dpr);
+            canvas.height = Math.floor(renderViewport.height * dpr);
 
-        page.getTextContent().then(textContent => {
-            if (textLayerDiv) {
-                import('pdfjs-dist/build/pdf').then(pdfjs => {
-                    if (pdfjs.renderTextLayer) {
-                        pdfjs.renderTextLayer({
-                            textContentSource: textContent,
-                            container: textLayerDiv,
-                            viewport: viewport,
-                            textDivs: []
-                        }).promise;
-                    }
-                }).catch(() => {
-                    // Silent fail or fallback if imports missing
-                });
-            }
-        });
+            // On-screen size (logical CSS pixels) — keep at unscaled layout size
+            canvas.style.width = `${Math.floor(width)}px`;
+            canvas.style.height = `${Math.floor(height)}px`;
 
-        return () => {
-            renderTask.cancel();
-        };
-    }, [page, scale, width, height, viewport]); // Dependencies
+            // Render into high-res buffer
+            const renderTask = page.render({
+                canvasContext: ctx,
+                viewport: renderViewport,
+                transform: [dpr, 0, 0, dpr, 0, 0],
+            });
 
-    return (
-        <div className={classes.pageContainer} style={{ width, height }}>
-            <canvas ref={canvasRef} className={classes.pageCanvas} />
-            <div ref={textLayerRef} className="textLayer" style={{ width, height }}></div>
-            {width > 0 && (
-                <OverlayLayer
-                    page={page}
-                    width={width}
-                    height={height}
-                    viewScale={scale}
-                />
-            )}
-        </div>
-    );
-}, (prevProps, nextProps) => {
-    return prevProps.scale === nextProps.scale && prevProps.page === nextProps.page;
-});
+            // --- Text layer ---
+            textLayerDiv.innerHTML = "";
+            textLayerDiv.style.width = `${Math.floor(width)}px`;
+            textLayerDiv.style.height = `${Math.floor(height)}px`;
+            textLayerDiv.style.setProperty("--scale-factor", String(effectiveRenderScale));
+
+            let textCancelled = false;
+
+            page
+                .getTextContent()
+                .then((textContent) => {
+                    if (textCancelled) return;
+
+                    return import("pdfjs-dist/build/pdf").then((pdfjs) => {
+                        if (textCancelled) return;
+
+                        if (pdfjs.renderTextLayer) {
+                            return pdfjs
+                                .renderTextLayer({
+                                    textContentSource: textContent,
+                                    container: textLayerDiv,
+                                    viewport: renderViewport,
+                                    textDivs: [],
+                                })
+                                .promise;
+                        }
+                    });
+                })
+                .catch(() => { });
+
+            return () => {
+                textCancelled = true;
+                try {
+                    renderTask.cancel();
+                } catch { }
+            };
+        }, [page, scale, renderScale, width, height]);
+
+        return (
+            <div className={classes.pageContainer} style={{ width, height, position: "relative" }}>
+                <canvas ref={canvasRef} className={classes.pageCanvas} />
+                <div ref={textLayerRef} className="textLayer" />
+
+                {width > 0 && (
+                    <OverlayLayer page={page} width={width} height={height} viewScale={scale * renderScale} />
+                )}
+            </div>
+        );
+    },
+    (prev, next) =>
+        prev.page === next.page &&
+        prev.scale === next.scale &&
+        prev.renderScale === next.renderScale
+);
 
 export default PDFPage;

@@ -12,14 +12,14 @@ const TOOLS = [
     { id: 'calibrate', icon: Scaling, label: 'Calibrate (C)', key: 'c' },
     { type: 'separator' },
     { id: 'length', icon: Ruler, label: 'Length (L)', key: 'l' },
-    { id: 'area', icon: Pentagon, label: 'Area (A)', key: 'a' },
+    { id: 'area', icon: Pentagon, label: 'Area (E)', key: 'e' },
     { id: 'perimeter', icon: Milestone, label: 'Perimeter (P)', key: 'p' },
     { id: 'count', icon: Hash, label: 'Count (N)', key: 'n' },
     { type: 'separator' },
     { id: 'rectangle', icon: RectangleHorizontal, label: 'Rectangle (R)', key: 'r' },
     { id: 'circle', icon: Circle, label: 'Circle (O)', key: 'o' },
     { id: 'line', icon: Minus, label: 'Line (I)', key: 'i' },
-    { id: 'arrow', icon: ArrowRight, label: 'Arrow (Y)', key: 'y' },
+    { id: 'arrow', icon: ArrowRight, label: 'Arrow (A)', key: 'a' },
     { type: 'separator' },
     { id: 'comment', icon: MessageSquare, label: 'Comment (M)', key: 'm' },
 ];
@@ -31,6 +31,9 @@ const Toolbar = () => {
         const handleKeyDown = (e) => {
             // Ignore if typing in an input
             if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+
+            // Ignore if Ctrl/Cmd is pressed (to avoid conflicts with undo/redo)
+            if (e.ctrlKey || e.metaKey) return;
 
             const tool = TOOLS.find(t => t.key === e.key);
             if (tool) {

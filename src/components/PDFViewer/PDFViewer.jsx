@@ -1,10 +1,12 @@
-import { useEffect, useRef, useState, useLayoutEffect, useMemo } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import useAppStore from "../../stores/useAppStore";
 import PDFPage from "./PDFPage";
+import OverlayLayer from "../Overlay/OverlayLayer";
 import classes from "./PDFViewer.module.css";
 
+const clamp = (v, min, max) => Math.min(max, Math.max(min, v));
+
 const PDFViewer = ({ document }) => {
-    // --- Store ---
     const {
         viewport: storeViewport,
         setViewport,
@@ -14,48 +16,39 @@ const PDFViewer = ({ document }) => {
         viewMode,
     } = useAppStore();
 
-    // --- Refs ---
     const containerRef = useRef(null);
     const contentRef = useRef(null);
-    const rafRef = useRef(null);
+    const rafCommitRef = useRef(null);
 
-    const isDraggingRef = useRef(false);
-    const isThumbDraggingRef = useRef(false); // <-- NEW: thumb drag mode
+    const isPanningRef = useRef(false);
+    const isThumbDraggingRef = useRef(false);
     const lastMouseRef = useRef({ x: 0, y: 0 });
 
     const startedPanButtonRef = useRef(null);
     const suppressNextClickRef = useRef(false);
 
-    // Prevent scroll->page detector from reacting to programmatic jumps
-    const programmaticPageJumpRef = useRef(false);
-
-    // Keep latest currentPage without closure issues
     const currentPageRef = useRef(currentPage);
     useEffect(() => {
         currentPageRef.current = currentPage;
     }, [currentPage]);
 
-    // Internal state (imperative truth)
+    // imperative viewport truth (fast)
     const stateRef = useRef({
         scale: storeViewport.scale || 1,
         x: storeViewport.x || 0,
         y: storeViewport.y || 0,
     });
 
-    // --- Local UI state ---
     const [pages, setPages] = useState([]);
     const [dragging, setDragging] = useState(false);
-    const [, forceRerender] = useState(0); // thumb rerender tick
+    const [, forceRerender] = useState(0);
 
-    // --- Constants ---
     const MIN_SCALE = 0.1;
     const MAX_SCALE = 10;
     const PADDING = 40;
 
-    // --- Bounds (vertical clamping) ---
+    // ---- bounds / scroll range (vertical) ----
     const boundsRef = useRef({ minY: PADDING, maxY: PADDING });
-
-    const clamp = (v, min, max) => Math.min(max, Math.max(min, v));
 
     const updateBounds = () => {
         const container = containerRef.current;
@@ -92,14 +85,68 @@ const PDFViewer = ({ document }) => {
 
     const canScrollY = () => getScrollRange() > 0.5;
 
-    // --- Apply state (single gateway) ---
+    // ---- page detection (single source, cheap) ----
+    const pageDetectRafRef = useRef(0);
+
+    const detectAndSetCurrentPage = () => {
+        pageDetectRafRef.current = 0;
+
+        if (viewMode !== "continuous") return;
+        if (isThumbDraggingRef.current) {
+            // still OK to update page during thumb drag
+            // but we don’t want any other loops — we only derive currentPage from y
+        }
+
+        const container = containerRef.current;
+        const content = contentRef.current;
+        if (!container || !content) return;
+
+        const pageEls = content.querySelectorAll(".pdf-page-container");
+        if (!pageEls.length) return;
+
+        const { y, scale } = stateRef.current;
+        const probeY = (container.clientHeight / 2 - y) / scale;
+
+        let bestIdx = 0;
+        let bestDist = Infinity;
+
+        for (let i = 0; i < pageEls.length; i++) {
+            const el = pageEls[i];
+            const top = el.offsetTop;
+            const bottom = top + el.offsetHeight;
+
+            if (probeY >= top && probeY < bottom) {
+                bestIdx = i;
+                bestDist = 0;
+                break;
+            }
+
+            const dist = probeY < top ? top - probeY : probeY - bottom;
+            if (dist < bestDist) {
+                bestDist = dist;
+                bestIdx = i;
+            }
+        }
+
+        const newPage = bestIdx + 1;
+        if (newPage !== currentPageRef.current) {
+            currentPageRef.current = newPage;
+            setCurrentPage(newPage);
+        }
+    };
+
+    const scheduleDetectPage = () => {
+        if (pageDetectRafRef.current) return;
+        pageDetectRafRef.current = requestAnimationFrame(detectAndSetCurrentPage);
+    };
+
+    // ---- applyState (single gateway) ----
     const applyState = (partial, commit = true) => {
         const prev = stateRef.current;
         const nextScale = clamp(partial.scale ?? prev.scale, MIN_SCALE, MAX_SCALE);
 
         const next = { ...prev, ...partial, scale: nextScale };
 
-        // bounds depend on scale/content/container
         stateRef.current = next;
         updateBounds();
 
@@ -111,18 +158,21 @@ const PDFViewer = ({ document }) => {
             contentRef.current.style.transformOrigin = "0 0";
         }
 
+        // keep thumb reactive
         forceRerender((n) => (n + 1) % 1000000);
 
+        // update page number from y
+        scheduleDetectPage();
+
         if (commit) {
-            if (rafRef.current) cancelAnimationFrame(rafRef.current);
-            rafRef.current = requestAnimationFrame(() => setViewport(next));
+            if (rafCommitRef.current) cancelAnimationFrame(rafCommitRef.current);
+            rafCommitRef.current = requestAnimationFrame(() => setViewport(next));
         }
     };
 
-    // --- 1) Load pages ---
+    // ---- load pages ----
     useEffect(() => {
         if (!document) return;
-
         let cancelled = false;
 
         const load = async () => {
@@ -141,9 +191,10 @@ const PDFViewer = ({ document }) => {
         };
     }, [document]);
 
-    // --- 2) Bounds maintenance ---
+    // ---- bounds maintenance ----
     useLayoutEffect(() => {
         updateBounds();
+        scheduleDetectPage();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [pages.length, viewMode]);
 
@@ -151,12 +202,14 @@ const PDFViewer = ({ document }) => {
         const onResize = () => {
             updateBounds();
             forceRerender((n) => (n + 1) % 1000000);
+            scheduleDetectPage();
         };
         window.addEventListener("resize", onResize);
         return () => window.removeEventListener("resize", onResize);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
-    // --- 3) Wheel: zoom (ctrl/cmd) + pan ---
+    // ---- wheel: zoom + pan ----
     useEffect(() => {
         const container = containerRef.current;
         if (!container) return;
@@ -166,7 +219,7 @@ const PDFViewer = ({ document }) => {
 
             const { scale, x, y } = stateRef.current;
 
-            // Zoom (Ctrl/Cmd + wheel)
+            // zoom about mouse
             if (e.ctrlKey || e.metaKey) {
                 const rect = container.getBoundingClientRect();
                 const mx = e.clientX - rect.left;
@@ -185,7 +238,7 @@ const PDFViewer = ({ document }) => {
                 return;
             }
 
-            // Pan (wheel)
+            // wheel pan
             let dx = e.deltaX;
             let dy = e.deltaY;
 
@@ -203,9 +256,9 @@ const PDFViewer = ({ document }) => {
         container.addEventListener("wheel", handleWheel, { passive: false });
         return () => container.removeEventListener("wheel", handleWheel);
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+    }, [viewMode]);
 
-    // --- 4) Keyboard zoom (Ctrl/Cmd +/-) ---
+    // ---- keyboard zoom ----
     useEffect(() => {
         const handleKeyDown = (e) => {
             if (!(e.ctrlKey || e.metaKey)) return;
@@ -239,15 +292,13 @@ const PDFViewer = ({ document }) => {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
-    // --- 5) Mouse drag pan ---
+    // ---- mouse pan ----
     const onMouseDown = (e) => {
-        // IMPORTANT: don't start canvas-pan when user is dragging the scrollbar thumb
-        // (thumb uses stopPropagation already, but keep safe)
         const shouldPan = e.button === 1 || activeTool === "pan" || e.shiftKey;
         if (!shouldPan) return;
 
         startedPanButtonRef.current = e.button;
-        isDraggingRef.current = true;
+        isPanningRef.current = true;
         setDragging(true);
         lastMouseRef.current = { x: e.clientX, y: e.clientY };
 
@@ -256,7 +307,7 @@ const PDFViewer = ({ document }) => {
     };
 
     const onMouseMove = (e) => {
-        if (!isDraggingRef.current) return;
+        if (!isPanningRef.current) return;
         e.stopPropagation();
 
         const dx = e.clientX - lastMouseRef.current.x;
@@ -267,10 +318,10 @@ const PDFViewer = ({ document }) => {
         applyState({ x: x + dx, y: canScrollY() ? y + dy : y });
     };
 
-    const stopDrag = (e) => {
-        if (!isDraggingRef.current) return;
+    const stopPan = (e) => {
+        if (!isPanningRef.current) return;
 
-        isDraggingRef.current = false;
+        isPanningRef.current = false;
         setDragging(false);
 
         if (startedPanButtonRef.current === 1) {
@@ -279,64 +330,19 @@ const PDFViewer = ({ document }) => {
                 suppressNextClickRef.current = false;
             }, 0);
         }
-
         startedPanButtonRef.current = null;
 
-        e.preventDefault();
-        e.stopPropagation();
-    };
-
-    // --- 6) Detect and set current page ---   
-    const detectAndSetCurrentPage = () => {
-        if (viewMode !== "continuous") return;
-
-        const container = containerRef.current;
-        const content = contentRef.current;
-        if (!container || !content) return;
-
-        const pageEls = content.querySelectorAll(".pdf-page-container");
-        if (!pageEls.length) return;
-
-        const { y, scale } = stateRef.current;
-
-        // middle of viewport -> content coords
-        const probeY = (container.clientHeight / 2 - y) / scale;
-
-        let bestIdx = 0;
-        let bestDist = Infinity;
-
-        for (let i = 0; i < pageEls.length; i++) {
-            const el = pageEls[i];
-            const top = el.offsetTop;
-            const bottom = top + el.offsetHeight;
-
-            if (probeY >= top && probeY < bottom) {
-                bestIdx = i;
-                bestDist = 0;
-                break;
-            }
-
-            const dist = probeY < top ? top - probeY : probeY - bottom;
-            if (dist < bestDist) {
-                bestDist = dist;
-                bestIdx = i;
-            }
-        }
-
-        const newPage = bestIdx + 1;
-        if (newPage !== currentPageRef.current) {
-            currentPageRef.current = newPage; // keep ref in sync immediately
-            setCurrentPage(newPage);
-        }
+        e?.preventDefault?.();
+        e?.stopPropagation?.();
     };
 
     useEffect(() => {
-        window.addEventListener("mouseup", stopDrag);
-        return () => window.removeEventListener("mouseup", stopDrag);
+        window.addEventListener("mouseup", stopPan);
+        return () => window.removeEventListener("mouseup", stopPan);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
-    // --- 6) Sync from store (external changes) ---
+    // ---- sync from store (external) ----
     useEffect(() => {
         const dScale = Math.abs((storeViewport.scale ?? 1) - stateRef.current.scale);
         const dX = Math.abs((storeViewport.x ?? 0) - stateRef.current.x);
@@ -355,108 +361,14 @@ const PDFViewer = ({ document }) => {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [storeViewport]);
 
-    // --- 7A) Page -> scroll (ONLY for explicit page changes; disabled during thumb drag) ---
-    useEffect(() => {
-        if (viewMode !== "continuous") return;
-        if (!contentRef.current) return;
-
-        // Don't fight the user while they're dragging the thumb
-        if (isThumbDraggingRef.current) return;
-
-        const pageEl = contentRef.current.querySelector(
-            `[data-page-number="${currentPage}"]`
-        );
-        if (!pageEl) return;
-
-        const pageTop = pageEl.offsetTop;
-        const { scale } = stateRef.current;
-        const targetY = PADDING - pageTop * scale;
-
-        programmaticPageJumpRef.current = true;
-        // applyState({ y: targetY });
-
-        requestAnimationFrame(() => {
-            programmaticPageJumpRef.current = false;
-        });
-
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [currentPage, viewMode]);
-
-    // --- 7B) Scroll -> page (disable while thumb dragging or during programmatic jump) ---
-    useEffect(() => {
-        if (viewMode !== "continuous") return;
-
-        const container = containerRef.current;
-        const content = contentRef.current;
-        if (!container || !content) return;
-
-        let raf = 0;
-
-        const detectPage = () => {
-            raf = 0;
-
-            if (isThumbDraggingRef.current) return;
-            if (programmaticPageJumpRef.current) return;
-
-            const pageEls = Array.from(content.querySelectorAll(".pdf-page-container"));
-            if (!pageEls.length) return;
-
-            const { y, scale } = stateRef.current;
-            const probeY = (container.clientHeight / 2 - y) / scale;
-
-            let bestIdx = 0;
-            let bestDist = Infinity;
-
-            for (let i = 0; i < pageEls.length; i++) {
-                const el = pageEls[i];
-                const top = el.offsetTop;
-                const bottom = top + el.offsetHeight;
-
-                if (probeY >= top && probeY < bottom) {
-                    bestIdx = i;
-                    bestDist = 0;
-                    break;
-                }
-
-                const dist = probeY < top ? top - probeY : probeY - bottom;
-                if (dist < bestDist) {
-                    bestDist = dist;
-                    bestIdx = i;
-                }
-            }
-
-            const newPage = bestIdx + 1;
-            if (newPage !== currentPageRef.current) {
-                setCurrentPage(newPage);
-            }
-        };
-
-        const schedule = () => {
-            if (!raf) raf = requestAnimationFrame(detectPage);
-        };
-
-        container.addEventListener("wheel", schedule, { passive: true });
-        window.addEventListener("mousemove", schedule, { passive: true });
-        window.addEventListener("mouseup", schedule, { passive: true });
-
-        schedule();
-
-        return () => {
-            container.removeEventListener("wheel", schedule);
-            window.removeEventListener("mousemove", schedule);
-            window.removeEventListener("mouseup", schedule);
-            if (raf) cancelAnimationFrame(raf);
-        };
-    }, [pages.length, viewMode, setCurrentPage]);
-
-    // --- Cursor ---
+    // ---- cursor ----
     const getCursor = () => {
         if (dragging) return "grabbing";
         if (activeTool === "pan") return "grab";
         return "default";
     };
 
-    // --- Scrollbar ---
+    // ---- scrollbar mapping ----
     const MIN_THUMB = 24;
     const TRACK_PAD = 4;
 
@@ -487,22 +399,25 @@ const PDFViewer = ({ document }) => {
 
         const { maxY } = boundsRef.current;
         const t = ((maxY - stateRef.current.y) / range) * maxThumb;
-
         return clamp(t, 0, maxThumb);
     };
 
-    const thumbY = useMemo(() => getThumbTranslateY(thumbH), [thumbH, storeViewport]);
+    const thumbY = useMemo(
+        () => getThumbTranslateY(thumbH),
+        // forceRerender already ticks during pans
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [thumbH, storeViewport]
+    );
 
-    const getCursorForThumb = () => "pointer";
-
+    // ---- render ----
     return (
         <div
             className={classes.viewerContainer}
             ref={containerRef}
             onMouseDown={onMouseDown}
             onMouseMove={onMouseMove}
-            onMouseUp={stopDrag}
-            onMouseLeave={stopDrag}
+            onMouseUp={stopPan}
+            onMouseLeave={stopPan}
             onAuxClickCapture={(e) => {
                 if (!suppressNextClickRef.current) return;
                 e.preventDefault();
@@ -515,7 +430,7 @@ const PDFViewer = ({ document }) => {
             }}
             style={{ cursor: getCursor(), userSelect: "none" }}
         >
-            {/* Content Layer */}
+            {/* Content Layer (PDF + SVG overlays move/zoom together) */}
             <div
                 ref={contentRef}
                 className={classes.contentLayer}
@@ -530,30 +445,55 @@ const PDFViewer = ({ document }) => {
             >
                 {viewMode === "single" ? (
                     pages[currentPage - 1] && (
-                        <div className="pdf-page-container" data-page-number={currentPage}>
-                            <PDFPage page={pages[currentPage - 1]} scale={1} />
+                        <div
+                            className="pdf-page-container"
+                            data-page-number={currentPage}
+                            style={{ position: "relative", width: "fit-content" }}
+                        >
+                            <PDFPage page={pages[currentPage - 1]} renderScale={storeViewport.scale} />
+                            {/* Overlay positioned over the page */}
+                            <div style={{ position: "absolute", inset: 0 }}>
+                                <OverlayLayer
+                                    page={pages[currentPage - 1]}
+                                    width={pages[currentPage - 1].getViewport({ scale: 1 }).width}
+                                    height={pages[currentPage - 1].getViewport({ scale: 1 }).height}
+                                    viewScale={storeViewport.scale}
+                                />
+                            </div>
                         </div>
                     )
                 ) : (
-                    pages.map((page, index) => (
-                        <div
-                            key={index}
-                            data-page-number={index + 1}
-                            className="pdf-page-container"
-                            style={{
-                                borderBottom: index < pages.length - 1 ? "1px solid #c0c0c0" : "none",
-                                paddingBottom: index < pages.length - 1 ? "20px" : "0",
-                                marginBottom: index < pages.length - 1 ? "20px" : "0",
-                                width: "fit-content",
-                            }}
-                        >
-                            <PDFPage page={page} scale={1} />
-                        </div>
-                    ))
+                    pages.map((page, index) => {
+                        const vp = page.getViewport({ scale: 1 });
+                        return (
+                            <div
+                                key={index}
+                                data-page-number={index + 1}
+                                className="pdf-page-container"
+                                style={{
+                                    position: "relative",
+                                    width: "fit-content",
+                                    borderBottom: index < pages.length - 1 ? "1px solid #c0c0c0" : "none",
+                                    paddingBottom: index < pages.length - 1 ? "20px" : "0",
+                                    marginBottom: index < pages.length - 1 ? "20px" : "0",
+                                }}
+                            >
+                                <PDFPage page={page} scale={1} renderScale={storeViewport.scale} />
+                                <div style={{ position: "absolute", inset: 0 }}>
+                                    <OverlayLayer
+                                        page={page}
+                                        width={vp.width}
+                                        height={vp.height}
+                                        viewScale={storeViewport.scale}
+                                    />
+                                </div>
+                            </div>
+                        );
+                    })
                 )}
             </div>
 
-            {/* Scrollbar (only if vertical scrolling exists) */}
+            {/* Scrollbar */}
             {canScrollY() && (
                 <div
                     style={{
@@ -578,9 +518,7 @@ const PDFViewer = ({ document }) => {
                             const container = containerRef.current;
                             if (!container) return;
 
-                            // Enter thumb drag mode: disable page sync loops
                             isThumbDraggingRef.current = true;
-                            programmaticPageJumpRef.current = true;
 
                             const startClientY = e.clientY;
                             const startThumbY = getThumbTranslateY(thumbH);
@@ -596,19 +534,14 @@ const PDFViewer = ({ document }) => {
                                 const newY = maxY - (newThumbY / maxThumb) * range;
 
                                 applyState({ y: newY });
-                                detectAndSetCurrentPage();
+                                // applyState already schedules page detect, so this is optional
+                                // scheduleDetectPage();
                             };
 
                             const onUp = () => {
                                 window.removeEventListener("mousemove", onDrag);
                                 window.removeEventListener("mouseup", onUp);
-
                                 isThumbDraggingRef.current = false;
-
-                                // release jump guard next frame to avoid a final "snap"
-                                requestAnimationFrame(() => {
-                                    programmaticPageJumpRef.current = false;
-                                });
                             };
 
                             window.addEventListener("mousemove", onDrag);
@@ -621,7 +554,7 @@ const PDFViewer = ({ document }) => {
                             height: thumbH,
                             backgroundColor: "rgba(100, 100, 100, 0.6)",
                             borderRadius: 4,
-                            cursor: getCursorForThumb(),
+                            cursor: "pointer",
                             transform: `translateY(${thumbY}px)`,
                         }}
                     />

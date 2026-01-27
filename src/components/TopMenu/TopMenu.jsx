@@ -11,7 +11,8 @@ import classes from './TopMenu.module.css';
 
 const TopMenu = ({ setPdfDocument, setIsLoading }) => {
     const {
-        theme, setTheme, zoom, setZoom, measurements, calibrationScales, pageUnits, shapes
+        theme, setTheme, zoom, setZoom, measurements, calibrationScales, pageUnits, shapes,
+        undo, redo, history, historyIndex
     } = useAppStore();
 
     const fileInputRef = useRef(null);
@@ -152,8 +153,18 @@ const TopMenu = ({ setPdfDocument, setIsLoading }) => {
                     </button>
                     {activeMenu === 'edit' && (
                         <div className={classes.dropdown}>
-                            <button disabled><Undo size={16} /> Undo</button>
-                            <button disabled><Redo size={16} /> Redo</button>
+                            <button
+                                onClick={() => { undo(); setActiveMenu(null); }}
+                                disabled={historyIndex <= 0}
+                            >
+                                <Undo size={16} /> Undo
+                            </button>
+                            <button
+                                onClick={() => { redo(); setActiveMenu(null); }}
+                                disabled={historyIndex >= history.length - 1}
+                            >
+                                <Redo size={16} /> Redo
+                            </button>
                         </div>
                     )}
                 </div>

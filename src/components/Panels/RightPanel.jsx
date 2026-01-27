@@ -4,8 +4,8 @@ import useAppStore from '../../stores/useAppStore';
 import classes from './RightPanel.module.css';
 import { calculatePolygonArea } from '../../geometry/transforms';
 
-const STROKE_COLORS = ['#000000', '#FF0000', '#0000FF', '#008000', '#FFA500', '#800080'];
-const FILL_COLORS = ['#FFCCCC', '#CCE5FF', '#CCFFCC', '#FFF2CC', '#E5CCFF'];
+const STROKE_COLORS = ['#000000', '#FF9999', '#77BBFF', '#88DD88', '#FFDD66'];
+const FILL_COLORS = ['none', '#FF9999', '#77BBFF', '#88DD88', '#FFDD66'];
 
 const RightPanel = () => {
     const {
@@ -48,6 +48,7 @@ const RightPanel = () => {
     const stroke = firstItem?.stroke || '#000000';
     const fill = firstItem?.fill || 'none';
     const strokeWidth = firstItem?.strokeWidth || 2;
+    const strokeDasharray = firstItem?.strokeDasharray || 'none';
     const opacity = firstItem?.opacity ?? 1;
 
     // --- Renderers ---
@@ -64,48 +65,59 @@ const RightPanel = () => {
                             onClick={() => updateProp('stroke', c)}
                         />
                     ))}
-                    <input
-                        type="color"
-                        value={stroke}
-                        onChange={(e) => updateProp('stroke', e.target.value)}
-                        className={classes.colorInput}
-                    />
+
+                    {/* Hex Input */}
+                    <div className={classes.hexInputGroup}>
+                        <span className={classes.hexPrefix}>#</span>
+                        <input
+                            type="text"
+                            value={(stroke || '').replace('#', '')}
+                            onChange={(e) => updateProp('stroke', '#' + e.target.value)}
+                            className={classes.hexInput}
+                            maxLength={6}
+                            placeholder="000000"
+                        />
+                    </div>
                 </div>
             </div>
 
             <div className={classes.section}>
                 <label className={classes.label}>Fill</label>
                 <div className={classes.colorGrid}>
-                    <button
-                        className={`${classes.colorBtn} ${fill === 'none' ? classes.activeColor : ''}`}
-                        style={{
-                            background: `url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='8' height='8' viewBox='0 0 8 8'><path d='M0 0h4v4H0zm4 4h4v4H4z' fill='%23e0e0e0'/></svg>")`,
-                            backgroundColor: '#fff'
-                        }}
-                        onClick={() => updateProp('fill', 'none')}
-                        title="None"
-                    />
                     {FILL_COLORS.map(c => (
                         <button
                             key={c}
                             className={`${classes.colorBtn} ${fill === c ? classes.activeColor : ''}`}
-                            style={{ backgroundColor: c }}
+                            style={{
+                                backgroundColor: c === 'none' ? '#fff' : c,
+                                background: c === 'none'
+                                    ? `url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='8' height='8' viewBox='0 0 8 8'><path d='M0 0h4v4H0zm4 4h4v4H4z' fill='%23e0e0e0'/></svg>")`
+                                    : c
+                            }}
                             onClick={() => updateProp('fill', c)}
+                            title={c === 'none' ? 'Transparent' : c}
                         />
                     ))}
-                    <input
-                        type="color"
-                        value={fill === 'none' ? '#ffffff' : fill}
-                        onChange={(e) => updateProp('fill', e.target.value)}
-                        className={classes.colorInput}
-                    />
+
+                    {/* Hex Input */}
+                    <div className={classes.hexInputGroup}>
+                        <span className={classes.hexPrefix}>#</span>
+                        <input
+                            type="text"
+                            value={(fill === 'none' ? '' : (fill || '')).replace('#', '')}
+                            onChange={(e) => updateProp('fill', e.target.value ? '#' + e.target.value : 'none')}
+                            className={classes.hexInput}
+                            maxLength={6}
+                            placeholder="None"
+                        />
+                    </div>
                 </div>
             </div>
 
             <div className={classes.section}>
                 <label className={classes.label}>Stroke Width</label>
                 <div className={classes.buttonGroup}>
-                    {[1, 2, 4, 6, 8].map(w => (
+                    {[1, 2, 4].map(w => (
                         <button
                             key={w}
                             className={`${classes.groupBtn} ${strokeWidth === w ? classes.activeBtn : ''}`}
@@ -114,6 +126,39 @@ const RightPanel = () => {
                             <div style={{ height: w, width: '20px', background: 'currentColor', borderRadius: 2 }}></div>
                         </button>
                     ))}
+                </div>
+            </div>
+
+            <div className={classes.section}>
+                <label className={classes.label}>Stroke Style</label>
+                <div className={classes.buttonGroup}>
+                    <button
+                        className={`${classes.groupBtn} ${strokeDasharray === 'none' ? classes.activeBtn : ''}`}
+                        onClick={() => updateProp('strokeDasharray', 'none')}
+                        title="Continuous"
+                    >
+                        <svg width="20" height="4" style={{ display: 'block' }}>
+                            <line x1="0" y1="2" x2="20" y2="2" stroke="currentColor" strokeWidth="2" />
+                        </svg>
+                    </button>
+                    <button
+                        className={`${classes.groupBtn} ${strokeDasharray === '6,3' ? classes.activeBtn : ''}`}
+                        onClick={() => updateProp('strokeDasharray', '6,3')}
+                        title="Dashed"
+                    >
+                        <svg width="20" height="4" style={{ display: 'block' }}>
+                            <line x1="0" y1="2" x2="20" y2="2" stroke="currentColor" strokeWidth="2" strokeDasharray="6,3" />
+                        </svg>
+                    </button>
+                    <button
+                        className={`${classes.groupBtn} ${strokeDasharray === '2,2' ? classes.activeBtn : ''}`}
+                        onClick={() => updateProp('strokeDasharray', '2,2')}
+                        title="Dotted"
+                    >
+                        <svg width="20" height="4" style={{ display: 'block' }}>
+                            <line x1="0" y1="2" x2="20" y2="2" stroke="currentColor" strokeWidth="2" strokeDasharray="2,2" />
+                        </svg>
+                    </button>
                 </div>
             </div>
 
@@ -132,10 +177,6 @@ const RightPanel = () => {
                     className={classes.slider}
                 />
             </div>
-
-            <button className={classes.actionBtn} onClick={handleDelete}>
-                <Trash2 size={16} /> Delete Selection
-            </button>
         </div>
     );
 

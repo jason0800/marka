@@ -81,8 +81,8 @@ const useAppStore = create((set, get) => ({
     setViewMode: (mode) => set({ viewMode: mode }),
 
     // --- History (NOTE: snapshots must be copies, not references) ---
-    history: [],
-    historyIndex: -1,
+    history: [{ shapes: [], measurements: [] }], // Start with empty state
+    historyIndex: 0,
 
     pushHistory: () =>
         set((state) => {
