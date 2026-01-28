@@ -70,6 +70,19 @@ const useAppStore = create((set, get) => ({
     selectedIds: [],
     setSelectedIds: (ids) => set({ selectedIds: ids }),
 
+    // --- Default Shape Properties (Sticky) ---
+    defaultShapeStyle: {
+        stroke: "#000000",
+        strokeWidth: 2,
+        strokeDasharray: "none",
+        fill: "none",
+        opacity: 1,
+    },
+    setDefaultShapeStyle: (style) =>
+        set((state) => ({
+            defaultShapeStyle: { ...state.defaultShapeStyle, ...style },
+        })),
+
     // --- Theme ---
     theme: "light",
     setTheme: (theme) => set({ theme }),

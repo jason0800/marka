@@ -21,6 +21,7 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0 }) => {
         pushHistory,
         undo,
         redo,
+        defaultShapeStyle,
     } = useAppStore();
 
     const svgRef = useRef(null);
@@ -488,11 +489,7 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0 }) => {
                     id,
                     type: activeTool,
                     pageIndex,
-                    stroke: "var(--shape-stroke, #000)",
-                    strokeWidth: 2, // in PDF points
-                    strokeDasharray: "none",
-                    fill: "none",
-                    opacity: 1,
+                    ...defaultShapeStyle, // Sticky properties
                     rotation: 0,
                 };
 
@@ -947,46 +944,41 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0 }) => {
                         </>
                     )}
 
-                    {/* Shape previews */}
-                    {activeTool === "rectangle" && shapeStart && (
-                        <rect
-                            x={Math.min(shapeStart.x, cursor.x)}
-                            y={Math.min(shapeStart.y, cursor.y)}
-                            width={Math.abs(cursor.x - shapeStart.x)}
-                            height={Math.abs(cursor.y - shapeStart.y)}
-                            stroke="var(--primary-color)"
-                            strokeWidth={nonScalingStroke}
-                            fill="none"
-                            strokeDasharray="5,5"
-                            vectorEffect="non-scaling-stroke"
-                        />
-                    )}
+                    {/* Shape previews (Real-time WYSIWYG) */}
+                    {["rectangle", "circle", "line", "arrow"].includes(activeTool) && shapeStart && (
+                        (() => {
+                            const style = {
+                                stroke: defaultShapeStyle.stroke,
+                                strokeWidth: defaultShapeStyle.strokeWidth,
+                                strokeDasharray: defaultShapeStyle.strokeDasharray === 'none' ? undefined : defaultShapeStyle.strokeDasharray,
+                                fill: defaultShapeStyle.fill,
+                                opacity: defaultShapeStyle.opacity,
+                            };
 
-                    {activeTool === "circle" && shapeStart && (
-                        <ellipse
-                            cx={(shapeStart.x + cursor.x) / 2}
-                            cy={(shapeStart.y + cursor.y) / 2}
-                            rx={Math.abs(cursor.x - shapeStart.x) / 2}
-                            ry={Math.abs(cursor.y - shapeStart.y) / 2}
-                            stroke="var(--primary-color)"
-                            strokeWidth={nonScalingStroke}
-                            fill="none"
-                            strokeDasharray="5,5"
-                            vectorEffect="non-scaling-stroke"
-                        />
-                    )}
+                            if (activeTool === "line") {
+                                return <line x1={shapeStart.x} y1={shapeStart.y} x2={cursor.x} y2={cursor.y} {...style} strokeLinecap="round" />;
+                            }
+                            if (activeTool === "arrow") {
+                                const headLength = 10;
+                                const angle = Math.atan2(cursor.y - shapeStart.y, cursor.x - shapeStart.x);
+                                const arrowHeadPath = `M ${cursor.x} ${cursor.y} L ${cursor.x - headLength * Math.cos(angle - Math.PI / 6)} ${cursor.y - headLength * Math.sin(angle - Math.PI / 6)} L ${cursor.x - headLength * Math.cos(angle + Math.PI / 6)} ${cursor.y - headLength * Math.sin(angle + Math.PI / 6)} Z`;
+                                return (
+                                    <g>
+                                        <line x1={shapeStart.x} y1={shapeStart.y} x2={cursor.x} y2={cursor.y} {...style} strokeLinecap="round" />
+                                        <path d={arrowHeadPath} fill={style.stroke} />
+                                    </g>
+                                );
+                            }
 
-                    {(activeTool === "line" || activeTool === "arrow") && shapeStart && (
-                        <line
-                            x1={shapeStart.x}
-                            y1={shapeStart.y}
-                            x2={cursor.x}
-                            y2={cursor.y}
-                            stroke="var(--primary-color)"
-                            strokeWidth={nonScalingStroke}
-                            strokeDasharray="5,5"
-                            vectorEffect="non-scaling-stroke"
-                        />
+                            const x = Math.min(shapeStart.x, cursor.x);
+                            const y = Math.min(shapeStart.y, cursor.y);
+                            const w = Math.abs(cursor.x - shapeStart.x);
+                            const h = Math.abs(cursor.y - shapeStart.y);
+
+                            if (activeTool === "rectangle") return <rect x={x} y={y} width={w} height={h} {...style} />;
+                            if (activeTool === "circle") return <ellipse cx={x + w / 2} cy={y + h / 2} rx={w / 2} ry={h / 2} {...style} />;
+                            return null;
+                        })()
                     )}
                 </g>
             )}
