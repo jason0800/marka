@@ -111,50 +111,57 @@ const BottomBar = ({ totalPages }) => {
                 />
             </div>
 
-            <div className="flex items-center gap-3 justify-self-center" style={{ visibility: totalPages > 0 ? 'visible' : 'hidden' }}>
-                <button
-                    className="bg-transparent border border-transparent text-[var(--text-secondary)] cursor-pointer py-2 px-3 min-w-[36px] rounded-md flex items-center justify-center text-base font-bold transition-all duration-200 hover:bg-[var(--btn-hover)] hover:text-[var(--text-primary)] disabled:opacity-30 disabled:cursor-not-allowed"
-                    onClick={goFirst}
-                    disabled={currentPage <= 1}
-                    title="First Page"
-                >
-                    «
-                </button>
-                <button
-                    className="bg-transparent border border-transparent text-[var(--text-secondary)] cursor-pointer py-2 px-3 min-w-[36px] rounded-md flex items-center justify-center text-base font-bold transition-all duration-200 hover:bg-[var(--btn-hover)] hover:text-[var(--text-primary)] disabled:opacity-30 disabled:cursor-not-allowed"
-                    onClick={goPrev}
-                    disabled={currentPage <= 1}
-                    title="Previous Page"
-                >
-                    ‹
-                </button>
+            <div className="flex items-center justify-self-center" style={{ visibility: totalPages > 0 ? 'visible' : 'hidden' }}>
+                <div className="flex items-center gap-1 mr-4">
+                    <button
+                        className="bg-transparent border border-transparent text-[var(--text-secondary)] p-1.5 rounded-md flex items-center justify-center transition-all duration-200 hover:bg-[var(--btn-hover)] hover:text-[var(--text-primary)] disabled:opacity-30 disabled:cursor-default h-8 w-8"
+                        onClick={goFirst}
+                        disabled={currentPage <= 1}
+                        title="First Page"
+                    >
+                        <span className="text-xl font-bold leading-none">«</span>
+                    </button>
+                    <button
+                        className="bg-transparent border border-transparent text-[var(--text-secondary)] p-1.5 rounded-md flex items-center justify-center transition-all duration-200 hover:bg-[var(--btn-hover)] hover:text-[var(--text-primary)] disabled:opacity-30 disabled:cursor-default h-8 w-8"
+                        onClick={goPrev}
+                        disabled={currentPage <= 1}
+                        title="Previous Page"
+                    >
+                        <span className="text-xl font-bold leading-none">‹</span>
+                    </button>
+                </div>
 
-                <span className="opacity-80 text-sm font-medium">Page</span>
-                <input
-                    type="text"
-                    className="bg-[var(--bg-color)] border border-[var(--border-color)] text-[var(--text-primary)] rounded-md px-2 py-1.5 w-[50px] text-center text-sm font-medium focus:outline-none focus:border-[#4CAF50] focus:ring-2 focus:ring-[#4CAF50]/20"
-                    value={pageInput}
-                    onChange={handlePageChange}
-                    onKeyDown={handlePageKeyDown}
-                />
-                <span className="opacity-80 text-sm font-medium">of {totalPages || 0}</span>
+                <div className="flex items-center gap-2 text-[var(--text-secondary)] text-[13px] font-medium">
+                    <span>Page</span>
+                    <input
+                        type="text"
+                        className="bg-[var(--bg-color)] border border-[var(--border-color)] text-[var(--text-primary)] rounded-md px-2 h-7 w-[40px] text-center text-[13px] font-medium focus:outline-none focus:border-[var(--primary-color)] transition-all"
+                        value={pageInput}
+                        onChange={handlePageChange}
+                        onKeyDown={handlePageKeyDown}
+                    />
+                    <span className="opacity-50">/</span>
+                    <span>{totalPages || 0}</span>
+                </div>
 
-                <button
-                    className="bg-transparent border border-transparent text-[var(--text-secondary)] cursor-pointer py-2 px-3 min-w-[36px] rounded-md flex items-center justify-center text-base font-bold transition-all duration-200 hover:bg-[var(--btn-hover)] hover:text-[var(--text-primary)] disabled:opacity-30 disabled:cursor-not-allowed"
-                    onClick={goNext}
-                    disabled={currentPage >= totalPages}
-                    title="Next Page"
-                >
-                    ›
-                </button>
-                <button
-                    className="bg-transparent border border-transparent text-[var(--text-secondary)] cursor-pointer py-2 px-3 min-w-[36px] rounded-md flex items-center justify-center text-base font-bold transition-all duration-200 hover:bg-[var(--btn-hover)] hover:text-[var(--text-primary)] disabled:opacity-30 disabled:cursor-not-allowed"
-                    onClick={goLast}
-                    disabled={currentPage >= totalPages}
-                    title="Last Page"
-                >
-                    »
-                </button>
+                <div className="flex items-center gap-1 ml-4">
+                    <button
+                        className="bg-transparent border border-transparent text-[var(--text-secondary)] p-1.5 rounded-md flex items-center justify-center transition-all duration-200 hover:bg-[var(--btn-hover)] hover:text-[var(--text-primary)] disabled:opacity-30 disabled:cursor-default h-8 w-8"
+                        onClick={goNext}
+                        disabled={currentPage >= totalPages}
+                        title="Next Page"
+                    >
+                        <span className="text-xl font-bold leading-none">›</span>
+                    </button>
+                    <button
+                        className="bg-transparent border border-transparent text-[var(--text-secondary)] p-1.5 rounded-md flex items-center justify-center transition-all duration-200 hover:bg-[var(--btn-hover)] hover:text-[var(--text-primary)] disabled:opacity-30 disabled:cursor-default h-8 w-8"
+                        onClick={goLast}
+                        disabled={currentPage >= totalPages}
+                        title="Last Page"
+                    >
+                        <span className="text-xl font-bold leading-none">»</span>
+                    </button>
+                </div>
             </div>
 
             <div className="flex items-center gap-2 justify-self-end">
