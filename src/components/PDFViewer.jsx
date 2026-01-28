@@ -1,7 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import useAppStore from "../stores/useAppStore";
 import PDFPage from "./PDFPage";
-import OverlayLayer from "./OverlayLayer";
 
 const clamp = (v, min, max) => Math.min(max, Math.max(min, v));
 
@@ -450,15 +449,6 @@ const PDFViewer = ({ document }) => {
                             style={{ position: "relative", width: "fit-content" }}
                         >
                             <PDFPage page={pages[currentPage - 1]} renderScale={storeViewport.scale} />
-                            {/* Overlay positioned over the page */}
-                            <div style={{ position: "absolute", inset: 0 }}>
-                                <OverlayLayer
-                                    page={pages[currentPage - 1]}
-                                    width={pages[currentPage - 1].getViewport({ scale: 1 }).width}
-                                    height={pages[currentPage - 1].getViewport({ scale: 1 }).height}
-                                    viewScale={storeViewport.scale}
-                                />
-                            </div>
                         </div>
                     )
                 ) : (
@@ -478,14 +468,6 @@ const PDFViewer = ({ document }) => {
                                 }}
                             >
                                 <PDFPage page={page} scale={1} renderScale={storeViewport.scale} />
-                                <div style={{ position: "absolute", inset: 0 }}>
-                                    <OverlayLayer
-                                        page={page}
-                                        width={vp.width}
-                                        height={vp.height}
-                                        viewScale={storeViewport.scale}
-                                    />
-                                </div>
                             </div>
                         );
                     })

@@ -54,7 +54,15 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0 }) => {
     const rotOffset = useMemo(() => 20 / Math.max(1e-6, viewScale), [viewScale]);
 
     // ---- Interaction state ----
-    const [isDrawing, setIsDrawing] = useState(false);
+    const [isDrawing, setIsDrawingState] = useState(false);
+    // Use a ref to track drawing state synchronously to prevent race conditions/double-fires
+    const isDrawingRef = useRef(false);
+
+    const setIsDrawing = useCallback((val) => {
+        isDrawingRef.current = val;
+        setIsDrawingState(val);
+    }, []);
+
     const [drawingPoints, setDrawingPoints] = useState([]); // for area/perimeter/length/comment
     const [cursor, setCursor] = useState(null);
     const [editingId, setEditingId] = useState(null);
@@ -92,11 +100,11 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0 }) => {
     }, []);
 
     const finishDrawing = useCallback(() => {
-        if (!isDrawing) return;
+        if (!isDrawingRef.current) return;
 
         if (activeTool === "area" && drawingPoints.length >= 3) {
             addMeasurement({
-                id: Date.now().toString(),
+                id: crypto.randomUUID(),
                 type: "area",
                 pageIndex,
                 points: [...drawingPoints],
@@ -104,7 +112,7 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0 }) => {
             pushHistory();
         } else if (activeTool === "perimeter" && drawingPoints.length >= 2) {
             addMeasurement({
-                id: Date.now().toString(),
+                id: crypto.randomUUID(),
                 type: "perimeter",
                 pageIndex,
                 points: [...drawingPoints],
@@ -118,7 +126,7 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0 }) => {
 
         // Auto-switch to select mode after drawing
         setActiveTool("select");
-    }, [isDrawing, activeTool, drawingPoints, addMeasurement, pageIndex, pushHistory, setActiveTool]);
+    }, [activeTool, drawingPoints, addMeasurement, pageIndex, pushHistory, setActiveTool, setIsDrawing]);
 
     // Keyboard shortcuts
     useEffect(() => {
@@ -177,7 +185,7 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0 }) => {
 
         window.addEventListener("keydown", onKeyDown);
         return () => window.removeEventListener("keydown", onKeyDown);
-    }, [editingId, finishDrawing, selectedIds, pageShapes, pageMeasurements, deleteShape, deleteMeasurement, setSelectedIds, pushHistory, undo, redo]);
+    }, [editingId, finishDrawing, selectedIds, pageShapes, pageMeasurements, deleteShape, deleteMeasurement, setSelectedIds, pushHistory, undo, redo, setIsDrawing]);
 
     // ---- Mouse handlers ----
     const handleMouseDown = (e) => {
@@ -252,14 +260,14 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0 }) => {
         // 4) Measurement tools
         if (["length", "calibrate", "area", "perimeter", "count", "comment"].includes(activeTool)) {
             if (activeTool === "count") {
-                addMeasurement({ id: Date.now().toString(), type: "count", pageIndex, point });
+                addMeasurement({ id: crypto.randomUUID(), type: "count", pageIndex, point });
                 pushHistory();
                 setActiveTool("select"); // Auto-switch to select
                 return;
             }
 
             if (activeTool === "comment") {
-                if (!isDrawing) {
+                if (!isDrawingRef.current) {
                     setIsDrawing(true);
                     setDrawingPoints([{ x: point.x, y: point.y }]); // tip
                 }
@@ -267,7 +275,7 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0 }) => {
             }
 
             if (activeTool === "length" || activeTool === "calibrate") {
-                if (!isDrawing) {
+                if (!isDrawingRef.current) {
                     setIsDrawing(true);
                     setDrawingPoints([{ x: point.x, y: point.y }]);
                 } else {
@@ -276,7 +284,7 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0 }) => {
 
                     if (activeTool === "length") {
                         addMeasurement({
-                            id: Date.now().toString(),
+                            id: crypto.randomUUID(),
                             type: "length",
                             pageIndex,
                             points: [start, end],
@@ -295,7 +303,7 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0 }) => {
             }
 
             if (activeTool === "area" || activeTool === "perimeter") {
-                if (!isDrawing) {
+                if (!isDrawingRef.current) {
                     setIsDrawing(true);
                     setDrawingPoints([{ x: point.x, y: point.y }]);
                 } else {
@@ -472,9 +480,9 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0 }) => {
         }
 
         // finalize shape draw
-        if (["rectangle", "circle", "line", "arrow"].includes(activeTool) && isDrawing && shapeStart && point) {
+        if (["rectangle", "circle", "line", "arrow"].includes(activeTool) && isDrawingRef.current && shapeStart && point) {
             if (calculateDistance(shapeStart, point) > 5) {
-                const id = Date.now().toString();
+                const id = crypto.randomUUID();
 
                 const base = {
                     id,
@@ -507,9 +515,9 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0 }) => {
         }
 
         // finalize comment (tip -> release defines box)
-        if (activeTool === "comment" && isDrawing && drawingPoints.length > 0 && point) {
+        if (activeTool === "comment" && isDrawingRef.current && drawingPoints.length > 0 && point) {
             const tip = drawingPoints[0];
-            const id = Date.now().toString();
+            const id = crypto.randomUUID();
             addMeasurement({
                 id,
                 type: "comment",
