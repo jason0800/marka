@@ -56,6 +56,17 @@ const PDFViewer = ({ document }) => {
     const MAX_SCALE = 10;
     const PADDING = 40;
 
+    // 
+    const getPageTopBaseY = (pageNumber) => {
+        const idx = Math.max(0, Math.min(numPages - 1, pageNumber - 1));
+        const hs = baseHeightsRef.current;
+
+        let top = PADDING;
+        for (let i = 0; i < idx; i++) top += (hs[i] || DEFAULT_PAGE_H) + PAGE_GAP;
+        return top;
+    };
+
+
     // Visual spacing (match your UI)
     const PAGE_GAP = 12; // approx paddingBottom+marginBottom combined
 
@@ -131,6 +142,19 @@ const PDFViewer = ({ document }) => {
         return sum;
     };
 
+    const getBaseContentHeightForMode = () => {
+        if (!numPages) return 0;
+
+        if (viewMode === "single") {
+            const idx = Math.max(0, Math.min(numPages - 1, (currentPageRef.current || 1) - 1));
+            const h = baseHeightsRef.current[idx] || DEFAULT_PAGE_H;
+            return PADDING * 2 + h; // only current page + padding
+        }
+
+        // continuous
+        return getBaseContentHeight();
+    };
+
     const updateBounds = () => {
         const container = containerRef.current;
         if (!container) return;
@@ -138,7 +162,7 @@ const PDFViewer = ({ document }) => {
         const containerH = container.clientHeight;
         const scale = stateRef.current.scale;
 
-        const scaledContentH = getBaseContentHeight() * scale;
+        const scaledContentH = getBaseContentHeightForMode() * scale;
 
         const maxY = PADDING;
         const computedMin = containerH - scaledContentH - PADDING;
@@ -242,7 +266,7 @@ const PDFViewer = ({ document }) => {
         updateBounds();
         scheduleDetectPage();
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [numPages, viewMode, layoutVersion]);
+    }, [numPages, viewMode, layoutVersion, currentPage]);
 
     useEffect(() => {
         const onResize = () => {
@@ -253,6 +277,40 @@ const PDFViewer = ({ document }) => {
         window.addEventListener("resize", onResize);
         return () => window.removeEventListener("resize", onResize);
     }, []);
+
+    useEffect(() => {
+        if (!numPages) return;
+
+        // Run after layout/bounds settle
+        const id = requestAnimationFrame(() => {
+            updateBounds();
+
+            // Only adjust when entering continuous (prevents thumb jitter)
+            if (viewMode !== "continuous") return;
+
+            const container = containerRef.current;
+            if (!container) return;
+
+            // compute current page top in continuous coords
+            const idx = Math.max(0, Math.min(numPages - 1, currentPage - 1));
+            const hs = baseHeightsRef.current;
+
+            let pageTop = PADDING;
+            for (let i = 0; i < idx; i++) pageTop += (hs[i] || DEFAULT_PAGE_H) + PAGE_GAP;
+
+            const pageH = hs[idx] || DEFAULT_PAGE_H;
+            const { scale } = stateRef.current;
+
+            // center current page in viewport
+            const targetY = container.clientHeight / 2 - (pageTop + pageH / 2) * scale;
+
+            applyState({ y: targetY }, true);
+        });
+
+        return () => cancelAnimationFrame(id);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [viewMode]);
+
 
     // ---- wheel: zoom + pan ----
     useEffect(() => {
@@ -300,6 +358,36 @@ const PDFViewer = ({ document }) => {
         return () => container.removeEventListener("wheel", handleWheel);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [viewMode]);
+
+    useEffect(() => {
+        if (!numPages) return;
+
+        if (viewMode === "single") {
+            // compute the top offset of currentPage in base coords
+            const hs = baseHeightsRef.current;
+            const idx = Math.max(0, Math.min(numPages - 1, currentPage - 1));
+
+            let pageTop = PADDING;
+            for (let i = 0; i < idx; i++) pageTop += (hs[i] || DEFAULT_PAGE_H) + PAGE_GAP;
+
+            const pageH = hs[idx] || DEFAULT_PAGE_H;
+
+            const container = containerRef.current;
+            if (!container) return;
+
+            const { scale } = stateRef.current;
+
+            // center the page vertically
+            const targetY = container.clientHeight / 2 - (pageTop + pageH / 2) * scale;
+
+            applyState({ y: targetY }, true);
+        } else {
+            // switching back to continuous: just recompute bounds and clamp current y
+            applyState({ y: stateRef.current.y }, true);
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [viewMode]);
+
 
     // ---- keyboard zoom ----
     useEffect(() => {
@@ -529,7 +617,7 @@ const PDFViewer = ({ document }) => {
 
     return (
         <div
-            lassName="w-full h-full overflow-hidden bg-[var(--viewer-bg)] relative touch-none"
+            className="w-full h-full overflow-hidden bg-[var(--viewer-bg)] relative touch-none"
             ref={containerRef}
             onMouseDown={onMouseDown}
             onMouseMove={onMouseMove}
