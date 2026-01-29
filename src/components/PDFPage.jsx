@@ -145,8 +145,8 @@ const PDFPage = memo(({ page, scale = 1.0, renderScale = 1.0 }) => {
 
     return (
         <div
-            className="relative shadow-[0_2px_10px_rgba(0,0,0,0.3)] mb-5 bg-white leading-[0]"
-            style={{ width, height, position: "relative" }}
+            className="relative leading-[0]"
+            style={{ width, height }}
         >
             <canvas ref={canvasRef} className="block" />
             <div
@@ -163,6 +163,7 @@ const PDFPage = memo(({ page, scale = 1.0, renderScale = 1.0 }) => {
             )}
         </div>
     );
+
 });
 
 export default PDFPage;

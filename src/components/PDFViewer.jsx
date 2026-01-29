@@ -57,7 +57,7 @@ const PDFViewer = ({ document }) => {
     const PADDING = 40;
 
     // Visual spacing (match your UI)
-    const PAGE_GAP = 40; // approx paddingBottom+marginBottom combined
+    const PAGE_GAP = 12; // approx paddingBottom+marginBottom combined
 
     // Debounced render scale so zoom is fast
     const debouncedRenderScale = useDebouncedValue(storeViewport.scale ?? 1, 140);
@@ -529,7 +529,7 @@ const PDFViewer = ({ document }) => {
 
     return (
         <div
-            className="w-full h-full overflow-hidden bg-[var(--viewer-bg)] cursor-grab relative touch-none active:cursor-grabbing"
+            lassName="w-full h-full overflow-hidden bg-[var(--viewer-bg)] relative touch-none"
             ref={containerRef}
             onMouseDown={onMouseDown}
             onMouseMove={onMouseMove}
@@ -551,7 +551,7 @@ const PDFViewer = ({ document }) => {
                 ref={contentRef}
                 className="absolute top-0 left-0 will-change-transform flex flex-col w-fit min-w-full"
                 style={{
-                    transform: `translate(${storeViewport.x}px, ${storeViewport.y}px) scale(${storeViewport.scale})`,
+                    transform: `translate(${stateRef.current.x}px, ${stateRef.current.y}px) scale(${stateRef.current.scale})`,
                     transformOrigin: "0 0",
                     display: "flex",
                     flexDirection: "column",
@@ -590,10 +590,16 @@ const PDFViewer = ({ document }) => {
                                     style={{
                                         position: "relative",
                                         width: "fit-content",
-                                        borderBottom: pageNumber < numPages ? "1px solid #c0c0c0" : "none",
-                                        paddingBottom: pageNumber < numPages ? "20px" : "0",
-                                        marginBottom: pageNumber < numPages ? "20px" : "0",
                                         minHeight: h,
+
+                                        // fully flat
+                                        background: "transparent",
+                                        boxShadow: "none",
+                                        border: "none",
+                                        borderRadius: 0,
+
+                                        // spacing only
+                                        marginBottom: pageNumber < numPages ? `${PAGE_GAP}px` : "0px",
                                     }}
                                 >
                                     {page ? (
@@ -604,6 +610,7 @@ const PDFViewer = ({ document }) => {
                                 </div>
                             );
                         })}
+
 
                         {bottomSpacerH > 0 && <div style={{ height: bottomSpacerH }} />}
                     </>
