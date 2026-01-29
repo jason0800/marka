@@ -55,8 +55,8 @@ const Toolbar = () => {
                     <button
                         key={tool.id}
                         className={`w-9 h-9 rounded-md border-none bg-transparent text-[var(--text-secondary)] flex items-center justify-center transition-all duration-200 hover:bg-[var(--btn-hover)] hover:text-[var(--text-primary)] ${isActive
-                                ? '!bg-[var(--primary-color)] !text-[var(--text-active)] shadow-[0_0_10px_rgba(var(--primary-color-rgb),0.5)]'
-                                : ''
+                            ? '!bg-[var(--primary-color)] !text-[var(--text-active)] shadow-[0_0_10px_rgba(var(--primary-color-rgb),0.25)]'
+                            : ''
                             }`}
                         onClick={() => setActiveTool(tool.id)}
                         title={tool.label}

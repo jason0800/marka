@@ -133,20 +133,7 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0 }) => {
     useEffect(() => {
         const onKeyDown = (e) => {
             if (editingId) return;
-
-            // Undo/Redo
-            if ((e.ctrlKey || e.metaKey) && e.key === "z" && !e.shiftKey) {
-                e.preventDefault();
-                e.stopPropagation();
-                undo();
-                return;
-            }
-            if ((e.ctrlKey || e.metaKey) && (e.key === "y" || (e.key === "z" && e.shiftKey))) {
-                e.preventDefault();
-                e.stopPropagation();
-                redo();
-                return;
-            }
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
 
             if (e.key === "Enter") finishDrawing();
 
@@ -159,28 +146,6 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0 }) => {
                 setSelectionStart(null);
                 setIsDraggingItems(false);
                 setDragStart(null);
-            }
-
-            // Delete selected objects
-            if (e.key === "Delete" || e.key === "Backspace") {
-                if (selectedIds.length > 0) {
-                    e.preventDefault(); // Prevent browser back navigation on Backspace
-                    selectedIds.forEach((id) => {
-                        // Check if it's a shape
-                        const shape = pageShapes.find((s) => s.id === id);
-                        if (shape) {
-                            deleteShape(id);
-                        } else {
-                            // Otherwise it's a measurement
-                            const measurement = pageMeasurements.find((m) => m.id === id);
-                            if (measurement) {
-                                deleteMeasurement(id);
-                            }
-                        }
-                    });
-                    setSelectedIds([]);
-                    pushHistory(); // Save state after deletion
-                }
             }
         };
 
@@ -566,32 +531,33 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0 }) => {
 
         const w = s.width;
         const h = s.height;
+        const padding = 6 / Math.max(1e-6, viewScale);
 
         return (
             <g>
                 <rect
-                    x={0}
-                    y={0}
-                    width={w}
-                    height={h}
+                    x={-padding}
+                    y={-padding}
+                    width={w + padding * 2}
+                    height={h + padding * 2}
                     fill="none"
                     stroke="var(--primary-color)"
                     strokeWidth={1 / Math.max(1e-6, viewScale)}
                     vectorEffect="non-scaling-stroke"
                     pointerEvents="none"
                 />
-                {renderHandle(0, 0, "nw-resize", "nw")}
-                {renderHandle(w / 2, 0, "n-resize", "n")}
-                {renderHandle(w, 0, "ne-resize", "ne")}
-                {renderHandle(w, h / 2, "e-resize", "e")}
-                {renderHandle(w, h, "se-resize", "se")}
-                {renderHandle(w / 2, h, "s-resize", "s")}
-                {renderHandle(0, h, "sw-resize", "sw")}
-                {renderHandle(0, h / 2, "w-resize", "w")}
+                {renderHandle(-padding, -padding, "nw-resize", "nw")}
+                {renderHandle(w / 2, -padding, "n-resize", "n")}
+                {renderHandle(w + padding, -padding, "ne-resize", "ne")}
+                {renderHandle(w + padding, h / 2, "e-resize", "e")}
+                {renderHandle(w + padding, h + padding, "se-resize", "se")}
+                {renderHandle(w / 2, h + padding, "s-resize", "s")}
+                {renderHandle(-padding, h + padding, "sw-resize", "sw")}
+                {renderHandle(-padding, h / 2, "w-resize", "w")}
 
                 <circle
                     cx={w / 2}
-                    cy={-rotOffset}
+                    cy={-rotOffset - padding}
                     r={4 / Math.max(1e-6, viewScale)}
                     fill="#b4e6a0"
                     stroke="#3a6b24"
@@ -616,6 +582,8 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0 }) => {
             opacity: s.opacity,
             cursor: activeTool === "select" ? "move" : "default",
             pointerEvents: "all",
+            strokeLinecap: "round",
+            strokeLinejoin: "round",
         };
 
         if (s.type === "line") {

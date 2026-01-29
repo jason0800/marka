@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useRef, useState, useEffect } from 'react';
 import useAppStore from '../stores/useAppStore';
 import { loadPDF } from '../services/pdf-service';
 import html2canvas from 'html2canvas';
@@ -12,8 +12,52 @@ import {
 const TopMenu = ({ setPdfDocument, setIsLoading }) => {
     const {
         theme, setTheme, zoom, setZoom, measurements, calibrationScales, pageUnits, shapes,
-        undo, redo, history, historyIndex
+        undo, redo, history, historyIndex, selectedIds, setSelectedIds, deleteShape, deleteMeasurement, pushHistory
     } = useAppStore();
+
+    // Global Key Handlers (Undo/Redo/Delete)
+    useEffect(() => {
+        const handleKeyDown = (e) => {
+            // Ignore inputs
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+
+            // Undo
+            if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
+                e.preventDefault();
+                undo();
+                return;
+            }
+
+            // Redo
+            if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) {
+                e.preventDefault();
+                redo();
+                return;
+            }
+
+            // Delete
+            if (e.key === 'Delete' || e.key === 'Backspace') {
+                if (selectedIds.length > 0) {
+                    e.preventDefault();
+
+                    selectedIds.forEach(id => {
+                        // Check global shapes list
+                        if (shapes.find(s => s.id === id)) {
+                            deleteShape(id);
+                        } else if (measurements.find(m => m.id === id)) {
+                            deleteMeasurement(id);
+                        }
+                    });
+
+                    setSelectedIds([]);
+                    pushHistory();
+                }
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [undo, redo, selectedIds, shapes, measurements, deleteShape, deleteMeasurement, setSelectedIds, pushHistory]);
 
     const fileInputRef = useRef(null);
     const [activeMenu, setActiveMenu] = useState(null);
