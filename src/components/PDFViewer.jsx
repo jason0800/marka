@@ -4,6 +4,15 @@ import PDFPage from "./PDFPage";
 
 const clamp = (v, min, max) => Math.min(max, Math.max(min, v));
 
+const useDebouncedValue = (value, delay = 140) => {
+    const [debounced, setDebounced] = useState(value);
+    useEffect(() => {
+        const t = setTimeout(() => setDebounced(value), delay);
+        return () => clearTimeout(t);
+    }, [value, delay]);
+    return debounced;
+};
+
 const PDFViewer = ({ document }) => {
     const {
         viewport: storeViewport,
@@ -44,6 +53,9 @@ const PDFViewer = ({ document }) => {
     const MIN_SCALE = 0.1;
     const MAX_SCALE = 10;
     const PADDING = 40;
+
+    // ✅ key: expensive bitmap renders will use this, not live storeViewport.scale
+    const debouncedRenderScale = useDebouncedValue(storeViewport.scale ?? 1, 140);
 
     // ---- bounds / scroll range (vertical) ----
     const boundsRef = useRef({ minY: PADDING, maxY: PADDING });
@@ -90,10 +102,6 @@ const PDFViewer = ({ document }) => {
         pageDetectRafRef.current = 0;
 
         if (viewMode !== "continuous") return;
-        if (isThumbDraggingRef.current) {
-            // still OK to update page during thumb drag
-            // but we don’t want any other loops — we only derive currentPage from y
-        }
 
         const container = containerRef.current;
         const content = contentRef.current;
@@ -142,7 +150,6 @@ const PDFViewer = ({ document }) => {
     const applyState = (partial, commit = true) => {
         const prev = stateRef.current;
         const nextScale = clamp(partial.scale ?? prev.scale, MIN_SCALE, MAX_SCALE);
-
         const next = { ...prev, ...partial, scale: nextScale };
 
         stateRef.current = next;
@@ -159,7 +166,6 @@ const PDFViewer = ({ document }) => {
         // keep thumb reactive
         forceRerender((n) => (n + 1) % 1000000);
 
-        // update page number from y
         scheduleDetectPage();
 
         if (commit) {
@@ -168,7 +174,7 @@ const PDFViewer = ({ document }) => {
         }
     };
 
-    // ---- load pages ----
+    // ---- load pages (unchanged; still eager loads all) ----
     useEffect(() => {
         if (!document) return;
         let cancelled = false;
@@ -400,12 +406,7 @@ const PDFViewer = ({ document }) => {
         return clamp(t, 0, maxThumb);
     };
 
-    const thumbY = useMemo(
-        () => getThumbTranslateY(thumbH),
-        // forceRerender already ticks during pans
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-        [thumbH, storeViewport]
-    );
+    const thumbY = useMemo(() => getThumbTranslateY(thumbH), [thumbH, storeViewport]);
 
     // ---- render ----
     return (
@@ -428,7 +429,6 @@ const PDFViewer = ({ document }) => {
             }}
             style={{ cursor: getCursor(), userSelect: "none" }}
         >
-            {/* Content Layer (PDF + SVG overlays move/zoom together) */}
             <div
                 ref={contentRef}
                 className="absolute top-0 left-0 will-change-transform flex flex-col w-fit min-w-full p-[50px]"
@@ -443,38 +443,33 @@ const PDFViewer = ({ document }) => {
             >
                 {viewMode === "single" ? (
                     pages[currentPage - 1] && (
-                        <div
-                            className="pdf-page-container"
-                            data-page-number={currentPage}
-                            style={{ position: "relative", width: "fit-content" }}
-                        >
-                            <PDFPage page={pages[currentPage - 1]} renderScale={storeViewport.scale} />
+                        <div className="pdf-page-container" data-page-number={currentPage} style={{ position: "relative", width: "fit-content" }}>
+                            {/* ✅ debouncedRenderScale */}
+                            <PDFPage page={pages[currentPage - 1]} scale={1} renderScale={debouncedRenderScale} />
                         </div>
                     )
                 ) : (
-                    pages.map((page, index) => {
-                        const vp = page.getViewport({ scale: 1 });
-                        return (
-                            <div
-                                key={index}
-                                data-page-number={index + 1}
-                                className="pdf-page-container"
-                                style={{
-                                    position: "relative",
-                                    width: "fit-content",
-                                    borderBottom: index < pages.length - 1 ? "1px solid #c0c0c0" : "none",
-                                    paddingBottom: index < pages.length - 1 ? "20px" : "0",
-                                    marginBottom: index < pages.length - 1 ? "20px" : "0",
-                                }}
-                            >
-                                <PDFPage page={page} scale={1} renderScale={storeViewport.scale} />
-                            </div>
-                        );
-                    })
+                    pages.map((page, index) => (
+                        <div
+                            key={index}
+                            data-page-number={index + 1}
+                            className="pdf-page-container"
+                            style={{
+                                position: "relative",
+                                width: "fit-content",
+                                borderBottom: index < pages.length - 1 ? "1px solid #c0c0c0" : "none",
+                                paddingBottom: index < pages.length - 1 ? "20px" : "0",
+                                marginBottom: index < pages.length - 1 ? "20px" : "0",
+                            }}
+                        >
+                            {/* ✅ debouncedRenderScale */}
+                            <PDFPage page={page} scale={1} renderScale={debouncedRenderScale} />
+                        </div>
+                    ))
                 )}
             </div>
 
-            {/* Scrollbar */}
+            {/* Scrollbar unchanged */}
             {canScrollY() && (
                 <div
                     style={{
@@ -515,8 +510,6 @@ const PDFViewer = ({ document }) => {
                                 const newY = maxY - (newThumbY / maxThumb) * range;
 
                                 applyState({ y: newY });
-                                // applyState already schedules page detect, so this is optional
-                                // scheduleDetectPage();
                             };
 
                             const onUp = () => {
