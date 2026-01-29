@@ -50,7 +50,7 @@ const PDFViewer = ({ document }) => {
     });
 
     const [dragging, setDragging] = useState(false);
-    const [, forceRerender] = useState(0);
+    const [tick, forceRerender] = useState(0);
 
     const MIN_SCALE = 0.1;
     const MAX_SCALE = 10;
@@ -71,7 +71,7 @@ const PDFViewer = ({ document }) => {
 
     // Store base (scale=1) heights for layout / virtualization (array of numbers)
     const baseHeightsRef = useRef([]); // length numPages
-    const [, bumpLayout] = useState(0); // trigger rerender when we learn real heights
+    const [layoutVersion, bumpLayout] = useState(0);
 
     useEffect(() => {
         if (!document) return;
@@ -242,7 +242,7 @@ const PDFViewer = ({ document }) => {
         updateBounds();
         scheduleDetectPage();
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [numPages, viewMode]);
+    }, [numPages, viewMode, layoutVersion]);
 
     useEffect(() => {
         const onResize = () => {
@@ -454,7 +454,7 @@ const PDFViewer = ({ document }) => {
         return { start, end };
     };
 
-    const visibleRange = useMemo(() => getVisibleRange(), [storeViewport, numPages]);
+    const visibleRange = useMemo(() => getVisibleRange(), [tick, numPages, viewMode]);
 
     // Preload visible pages (and a bit extra)
     useEffect(() => {
@@ -500,7 +500,7 @@ const PDFViewer = ({ document }) => {
         return clamp(t, 0, maxThumb);
     };
 
-    const thumbY = useMemo(() => getThumbTranslateY(thumbH), [thumbH, storeViewport]);
+    const thumbY = getThumbTranslateY(thumbH);
 
     // ---- render helpers: spacers ----
     const { topSpacerH, bottomSpacerH, renderIndices } = useMemo(() => {
@@ -525,7 +525,7 @@ const PDFViewer = ({ document }) => {
         for (let i = start; i <= end; i++) indices.push(i);
 
         return { topSpacerH: top, bottomSpacerH: bottom, renderIndices: indices };
-    }, [visibleRange, numPages, viewMode, bumpLayout]);
+    }, [visibleRange, numPages, viewMode, layoutVersion]);
 
     return (
         <div
