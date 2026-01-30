@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { loadPDF } from './services/pdf-service';
 import PDFViewer from './components/PDFViewer';
 import Toolbar from './components/Toolbar';
-import RightPanel from './components/RightPanel';
+import LeftPanel from './components/LeftPanel';
 import PersistenceManager from './components/PersistenceManager';
 import html2canvas from 'html2canvas';
 import useAppStore from './stores/useAppStore';
@@ -34,7 +34,7 @@ function App() {
       <PersistenceManager projectId="default" />
       <TopMenu setPdfDocument={setPdfDocument} setIsLoading={setIsLoading} />
       <div className="workspace-container">
-        <Toolbar />
+        <LeftPanel pdfDocument={pdfDocument} />
         <main className="main-content">
           {isLoading && <div className="pdf-viewer-placeholder">Loading...</div>}
           {!isLoading && !pdfDocument && (
@@ -44,7 +44,7 @@ function App() {
           )}
           {pdfDocument && <PDFViewer document={pdfDocument} />}
         </main>
-        <RightPanel />
+        <Toolbar />
       </div>
       <BottomBar totalPages={pdfDocument ? pdfDocument.numPages : 0} />
     </div>

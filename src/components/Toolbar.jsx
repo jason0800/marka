@@ -45,7 +45,7 @@ const Toolbar = () => {
     }, [setActiveTool]);
 
     return (
-        <aside className="w-[60px] bg-[var(--bg-secondary)] border-r border-[var(--border-color)] flex flex-col items-center pt-4 gap-3 z-10">
+        <aside className="w-[60px] bg-[var(--bg-secondary)] border-l border-[var(--border-color)] flex flex-col items-center pt-4 gap-3 z-10 shrink-0">
             {TOOLS.map((tool, i) => {
                 if (tool.type === 'separator') {
                     return <div key={i} className="w-[60%] h-px bg-[var(--border-color)] my-1" />;

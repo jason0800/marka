@@ -34,10 +34,3 @@
   color: #666;
 }
 
-.right-panel {
-  width: 250px;
-  background: #252525;
-  border-left: 1px solid #333;
-  display: none;
-  /* Hidden for now until enabled */
-}
