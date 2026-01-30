@@ -1,10 +1,17 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, useCallback } from "react";
+import {
+    useEffect,
+    useLayoutEffect,
+    useMemo,
+    useRef,
+    useState,
+    useCallback,
+} from "react";
 import useAppStore from "../stores/useAppStore";
 import PDFPage from "./PDFPage";
 
 const clamp = (v, min, max) => Math.min(max, Math.max(min, v));
 
-const useDebouncedValue = (value, delay = 140) => {
+const useDebouncedValue = (value, delay = 180) => {
     const [debounced, setDebounced] = useState(value);
     useEffect(() => {
         const t = setTimeout(() => setDebounced(value), delay);
@@ -29,7 +36,6 @@ const PDFViewer = ({ document }) => {
     // --- DOM refs ---
     const containerRef = useRef(null);
     const contentRef = useRef(null);
-    const rafCommitRef = useRef(null);
 
     // IMPORTANT: wheel listener must attach even when ref is null on first effect run
     const [containerEl, setContainerEl] = useState(null);
@@ -59,23 +65,49 @@ const PDFViewer = ({ document }) => {
     });
 
     const [dragging, setDragging] = useState(false);
+
+    // tick is only for virtualization + derived UI; do NOT bump it on every wheel event
     const [tick, bumpTick] = useState(0);
+    const rafTickRef = useRef(0);
+    const scheduleTick = useCallback(() => {
+        if (rafTickRef.current) return;
+        rafTickRef.current = requestAnimationFrame(() => {
+            rafTickRef.current = 0;
+            bumpTick((t) => (t + 1) % 1_000_000);
+        });
+    }, []);
 
     const MIN_SCALE = 0.1;
     const MAX_SCALE = 10;
     const PADDING = 40;
     const PAGE_GAP = 12;
 
-    const debouncedRenderScale = useDebouncedValue(storeViewport.scale ?? 1, 140);
+    // ---- zoom jank killer: "pin" renderScale while zooming, only re-rasterize after idle ----
+    const [isZooming, setIsZooming] = useState(false);
+    const zoomIdleTimerRef = useRef(null);
+
+    const markZooming = useCallback(() => {
+        if (!isZooming) setIsZooming(true);
+        if (zoomIdleTimerRef.current) clearTimeout(zoomIdleTimerRef.current);
+        zoomIdleTimerRef.current = setTimeout(() => setIsZooming(false), 220);
+    }, [isZooming]);
+
+    useEffect(() => {
+        return () => {
+            if (zoomIdleTimerRef.current) clearTimeout(zoomIdleTimerRef.current);
+        };
+    }, []);
+
+    const debouncedRenderScale = useDebouncedValue(storeViewport.scale ?? 1, 180);
+    // While zooming: don't trigger expensive re-rendering; after idle it sharpens.
+    const effectiveRenderScale = (isZooming || dragging) ? 1 : debouncedRenderScale;
 
     // ---- document + caches ----
     const [numPages, setNumPages] = useState(0);
     const pageCacheRef = useRef(new Map()); // pageNumber -> PDFPageProxy
-    const loadingRef = useRef(new Set());   // pageNumber strings in-flight
-    const baseHeightsRef = useRef([]);      // scale=1 heights
+    const loadingRef = useRef(new Set()); // pageNumber strings in-flight
+    const baseHeightsRef = useRef([]); // scale=1 heights
     const [layoutVersion, bumpLayout] = useState(0);
-
-    const forceRerender = useCallback(() => bumpTick((t) => (t + 1) % 1_000_000), []);
 
     const getMaxPages = useCallback(() => {
         return document?.numPages ?? numPages;
@@ -87,7 +119,6 @@ const PDFViewer = ({ document }) => {
 
             const maxPages = getMaxPages();
             if (pageNumber < 1 || pageNumber > maxPages) return;
-
             if (pageCacheRef.current.has(pageNumber)) return;
 
             const key = String(pageNumber);
@@ -108,10 +139,10 @@ const PDFViewer = ({ document }) => {
                 }
             } finally {
                 loadingRef.current.delete(key);
-                forceRerender();
+                scheduleTick(); // ✅ not immediate rerender storm
             }
         },
-        [document, forceRerender, getMaxPages]
+        [document, getMaxPages, scheduleTick]
     );
 
     useEffect(() => {
@@ -124,11 +155,8 @@ const PDFViewer = ({ document }) => {
         loadingRef.current = new Set();
         baseHeightsRef.current = Array.from({ length: n }, () => DEFAULT_PAGE_H);
 
-        // preload first page (now safe even before numPages state updates)
         ensurePageLoaded(1);
-
-        // also ensure bounds get recomputed once container exists
-        forceRerender();
+        scheduleTick();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [document]);
 
@@ -150,7 +178,10 @@ const PDFViewer = ({ document }) => {
         if (!numPages) return 0;
 
         if (viewMode === "single") {
-            const idx = Math.max(0, Math.min(numPages - 1, (currentPageRef.current || 1) - 1));
+            const idx = Math.max(
+                0,
+                Math.min(numPages - 1, (currentPageRef.current || 1) - 1)
+            );
             const h = baseHeightsRef.current[idx] || DEFAULT_PAGE_H;
             return PADDING * 2 + h;
         }
@@ -186,38 +217,9 @@ const PDFViewer = ({ document }) => {
 
     const canScrollY = useCallback(() => getScrollRange() > 0.5, [getScrollRange]);
 
-    // ---- applyState ----
-    const applyState = useCallback(
-        (partial, commit = true) => {
-            const prev = stateRef.current;
-            const nextScale = clamp(partial.scale ?? prev.scale, MIN_SCALE, MAX_SCALE);
-            const next = { ...prev, ...partial, scale: nextScale };
-
-            stateRef.current = next;
-
-            updateBounds();
-
-            next.y = clampY(next.y);
-            stateRef.current = next;
-
-            if (contentRef.current) {
-                contentRef.current.style.transform = `translate(${next.x}px, ${next.y}px) scale(${next.scale})`;
-                contentRef.current.style.transformOrigin = "0 0";
-            }
-
-            forceRerender();
-            scheduleDetectPage(); // ✅ keep currentPage in sync with scroll
-
-            if (commit) {
-                if (rafCommitRef.current) cancelAnimationFrame(rafCommitRef.current);
-                rafCommitRef.current = requestAnimationFrame(() => setViewport(stateRef.current));
-            }
-        },
-        [clampY, forceRerender, setViewport, updateBounds]
-    );
-
     // ---- page detection ----
     const pageDetectRafRef = useRef(0);
+
     const detectAndSetCurrentPage = useCallback(() => {
         pageDetectRafRef.current = 0;
         if (viewMode !== "continuous") return;
@@ -265,9 +267,47 @@ const PDFViewer = ({ document }) => {
         pageDetectRafRef.current = requestAnimationFrame(detectAndSetCurrentPage);
     }, [detectAndSetCurrentPage]);
 
+    // ---- applyState (NO immediate forceRerender; only scheduleTick once/frame) ----
+    const commitRafRef = useRef(0);
+
+    const applyState = useCallback(
+        (partial, commit = true) => {
+            const prev = stateRef.current;
+            const nextScale = clamp(partial.scale ?? prev.scale, MIN_SCALE, MAX_SCALE);
+            const next = { ...prev, ...partial, scale: nextScale };
+
+            stateRef.current = next;
+
+            updateBounds();
+            next.y = clampY(next.y);
+            stateRef.current = next;
+
+            // Fast path: DOM transform (no React)
+            if (contentRef.current) {
+                contentRef.current.style.transform = `translate(${next.x}px, ${next.y}px) scale(${next.scale})`;
+                contentRef.current.style.transformOrigin = "0 0";
+            }
+
+            // Derived UI + virtualization at most once/frame
+            scheduleTick();
+            scheduleDetectPage();
+
+            // Commit to store at most once/frame
+            if (commit) {
+                if (commitRafRef.current) cancelAnimationFrame(commitRafRef.current);
+                commitRafRef.current = requestAnimationFrame(() => {
+                    commitRafRef.current = 0;
+                    setViewport(stateRef.current);
+                });
+            }
+        },
+        [clampY, scheduleDetectPage, scheduleTick, setViewport, updateBounds]
+    );
+
     // ---- bounds maintenance ----
     useLayoutEffect(() => {
         updateBounds();
+        scheduleTick();
         scheduleDetectPage();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [numPages, viewMode, layoutVersion, currentPage, containerEl]);
@@ -275,12 +315,12 @@ const PDFViewer = ({ document }) => {
     useEffect(() => {
         const onResize = () => {
             updateBounds();
-            forceRerender();
+            scheduleTick();
             scheduleDetectPage();
         };
         window.addEventListener("resize", onResize);
         return () => window.removeEventListener("resize", onResize);
-    }, [forceRerender, scheduleDetectPage, updateBounds]);
+    }, [scheduleDetectPage, scheduleTick, updateBounds]);
 
     // ---- wheel: zoom + pan (ATTACHES RELIABLY) ----
     useEffect(() => {
@@ -293,6 +333,8 @@ const PDFViewer = ({ document }) => {
             const { scale, x, y } = stateRef.current;
 
             if (e.ctrlKey || e.metaKey) {
+                markZooming();
+
                 const rect = container.getBoundingClientRect();
                 const mx = e.clientX - rect.left;
                 const my = e.clientY - rect.top;
@@ -320,38 +362,23 @@ const PDFViewer = ({ document }) => {
 
             if (dx === 0 && dy === 0) return;
 
-            // NOTE: do NOT gate by canScrollY(); clamp handles it
             applyState({ x: x - dx, y: y - dy });
         };
 
-        container.addEventListener("wheel", handleWheel, { passive: false, capture: true });
-        return () => container.removeEventListener("wheel", handleWheel, { capture: true });
-    }, [applyState, containerEl, viewMode]);
+        container.addEventListener("wheel", handleWheel, {
+            passive: false,
+            capture: true,
+        });
+        return () =>
+            container.removeEventListener("wheel", handleWheel, { capture: true });
+    }, [applyState, containerEl, markZooming]);
 
     // ---- mode switch positioning ----
     useEffect(() => {
         if (!numPages) return;
-
         const container = containerRef.current;
         if (!container) return;
 
-        if (viewMode === "single") {
-            // center selected page
-            const idx = Math.max(0, Math.min(numPages - 1, currentPage - 1));
-            const hs = baseHeightsRef.current;
-
-            let pageTop = PADDING;
-            for (let i = 0; i < idx; i++) pageTop += (hs[i] || DEFAULT_PAGE_H) + PAGE_GAP;
-
-            const pageH = hs[idx] || DEFAULT_PAGE_H;
-            const { scale } = stateRef.current;
-
-            const targetY = container.clientHeight / 2 - (pageTop + pageH / 2) * scale;
-            applyState({ y: targetY }, true);
-            return;
-        }
-
-        // continuous: keep current page centered (prevents jump to page 1)
         const idx = Math.max(0, Math.min(numPages - 1, currentPage - 1));
         const hs = baseHeightsRef.current;
 
@@ -361,7 +388,9 @@ const PDFViewer = ({ document }) => {
         const pageH = hs[idx] || DEFAULT_PAGE_H;
         const { scale } = stateRef.current;
 
-        const targetY = container.clientHeight / 2 - (pageTop + pageH / 2) * scale;
+        const targetY =
+            container.clientHeight / 2 - (pageTop + pageH / 2) * scale;
+
         applyState({ y: targetY }, true);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [viewMode]);
@@ -373,6 +402,7 @@ const PDFViewer = ({ document }) => {
             if (!(e.key === "=" || e.key === "+" || e.key === "-")) return;
 
             e.preventDefault();
+            markZooming();
 
             const zoomIn = e.key !== "-";
             const { scale, x, y } = stateRef.current;
@@ -397,7 +427,7 @@ const PDFViewer = ({ document }) => {
 
         window.addEventListener("keydown", handleKeyDown);
         return () => window.removeEventListener("keydown", handleKeyDown);
-    }, [applyState]);
+    }, [applyState, markZooming]);
 
     // ---- mouse pan ----
     const onMouseDown = (e) => {
@@ -444,6 +474,7 @@ const PDFViewer = ({ document }) => {
     useEffect(() => {
         window.addEventListener("mouseup", stopPan);
         return () => window.removeEventListener("mouseup", stopPan);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     // ---- sync from store (external) ----
@@ -510,7 +541,11 @@ const PDFViewer = ({ document }) => {
         return { start, end };
     }, [numPages, PAGE_GAP]);
 
-    const visibleRange = useMemo(() => getVisibleRange(), [tick, numPages, viewMode, getVisibleRange]);
+    const visibleRange = useMemo(
+        () => getVisibleRange(),
+        // tick is throttled to 1/frame
+        [tick, numPages, viewMode, getVisibleRange]
+    );
 
     useEffect(() => {
         if (viewMode !== "continuous") return;
@@ -566,7 +601,8 @@ const PDFViewer = ({ document }) => {
         for (let i = 0; i < start; i++) top += (hs[i] || DEFAULT_PAGE_H) + PAGE_GAP;
 
         let bottom = 0;
-        for (let i = end + 1; i < numPages; i++) bottom += (hs[i] || DEFAULT_PAGE_H) + PAGE_GAP;
+        for (let i = end + 1; i < numPages; i++)
+            bottom += (hs[i] || DEFAULT_PAGE_H) + PAGE_GAP;
 
         const indices = [];
         for (let i = start; i <= end; i++) indices.push(i);
@@ -579,6 +615,13 @@ const PDFViewer = ({ document }) => {
         if (activeTool === "pan") return "grab";
         return "default";
     };
+
+    // NOTE: avoid calling ensurePageLoaded during render if you can.
+    // We'll keep it (best-effort), but it still can cause extra microtasks.
+    useEffect(() => {
+        if (!document) return;
+        if (viewMode === "single") ensurePageLoaded(currentPage);
+    }, [currentPage, document, ensurePageLoaded, viewMode]);
 
     return (
         <div
@@ -614,11 +657,23 @@ const PDFViewer = ({ document }) => {
             >
                 {viewMode === "single" ? (
                     (() => {
-                        ensurePageLoaded(currentPage);
                         const page = pageCacheRef.current.get(currentPage);
                         return (
-                            <div className="pdf-page-container" data-page-number={currentPage} style={{ position: "relative", width: "fit-content" }}>
-                                {page ? <PDFPage page={page} scale={1} renderScale={debouncedRenderScale} /> : <div style={{ width: DEFAULT_PAGE_W, height: DEFAULT_PAGE_H }} />}
+                            <div
+                                className="pdf-page-container"
+                                data-page-number={currentPage}
+                                style={{ position: "relative", width: "fit-content" }}
+                            >
+                                {page ? (
+                                    <PDFPage
+                                        page={page}
+                                        scale={1}
+                                        renderScale={effectiveRenderScale}
+                                        isInteracting={isZooming || dragging}
+                                    />
+                                ) : (
+                                    <div style={{ width: DEFAULT_PAGE_W, height: DEFAULT_PAGE_H }} />
+                                )}
                             </div>
                         );
                     })()
@@ -644,7 +699,16 @@ const PDFViewer = ({ document }) => {
                                         marginBottom: pageNumber < numPages ? `${PAGE_GAP}px` : "0px",
                                     }}
                                 >
-                                    {page ? <PDFPage page={page} scale={1} renderScale={debouncedRenderScale} /> : <div style={{ width: DEFAULT_PAGE_W, height: h }} />}
+                                    {page ? (
+                                        <PDFPage
+                                            page={page}
+                                            scale={1}
+                                            renderScale={effectiveRenderScale}
+                                            isInteracting={isZooming || dragging}
+                                        />
+                                    ) : (
+                                        <div style={{ width: DEFAULT_PAGE_W, height: h }} />
+                                    )}
                                 </div>
                             );
                         })}
