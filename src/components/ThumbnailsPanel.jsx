@@ -6,6 +6,7 @@ const ThumbnailsPanel = ({ pdfDocument }) => {
     const { currentPage, setCurrentPage, setJumpToPage } = useAppStore();
     const scrollRef = useRef(null);
     const [thumbScale, setThumbScale] = useState(1);
+    const [sliderVal, setSliderVal] = useState(200);
 
     // Initial scroll to active thumbnail logic
     useEffect(() => {
@@ -28,9 +29,7 @@ const ThumbnailsPanel = ({ pdfDocument }) => {
     const minWidth = 80;
     const maxWidth = 240; // max that fits comfortably or scrolls 
 
-    // Convert 0-1 scale to width
-    // Let's just use the slider value as width for simplicity
-    const [sliderVal, setSliderVal] = useState(200);
+
 
     return (
         <div className="bg-[var(--bg-secondary)] flex flex-col text-[var(--text-primary)] h-full">

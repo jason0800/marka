@@ -625,6 +625,7 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0 }) => {
                         vectorEffect="non-scaling-stroke"
                         pointerEvents="all"
                         data-shape-id={s.id}
+                        style={{ cursor: activeTool === "select" ? "move" : "default" }}
                     />
 
                     {isSelected && renderSelectionFrame(s)}
