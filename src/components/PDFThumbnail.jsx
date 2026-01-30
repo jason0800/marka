@@ -1,18 +1,32 @@
-import React, { useEffect, useRef, useState, memo } from 'react';
-import useAppStore from '../stores/useAppStore';
+import React, { useEffect, useRef, useState, memo, useCallback } from "react";
 
-const PDFThumbnail = memo(({ document, pageNumber, width = 180, isActive, onClick }) => {
+const PDFThumbnail = memo(function PDFThumbnail({
+    document,
+    pageNumber,
+    width = 180,
+    isActive,
+    onSelect, // (pageNumber) => void
+}) {
     const containerRef = useRef(null);
     const canvasRef = useRef(null);
     const [page, setPage] = useState(null);
     const [isVisible, setIsVisible] = useState(false);
     const renderTaskRef = useRef(null);
 
+    // Click handler reads dataset to avoid any stale closure weirdness
+    const handleClick = useCallback((e) => {
+        const n = Number(e.currentTarget.dataset.page);
+        if (Number.isFinite(n)) onSelect(n);
+    }, [onSelect]);
+
     // Intersection Observer to lazy load
     useEffect(() => {
+        const node = containerRef.current;
+        if (!node) return;
+
         const observer = new IntersectionObserver(
             (entries) => {
-                if (entries[0].isIntersecting) {
+                if (entries[0]?.isIntersecting) {
                     setIsVisible(true);
                     observer.disconnect();
                 }
@@ -20,81 +34,89 @@ const PDFThumbnail = memo(({ document, pageNumber, width = 180, isActive, onClic
             { threshold: 0.1 }
         );
 
-        if (containerRef.current) {
-            observer.observe(containerRef.current);
-        }
-
+        observer.observe(node);
         return () => observer.disconnect();
     }, []);
 
     // Fetch page when visible
     useEffect(() => {
-        if (!isVisible || !document || page) return;
+        if (!isVisible || !document) return;
 
-        let active = true;
-        document.getPage(pageNumber).then((p) => {
-            if (active) setPage(p);
-        }).catch(console.error);
+        let cancelled = false;
+        document
+            .getPage(pageNumber)
+            .then((p) => {
+                if (!cancelled) setPage(p);
+            })
+            .catch(console.error);
 
-        return () => { active = false; };
-    }, [isVisible, document, pageNumber, page]);
+        return () => {
+            cancelled = true;
+        };
+    }, [isVisible, document, pageNumber]);
 
     // Render page to canvas
     useEffect(() => {
         if (!page || !canvasRef.current) return;
 
         const canvas = canvasRef.current;
-        const ctx = canvas.getContext('2d', { alpha: false });
+        const ctx = canvas.getContext("2d", { alpha: false });
 
         // Cancel previous render if any
-        if (renderTaskRef.current) {
-            try {
-                renderTaskRef.current.cancel();
-            } catch (e) { }
-        }
+        try {
+            renderTaskRef.current?.cancel?.();
+        } catch { }
+        renderTaskRef.current = null;
 
-        // Calculate scale to fit width
-        // Use scale 1 viewport to get aspect ratio
-        const viewport = page.getViewport({ scale: 1 });
-        const scale = width / viewport.width;
-        const scaledViewport = page.getViewport({ scale });
+        const vp1 = page.getViewport({ scale: 1 });
+        const scale = width / vp1.width;
+        const vp = page.getViewport({ scale });
 
-        // Set dimensions
-        canvas.width = scaledViewport.width;
-        canvas.height = scaledViewport.height;
+        // Backing store in device pixels (optional DPR for sharper thumbs)
+        const dpr = Math.min(2, window.devicePixelRatio || 1);
+        canvas.width = Math.max(1, Math.floor(vp.width * dpr));
+        canvas.height = Math.max(1, Math.floor(vp.height * dpr));
+        canvas.style.width = `${Math.floor(vp.width)}px`;
+        canvas.style.height = `${Math.floor(vp.height)}px`;
 
-        const renderContext = {
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        ctx.clearRect(0, 0, vp.width, vp.height);
+
+        const task = page.render({
             canvasContext: ctx,
-            viewport: scaledViewport,
-        };
+            viewport: vp,
+        });
 
-        const renderTask = page.render(renderContext);
-        renderTaskRef.current = renderTask;
+        renderTaskRef.current = task;
 
-        renderTask.promise.catch((err) => {
-            if (err.name !== 'RenderingCancelledException') {
-                console.error('Thumbnail render error:', err);
+        task.promise.catch((err) => {
+            if (err?.name !== "RenderingCancelledException") {
+                console.error("Thumbnail render error:", err);
             }
         });
 
         return () => {
-            if (renderTaskRef.current) {
-                try {
-                    renderTaskRef.current.cancel();
-                } catch (e) { }
-            }
+            try {
+                task.cancel?.();
+            } catch { }
         };
     }, [page, width]);
 
     return (
-        <div
+        <button
             ref={containerRef}
-            onClick={onClick}
-            className={`cursor-pointer rounded-lg p-2 transition-colors hover:bg-[var(--bg-secondary)] flex flex-col items-center gap-2 ${isActive ? 'bg-[var(--bg-secondary)] ring-2 ring-[var(--primary-color)]' : ''
-                }`}
+            type="button"
+            data-page={pageNumber}
+            onClick={handleClick}
+            className="cursor-pointer rounded-lg p-2 transition-colors hover:bg-[var(--bg-secondary)] flex flex-col items-center gap-2 text-left"
+            style={{ width }}
         >
-            <div className="relative bg-white shadow-sm border border-[var(--border-color)]">
-                {/* Placeholder / Loading State */}
+            <div
+                className={`relative bg-white shadow-sm border transition-all duration-200 ${isActive
+                        ? "border-[var(--primary-color)] ring-2 ring-[var(--primary-color)] ring-opacity-50"
+                        : "border-[var(--border-color)]"
+                    }`}
+            >
                 {!page && (
                     <div
                         style={{ width: width, height: width * 1.4 }}
@@ -106,10 +128,11 @@ const PDFThumbnail = memo(({ document, pageNumber, width = 180, isActive, onClic
 
                 <canvas ref={canvasRef} className="block" />
             </div>
+
             <span className="text-xs text-[var(--text-secondary)] font-medium">
                 {pageNumber}
             </span>
-        </div>
+        </button>
     );
 });
 

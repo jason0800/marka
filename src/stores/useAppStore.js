@@ -90,8 +90,10 @@ const useAppStore = create((set, get) => ({
     // --- Page Navigation & View Mode ---
     currentPage: 1,
     viewMode: 'continuous', // 'single' | 'continuous'
+    jumpToPage: null, // trigger for imperative navigation
     setCurrentPage: (page) => set({ currentPage: page }),
     setViewMode: (mode) => set({ viewMode: mode }),
+    setJumpToPage: (page) => set({ jumpToPage: page }),
 
     // --- History (NOTE: snapshots must be copies, not references) ---
     history: [{ shapes: [], measurements: [] }], // Start with empty state

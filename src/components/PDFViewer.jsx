@@ -50,6 +50,7 @@ const PDFViewer = ({ document }) => {
     const lastMouseRef = useRef({ x: 0, y: 0 });
     const startedPanButtonRef = useRef(null);
     const suppressNextClickRef = useRef(false);
+    const suppressDetectUntilRef = useRef(0);
 
     // --- current page ref (avoid stale closures) ---
     const currentPageRef = useRef(currentPage);
@@ -222,6 +223,10 @@ const PDFViewer = ({ document }) => {
 
     const detectAndSetCurrentPage = useCallback(() => {
         pageDetectRafRef.current = 0;
+
+        // ✅ suppress auto-detection right after programmatic jumps
+        if (performance.now() < suppressDetectUntilRef.current) return;
+
         if (viewMode !== "continuous") return;
 
         const container = containerRef.current;
@@ -234,25 +239,20 @@ const PDFViewer = ({ document }) => {
         let cursor = PADDING;
 
         let bestIdx = 0;
-        let bestDist = Infinity;
 
         for (let i = 0; i < numPages; i++) {
+            const h = hs[i] || DEFAULT_PAGE_H;
+
+            // ✅ gap belongs to THIS page
             const top = cursor;
-            const bottom = top + (hs[i] || DEFAULT_PAGE_H);
+            const bottom = top + h + (i < numPages - 1 ? PAGE_GAP : 0);
 
             if (probeY >= top && probeY < bottom) {
                 bestIdx = i;
-                bestDist = 0;
                 break;
             }
 
-            const dist = probeY < top ? top - probeY : probeY - bottom;
-            if (dist < bestDist) {
-                bestDist = dist;
-                bestIdx = i;
-            }
-
-            cursor = bottom + PAGE_GAP;
+            cursor = top + h + PAGE_GAP;
         }
 
         const newPage = bestIdx + 1;
@@ -261,6 +261,7 @@ const PDFViewer = ({ document }) => {
             setCurrentPage(newPage);
         }
     }, [numPages, setCurrentPage, viewMode, PAGE_GAP]);
+
 
     const scheduleDetectPage = useCallback(() => {
         if (pageDetectRafRef.current) return;
@@ -374,26 +375,54 @@ const PDFViewer = ({ document }) => {
     }, [applyState, containerEl, markZooming]);
 
     // ---- mode switch positioning ----
+    // ---- mode switch positioning & explicit jumps ----
+    const { jumpToPage, setJumpToPage } = useAppStore();
+
     useEffect(() => {
         if (!numPages) return;
+
         const container = containerRef.current;
         if (!container) return;
 
-        const idx = Math.max(0, Math.min(numPages - 1, currentPage - 1));
+        const targetPage = jumpToPage || currentPage;
+
+        const idx = Math.max(0, Math.min(numPages - 1, targetPage - 1));
         const hs = baseHeightsRef.current;
 
         let pageTop = PADDING;
         for (let i = 0; i < idx; i++) pageTop += (hs[i] || DEFAULT_PAGE_H) + PAGE_GAP;
 
-        const pageH = hs[idx] || DEFAULT_PAGE_H;
         const { scale } = stateRef.current;
 
-        const targetY =
-            container.clientHeight / 2 - (pageTop + pageH / 2) * scale;
+        let targetY;
+
+        if (jumpToPage) {
+            // ✅ suppress auto-detect briefly so it doesn't snap to next page while settling
+            suppressDetectUntilRef.current = performance.now() + 250;
+
+            // ✅ update immediately (so thumbnails highlight the clicked page instantly)
+            if (currentPageRef) currentPageRef.current = targetPage;
+            if (currentPage !== targetPage) setCurrentPage(targetPage);
+
+            // ✅ bias a little INTO the page so we never land in the gap/boundary
+            const BIAS_INTO_PAGE = 10; // base coords (unscaled)
+
+            // Align top of page near top of viewport, but slightly inside the page
+            targetY = -(pageTop * scale) + PADDING + BIAS_INTO_PAGE * scale;
+        } else {
+            // Center logic (mode switch / recenter)
+            const pageH = hs[idx] || DEFAULT_PAGE_H;
+            targetY = container.clientHeight / 2 - (pageTop + pageH / 2) * scale;
+        }
 
         applyState({ y: targetY }, true);
+
+        if (jumpToPage) {
+            setJumpToPage(null); // consume trigger
+        }
+
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [viewMode]);
+    }, [viewMode, jumpToPage, numPages]);
 
     // ---- keyboard zoom ----
     useEffect(() => {
