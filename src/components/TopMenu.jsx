@@ -9,7 +9,7 @@ import {
 } from 'lucide-react';
 
 
-const TopMenu = ({ setPdfDocument, setIsLoading }) => {
+const TopMenu = ({ setPdfDocument, setIsLoading, isDocumentLoaded }) => {
     const {
         theme, setTheme, zoom, setZoom, measurements, calibrationScales, pageUnits, shapes,
         undo, redo, history, historyIndex, selectedIds, setSelectedIds, deleteShape, deleteMeasurement, pushHistory
@@ -17,6 +17,8 @@ const TopMenu = ({ setPdfDocument, setIsLoading }) => {
 
     // Global Key Handlers (Undo/Redo/Delete)
     useEffect(() => {
+        if (!isDocumentLoaded) return; // Disable shortcuts if no doc
+
         const handleKeyDown = (e) => {
             // Ignore inputs
             if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
@@ -57,7 +59,7 @@ const TopMenu = ({ setPdfDocument, setIsLoading }) => {
 
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [undo, redo, selectedIds, shapes, measurements, deleteShape, deleteMeasurement, setSelectedIds, pushHistory]);
+    }, [undo, redo, selectedIds, shapes, measurements, deleteShape, deleteMeasurement, setSelectedIds, pushHistory, isDocumentLoaded]);
 
     const fileInputRef = useRef(null);
     const [activeMenu, setActiveMenu] = useState(null);
@@ -89,6 +91,7 @@ const TopMenu = ({ setPdfDocument, setIsLoading }) => {
     };
 
     const handleSave = () => {
+        if (!isDocumentLoaded) return;
         const data = {
             measurements,
             calibrationScales,
@@ -105,6 +108,7 @@ const TopMenu = ({ setPdfDocument, setIsLoading }) => {
     };
 
     const handleExportPNG = async () => {
+        if (!isDocumentLoaded) return;
         const element = document.querySelector('.main-content');
         if (element) {
             try {
@@ -126,6 +130,7 @@ const TopMenu = ({ setPdfDocument, setIsLoading }) => {
     };
 
     const handleExportCSV = () => {
+        if (!isDocumentLoaded) return;
         let csv = "ID,Type,Page,Value,Unit,RawPixels,Points\n";
         measurements.forEach(m => {
             const scale = calibrationScales[m.pageIndex] || 1.0;
@@ -184,12 +189,12 @@ const TopMenu = ({ setPdfDocument, setIsLoading }) => {
                         <div className="absolute top-full left-0 mt-1 bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded min-w-[180px] shadow-[0_4px_12px_rgba(0,0,0,0.3)] py-1 z-[101] flex flex-col">
                             <button className="bg-transparent border-none text-[var(--text-primary)] px-4 py-2 text-left cursor-pointer text-[13px] flex items-center gap-2 w-full hover:bg-[#b4e6a0] hover:text-[#1a1a1a] disabled:opacity-50 disabled:cursor-default" onClick={handleNew}><FileText size={16} /> New</button>
                             <button className="bg-transparent border-none text-[var(--text-primary)] px-4 py-2 text-left cursor-pointer text-[13px] flex items-center gap-2 w-full hover:bg-[#b4e6a0] hover:text-[#1a1a1a] disabled:opacity-50 disabled:cursor-default" onClick={handleOpen}><FolderOpen size={16} /> Open PDF</button>
-                            <button className="bg-transparent border-none text-[var(--text-primary)] px-4 py-2 text-left cursor-pointer text-[13px] flex items-center gap-2 w-full hover:bg-[#b4e6a0] hover:text-[#1a1a1a] disabled:opacity-50 disabled:cursor-default" onClick={handleSave}><Save size={16} /> Save Project</button>
+                            <button className={`bg-transparent border-none text-[var(--text-primary)] px-4 py-2 text-left cursor-pointer text-[13px] flex items-center gap-2 w-full hover:bg-[#b4e6a0] hover:text-[#1a1a1a] disabled:opacity-50 disabled:cursor-default ${!isDocumentLoaded ? 'opacity-50 cursor-default' : ''}`} onClick={handleSave} disabled={!isDocumentLoaded}><Save size={16} /> Save Project</button>
                             <div className="h-px bg-[#444] my-1" />
-                            <button className="bg-transparent border-none text-[var(--text-primary)] px-4 py-2 text-left cursor-pointer text-[13px] flex items-center gap-2 w-full hover:bg-[#b4e6a0] hover:text-[#1a1a1a] disabled:opacity-50 disabled:cursor-default" onClick={handleExportPNG}><Download size={16} /> Export as PNG</button>
-                            <button className="bg-transparent border-none text-[var(--text-primary)] px-4 py-2 text-left cursor-pointer text-[13px] flex items-center gap-2 w-full hover:bg-[#b4e6a0] hover:text-[#1a1a1a] disabled:opacity-50 disabled:cursor-default" onClick={handleExportCSV}><Download size={16} /> Export CSV</button>
+                            <button className={`bg-transparent border-none text-[var(--text-primary)] px-4 py-2 text-left cursor-pointer text-[13px] flex items-center gap-2 w-full hover:bg-[#b4e6a0] hover:text-[#1a1a1a] disabled:opacity-50 disabled:cursor-default ${!isDocumentLoaded ? 'opacity-50 cursor-default' : ''}`} onClick={handleExportPNG} disabled={!isDocumentLoaded}><Download size={16} /> Export as PNG</button>
+                            <button className={`bg-transparent border-none text-[var(--text-primary)] px-4 py-2 text-left cursor-pointer text-[13px] flex items-center gap-2 w-full hover:bg-[#b4e6a0] hover:text-[#1a1a1a] disabled:opacity-50 disabled:cursor-default ${!isDocumentLoaded ? 'opacity-50 cursor-default' : ''}`} onClick={handleExportCSV} disabled={!isDocumentLoaded}><Download size={16} /> Export CSV</button>
                             {/* Print placeholder */}
-                            <button className="bg-transparent border-none text-[var(--text-primary)] px-4 py-2 text-left cursor-pointer text-[13px] flex items-center gap-2 w-full hover:bg-[#b4e6a0] hover:text-[#1a1a1a] disabled:opacity-50 disabled:cursor-default" onClick={() => window.print()}><Printer size={16} /> Print</button>
+                            <button className={`bg-transparent border-none text-[var(--text-primary)] px-4 py-2 text-left cursor-pointer text-[13px] flex items-center gap-2 w-full hover:bg-[#b4e6a0] hover:text-[#1a1a1a] disabled:opacity-50 disabled:cursor-default ${!isDocumentLoaded ? 'opacity-50 cursor-default' : ''}`} onClick={() => isDocumentLoaded && window.print()} disabled={!isDocumentLoaded}><Printer size={16} /> Print</button>
                         </div>
                     )}
                 </div>
@@ -197,8 +202,9 @@ const TopMenu = ({ setPdfDocument, setIsLoading }) => {
                 {/* EDIT MENU */}
                 <div className="relative">
                     <button
-                        className="bg-transparent border-none text-[var(--text-primary)] px-2 py-1 rounded cursor-pointer text-[13px] flex items-center gap-1 hover:bg-[var(--btn-hover)] hover:text-[var(--text-primary)]"
-                        onClick={() => setActiveMenu(activeMenu === 'edit' ? null : 'edit')}
+                        className={`bg-transparent border-none text-[var(--text-primary)] px-2 py-1 rounded cursor-pointer text-[13px] flex items-center gap-1 hover:bg-[var(--btn-hover)] hover:text-[var(--text-primary)] ${!isDocumentLoaded ? 'opacity-50 cursor-default hover:bg-transparent' : ''}`}
+                        onClick={() => isDocumentLoaded && setActiveMenu(activeMenu === 'edit' ? null : 'edit')}
+                        disabled={!isDocumentLoaded}
                     >
                         Edit <ChevronDown size={14} />
                     </button>
@@ -225,8 +231,9 @@ const TopMenu = ({ setPdfDocument, setIsLoading }) => {
                 {/* VIEW MENU */}
                 <div className="relative">
                     <button
-                        className="bg-transparent border-none text-[var(--text-primary)] px-2 py-1 rounded cursor-pointer text-[13px] flex items-center gap-1 hover:bg-[var(--btn-hover)] hover:text-[var(--text-primary)]"
-                        onClick={() => setActiveMenu(activeMenu === 'view' ? null : 'view')}
+                        className={`bg-transparent border-none text-[var(--text-primary)] px-2 py-1 rounded cursor-pointer text-[13px] flex items-center gap-1 hover:bg-[var(--btn-hover)] hover:text-[var(--text-primary)] ${!isDocumentLoaded ? 'opacity-50 cursor-default hover:bg-transparent' : ''}`}
+                        onClick={() => isDocumentLoaded && setActiveMenu(activeMenu === 'view' ? null : 'view')}
+                        disabled={!isDocumentLoaded}
                     >
                         View <ChevronDown size={14} />
                     </button>

@@ -8,6 +8,7 @@ import html2canvas from 'html2canvas';
 import useAppStore from './stores/useAppStore';
 import TopMenu from './components/TopMenu';
 import BottomBar from './components/BottomBar';
+import StartupPage from './components/StartupPage';
 import './App.css';
 
 function App() {
@@ -27,26 +28,33 @@ function App() {
     document.documentElement.setAttribute('data-theme', currentTheme);
   }
 
-
+  const isDocumentLoaded = !!pdfDocument;
 
   return (
     <div className="app-container" data-theme={useAppStore(s => s.theme)}>
       <PersistenceManager projectId="default" />
-      <TopMenu setPdfDocument={setPdfDocument} setIsLoading={setIsLoading} />
-      <div className="workspace-container">
-        <LeftPanel pdfDocument={pdfDocument} />
-        <main className="main-content">
-          {isLoading && <div className="pdf-viewer-placeholder">Loading...</div>}
-          {!isLoading && !pdfDocument && (
-            <div className="pdf-viewer-placeholder">
-              Open a PDF to begin
-            </div>
-          )}
-          {pdfDocument && <PDFViewer document={pdfDocument} />}
-        </main>
-        <Toolbar />
-      </div>
-      <BottomBar totalPages={pdfDocument ? pdfDocument.numPages : 0} />
+      <TopMenu
+        setPdfDocument={setPdfDocument}
+        setIsLoading={setIsLoading}
+        isDocumentLoaded={isDocumentLoaded}
+      />
+
+      {!isDocumentLoaded && !isLoading ? (
+        <StartupPage setPdfDocument={setPdfDocument} setIsLoading={setIsLoading} />
+      ) : (
+        <div className="workspace-container">
+          <LeftPanel pdfDocument={pdfDocument} />
+          <main className="main-content">
+            {isLoading && <div className="pdf-viewer-placeholder">Loading...</div>}
+            {pdfDocument && <PDFViewer document={pdfDocument} />}
+          </main>
+          <Toolbar />
+        </div>
+      )}
+
+      {isDocumentLoaded && (
+        <BottomBar totalPages={pdfDocument ? pdfDocument.numPages : 0} />
+      )}
     </div>
   );
 }
