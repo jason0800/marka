@@ -271,7 +271,7 @@ const PDFPage = memo(function PDFPage({
                 className="absolute inset-0 overflow-hidden leading-[1.0] pointer-events-none [&>span]:text-transparent [&>span]:absolute [&>span]:whitespace-pre [&>span]:cursor-text [&>span]:origin-[0%_0%] [&>span]:pointer-events-auto"
             />
             {width > 0 && (
-                <OverlayLayer page={page} width={width} height={height} viewScale={scale * renderScale} />
+                <OverlayLayer page={page} width={width} height={height} viewScale={scale} />
             )}
         </div>
     );
