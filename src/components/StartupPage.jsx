@@ -62,15 +62,13 @@ const StartupPage = ({ setPdfDocument, setIsLoading, onNewPDF }) => {
             <div className="flex flex-col items-center gap-8 p-12 max-w-2xl w-full">
                 {/* Logo / Header */}
                 <div className="flex flex-col items-center gap-2 mb-8">
-                    <div className="w-16 h-16 bg-[var(--primary-color)] rounded-2xl flex items-center justify-center shadow-lg mb-4">
-                        <FileText size={32} className="text-white" />
-                    </div>
+                    <img src="/marka-icon.png" alt="Marka Logo" className="w-40 h-40 mb-2" />
                     <h1 className="text-4xl font-bold tracking-tight">Marka</h1>
-                    <p className="text-[var(--text-secondary)] text-lg">PDF Annotation & Measurement Tool</p>
+                    <p className="text-[var(--text-secondary)] text-lg">Web-Based PDF Markup & Measurement Tool</p>
                 </div>
 
                 {/* Actions */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full h-10">
                     <button
                         onClick={() => fileInputRef.current?.click()}
                         className="group flex flex-col items-center justify-center gap-4 p-8 rounded-xl bg-[var(--bg-secondary)] border border-[var(--border-color)] hover:border-[var(--primary-color)] hover:shadow-md transition-all duration-200"
