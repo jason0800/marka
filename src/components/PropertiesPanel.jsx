@@ -29,6 +29,10 @@ const PropertiesPanel = () => {
         activeTool, deleteShape, defaultShapeStyle, setDefaultShapeStyle
     } = useAppStore();
 
+    // Local state for rotation input to allow typing "-"
+    const [isEditingRot, setIsEditingRot] = useState(false);
+    const [rotationInput, setRotationInput] = useState("");
+
     // Helper to find selected items
     const selectedShapes = shapes.filter(s => selectedIds.includes(s.id));
 
@@ -205,8 +209,9 @@ const PropertiesPanel = () => {
                         </div>
                     </div>
 
+                    {/* Opacity Control */}
                     <div className="flex flex-col gap-2">
-                        <div className="flex justify-between items-center">
+                        <div className="flex justify-between items-center mb-1">
                             <label className="text-xs text-[var(--text-secondary)] font-medium">Opacity</label>
                             <div className="flex items-center bg-[var(--bg-color)] px-1.5 py-0.5 rounded min-w-[12px] border border-transparent focus-within:border-[var(--primary-color)] transition-colors">
                                 <input
@@ -232,6 +237,51 @@ const PropertiesPanel = () => {
                             className="w-full h-0.5 bg-[var(--border-color)] rounded-sm appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-2.5 [&::-webkit-slider-thumb]:h-2.5 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-[var(--text-primary)] [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-[var(--bg-secondary)] [&::-webkit-slider-thumb]:shadow-md"
                         />
                     </div>
+
+                    {/* Rotation Control - Hidden for Lines/Arrows */}
+                    {!['line', 'arrow'].includes(source?.type) && (
+                        <div className="flex flex-col gap-1">
+                            <div className="flex justify-between items-center">
+                                <label className="text-xs text-[var(--text-secondary)] font-medium">Rotation</label>
+                                <div className="flex items-center bg-[var(--bg-color)] px-2 py-0.5 rounded border border-transparent focus-within:border-[var(--primary-color)] transition-colors h-5 w-[50px]">
+                                    <input
+                                        type="text"
+                                        value={isEditingRot ? rotationInput : Math.round(source?.rotation || 0)}
+                                        onFocus={() => {
+                                            setIsEditingRot(true);
+                                            setRotationInput(Math.round(source?.rotation || 0).toString());
+                                        }}
+                                        onBlur={() => setIsEditingRot(false)}
+                                        onChange={(e) => {
+                                            const valStr = e.target.value;
+                                            setRotationInput(valStr);
+
+                                            // Only update prop if it's a valid integer (and not just "-")
+                                            // Allow "-" to just sit in local state until more is typed
+                                            if (valStr === '-' || valStr === '') return;
+
+                                            const val = parseInt(valStr.replace(/[^0-9-]/g, ''));
+                                            if (!isNaN(val)) {
+                                                updateProp('rotation', val);
+                                            }
+                                        }}
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+                                                e.preventDefault();
+                                                const current = Math.round(source?.rotation || 0);
+                                                const step = e.shiftKey ? 15 : 1;
+                                                const next = e.key === 'ArrowUp' ? current + step : current - step;
+                                                updateProp('rotation', next);
+                                                setRotationInput(next.toString());
+                                            }
+                                        }}
+                                        className="w-full text-xs text-[var(--text-primary)] bg-transparent outline-none text-right font-mono"
+                                    />
+                                    <span className="text-xs text-[var(--text-secondary)] ml-1 select-none">°</span>
+                                </div>
+                            </div>
+                        </div>
+                    )}
                 </div>
             )}
         </div>

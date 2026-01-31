@@ -69,7 +69,7 @@ const CustomSelect = ({ value, onChange, options, placeholder }) => {
 
             {isOpen && (
                 <div
-                    className="absolute top-full left-0 right-0 mt-1 bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-md shadow-xl z-50 max-h-[60px] overflow-y-scroll"
+                    className="absolute top-full left-0 right-0 mt-1 bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-md shadow-xl z-50 max-h-[220px] overflow-y-scroll"
                     style={{ scrollbarGutter: 'stable' }}
                 >
                     {options.map((option) => (
