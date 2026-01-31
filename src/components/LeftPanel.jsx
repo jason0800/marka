@@ -16,7 +16,7 @@ const LeftPanel = ({ pdfDocument }) => {
                         ? 'bg-[var(--primary-color)] text-[var(--text-active)] shadow-md'
                         : 'text-[var(--text-secondary)] hover:bg-[var(--bg-hover)]'
                         }`}
-                    onClick={() => setActiveTab('thumbnails')}
+                    onClick={() => setActiveTab(activeTab === 'thumbnails' ? null : 'thumbnails')}
                     title="Thumbnails"
                 >
                     <LayoutGrid size={20} />
@@ -26,7 +26,7 @@ const LeftPanel = ({ pdfDocument }) => {
                         ? 'bg-[var(--primary-color)] text-[var(--text-active)] shadow-md'
                         : 'text-[var(--text-secondary)] hover:bg-[var(--bg-hover)]'
                         }`}
-                    onClick={() => setActiveTab('properties')}
+                    onClick={() => setActiveTab(activeTab === 'properties' ? null : 'properties')}
                     title="Properties"
                 >
                     <Sliders size={20} />
@@ -34,14 +34,16 @@ const LeftPanel = ({ pdfDocument }) => {
             </div>
 
             {/* Content Column */}
-            <div className="flex-1 w-[260px] overflow-hidden bg-[var(--bg-secondary)]">
-                {activeTab === 'thumbnails' && (
-                    <ThumbnailsPanel pdfDocument={pdfDocument} />
-                )}
-                {activeTab === 'properties' && (
-                    <PropertiesPanel />
-                )}
-            </div>
+            {activeTab && (
+                <div className="flex-1 w-[260px] overflow-hidden bg-[var(--bg-secondary)]">
+                    {activeTab === 'thumbnails' && (
+                        <ThumbnailsPanel pdfDocument={pdfDocument} />
+                    )}
+                    {activeTab === 'properties' && (
+                        <PropertiesPanel />
+                    )}
+                </div>
+            )}
         </div>
     );
 };

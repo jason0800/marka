@@ -154,7 +154,7 @@ const PropertiesPanel = () => {
                     <div className="flex flex-col gap-1">
                         <label className="text-xs text-[var(--text-secondary)] font-medium">Stroke Width</label>
                         <div className="flex gap-1 bg-[var(--bg-color)] p-0.5 rounded-md border border-[var(--border-color)]">
-                            {[1.25, 2.5, 3.75].map(w => (
+                            {[1.5, 2.75, 3.75].map(w => (
                                 <button
                                     key={w}
                                     className={`flex-1 h-7 border-none bg-transparent rounded cursor-pointer flex items-center justify-center text-[var(--text-secondary)] hover:bg-[var(--btn-hover)] hover:text-[var(--text-primary)] ${strokeWidth === w ? '!bg-[var(--primary-color)] !text-[var(--text-active)] shadow-[0_0_10px_rgba(var(--primary-color-rgb),0.25)]' : ''}`}
@@ -162,7 +162,7 @@ const PropertiesPanel = () => {
                                     aria-pressed={strokeWidth === w}
                                     aria-label={`Stroke width ${w}`}
                                 >
-                                    <div style={{ height: Math.max(1, w), width: '16px', background: 'currentColor', borderRadius: 99 }}></div>
+                                    <div style={{ height: Math.max(1, w), width: '24px', background: 'currentColor', borderRadius: 99 }}></div>
                                 </button>
                             ))}
                         </div>
@@ -189,7 +189,7 @@ const PropertiesPanel = () => {
                                 aria-pressed={strokeDasharray === '8,12'}
                             >
                                 <svg width="24" height="4" style={{ display: 'block', overflow: 'visible' }}>
-                                    <line x1="0" y1="2" x2="24" y2="2" stroke="currentColor" strokeWidth="2" strokeDasharray="6,8" strokeLinecap="round" />
+                                    <line x1="0" y1="2" x2="24" y2="2" stroke="currentColor" strokeWidth="2" strokeDasharray="4,6" strokeLinecap="round" />
                                 </svg>
                             </button>
                             <button
@@ -199,7 +199,7 @@ const PropertiesPanel = () => {
                                 aria-pressed={strokeDasharray === '0,10'}
                             >
                                 <svg width="24" height="4" style={{ display: 'block', overflow: 'visible' }}>
-                                    <line x1="0" y1="2" x2="24" y2="2" stroke="currentColor" strokeWidth="2" strokeDasharray="0,6" strokeLinecap="round" />
+                                    <line x1="0" y1="2" x2="24" y2="2" stroke="currentColor" strokeWidth="3" strokeDasharray="1,9" strokeLinecap="round" />
                                 </svg>
                             </button>
                         </div>
