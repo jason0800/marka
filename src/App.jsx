@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { loadPDF } from './services/pdf-service';
 import PDFViewer from './components/PDFViewer';
 import Toolbar from './components/Toolbar';
@@ -10,53 +10,57 @@ import TopMenu from './components/TopMenu';
 import BottomBar from './components/BottomBar';
 import StartupPage from './components/StartupPage';
 import NewPDFDialog from './components/NewPDFDialog';
+import TabBar from './components/TabBar';
 import './App.css';
 
 function App() {
-  const [pdfDocument, setPdfDocument] = useState(null);
+  const { theme, pdfDocument, tabs, addTab } = useAppStore();
   const [isLoading, setIsLoading] = useState(false);
-  const { theme } = useAppStore();
   const [showNewPDFDialog, setShowNewPDFDialog] = useState(false);
 
   // Apply theme globally to body
-  useState(() => {
-    // Initial set
-    document.documentElement.setAttribute('data-theme', useAppStore.getState().theme);
-  }, []);
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+  }, [theme]);
 
-  // Update when theme changes
-  const currentTheme = useAppStore(s => s.theme);
-  if (document.documentElement.getAttribute('data-theme') !== currentTheme) {
-    document.documentElement.setAttribute('data-theme', currentTheme);
-  }
+  const isDocumentLoaded = tabs.length > 0;
 
-  const isDocumentLoaded = !!pdfDocument;
+  // Wrapper to adapt legacy components calling setPdfDocument
+  const handleSetPdfDocument = (doc, name = "Untitled.pdf", size = 0) => {
+    addTab(doc, name, size);
+    setIsLoading(false);
+  };
 
   return (
-    <div className="app-container" data-theme={useAppStore(s => s.theme)}>
+    <div className="app-container" data-theme={theme}>
       <PersistenceManager projectId="default" />
       <TopMenu
-        setPdfDocument={setPdfDocument}
+        setPdfDocument={handleSetPdfDocument}
         setIsLoading={setIsLoading}
         isDocumentLoaded={isDocumentLoaded}
         onNewPDF={() => setShowNewPDFDialog(true)}
         pdfDocument={pdfDocument}
       />
 
-      {!isDocumentLoaded && !isLoading ? (
+      {!isDocumentLoaded ? (
         <StartupPage
-          setPdfDocument={setPdfDocument}
+          setPdfDocument={handleSetPdfDocument}
           setIsLoading={setIsLoading}
           onNewPDF={() => setShowNewPDFDialog(true)}
         />
       ) : (
         <div className="workspace-container">
           <LeftPanel pdfDocument={pdfDocument} />
-          <main className="main-content">
-            {isLoading && <div className="pdf-viewer-placeholder">Loading...</div>}
-            {pdfDocument && <PDFViewer document={pdfDocument} />}
-          </main>
-          <Toolbar />
+          <div className="flex flex-col flex-1 h-full min-w-0">
+            <TabBar />
+            <div className="flex flex-1 min-h-0 relative">
+              <main className="main-content relative flex-1 flex flex-col min-h-0">
+                {isLoading && <div className="pdf-viewer-placeholder">Loading...</div>}
+                {pdfDocument && <PDFViewer document={pdfDocument} />}
+              </main>
+              <Toolbar />
+            </div>
+          </div>
         </div>
       )}
 
@@ -67,8 +71,11 @@ function App() {
       {showNewPDFDialog && (
         <NewPDFDialog
           onClose={() => setShowNewPDFDialog(false)}
-          onCreated={(doc) => {
-            setPdfDocument(doc);
+          onCreated={(doc, name) => {
+            // NewPDFDialog updated to return doc
+            if (doc) {
+              addTab(doc, name || "New PDF", 0);
+            }
             setShowNewPDFDialog(false);
           }}
         />

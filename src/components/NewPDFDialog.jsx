@@ -1,7 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { X, FileText, ChevronDown, Check } from 'lucide-react';
 import { jsPDF } from 'jspdf';
-import { loadPDF } from '../services/pdf-service';
 
 const TEMPLATES = [
     // US Common
@@ -173,10 +172,10 @@ const NewPDFDialog = ({ onClose, onCreated }) => {
             }
 
             const blob = doc.output('blob');
-            const file = new File([blob], "new_document.pdf", { type: "application/pdf" });
+            const file = new File([blob], "New Document.pdf", { type: "application/pdf" });
 
             const pdfDoc = await loadPDF(file);
-            onCreated(pdfDoc);
+            onCreated(pdfDoc, "New Document.pdf");
             onClose();
 
         } catch (e) {

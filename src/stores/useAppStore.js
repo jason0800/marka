@@ -150,7 +150,16 @@ const useAppStore = create((set, get) => ({
     // --- File Info ---
     fileName: "Untitled.pdf",
     fileSize: 0,
-    setFileInfo: (name, size) => set({ fileName: name, fileSize: size }),
+    setFileInfo: (name, size) => set((state) => {
+        const newTabs = state.tabs.map(t =>
+            t.id === state.activeTabId ? { ...t, title: name } : t
+        );
+        return {
+            fileName: name,
+            fileSize: size,
+            tabs: newTabs
+        };
+    }),
 
     addMeasurement: (measurement) =>
         set((state) => ({ measurements: [...state.measurements, measurement] })),
@@ -313,6 +322,139 @@ const useAppStore = create((set, get) => ({
             };
         }),
 
+    // --- Tabs & Multi-Document Support ---
+    tabs: [], // { id, title, pdfDocument, state: { ...snapshot } }
+    activeTabId: null,
+    pdfDocument: null, // Current active PDF proxy
+
+    setPdfDocument: (doc) => set({ pdfDocument: doc }),
+
+    addTab: (pdfDoc, fileName, fileSize) => set((state) => {
+        const newTabId = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `tab-${Date.now()}`;
+
+        // Snapshot current tab if exists
+        let newTabs = [...state.tabs];
+        if (state.activeTabId) {
+            newTabs = newTabs.map(t =>
+                t.id === state.activeTabId
+                    ? { ...t, state: getSnapshot(state) }
+                    : t
+            );
+        }
+
+        // Create new tab entry
+        const newTab = {
+            id: newTabId,
+            title: fileName || "Untitled",
+            pdfDocument: pdfDoc,
+            state: {
+                ...initialStateSnapshot,
+                fileName: fileName || "Untitled.pdf",
+                fileSize: fileSize || 0,
+            }
+        };
+
+        return {
+            tabs: [...newTabs, newTab],
+            activeTabId: newTabId,
+            pdfDocument: pdfDoc,
+            // Reset workspace to clean state
+            ...initialStateSnapshot,
+            fileName: fileName || "Untitled.pdf",
+            fileSize: fileSize || 0,
+            history: [{ shapes: [], measurements: [] }], // Explicitly reset history structure
+            historyIndex: 0
+        };
+    }),
+
+    switchTab: (tabId) => set((state) => {
+        if (state.activeTabId === tabId) return {};
+
+        // Snapshot current
+        const tabsWithSnapshot = state.tabs.map(t =>
+            t.id === state.activeTabId
+                ? { ...t, state: getSnapshot(state) }
+                : t
+        );
+
+        const targetTab = tabsWithSnapshot.find(t => t.id === tabId);
+        if (!targetTab) return {};
+
+        return {
+            tabs: tabsWithSnapshot,
+            activeTabId: tabId,
+            pdfDocument: targetTab.pdfDocument,
+            ...targetTab.state
+        };
+    }),
+
+    closeTab: (tabId) => set((state) => {
+        const newTabs = state.tabs.filter(t => t.id !== tabId);
+
+        // If closing active tab, switch to another
+        if (state.activeTabId === tabId) {
+            if (newTabs.length > 0) {
+                const nextTab = newTabs[newTabs.length - 1]; // Switch to last
+                return {
+                    tabs: newTabs,
+                    activeTabId: nextTab.id,
+                    pdfDocument: nextTab.pdfDocument,
+                    ...nextTab.state
+                };
+            } else {
+                // No tabs left
+                return {
+                    tabs: [],
+                    activeTabId: null,
+                    pdfDocument: null,
+                    ...initialStateSnapshot,
+                    fileName: "Untitled.pdf",
+                    fileSize: 0,
+                    history: [{ shapes: [], measurements: [] }],
+                    historyIndex: 0
+                };
+            }
+        }
+
+        return { tabs: newTabs };
+    }),
+
+    updateTabTitle: (tabId, newTitle) => set((state) => ({
+        tabs: state.tabs.map(t => t.id === tabId ? { ...t, title: newTitle } : t)
+    })),
+
 }));
+
+// Helper to capture workspace state
+const getSnapshot = (state) => ({
+    viewport: state.viewport,
+    measurements: state.measurements,
+    shapes: state.shapes,
+    selectedIds: state.selectedIds,
+    theme: state.theme,
+    currentPage: state.currentPage,
+    viewMode: state.viewMode,
+    history: state.history,
+    historyIndex: state.historyIndex,
+    calibrationScales: state.calibrationScales,
+    pageUnits: state.pageUnits,
+    fileName: state.fileName,
+    fileSize: state.fileSize,
+    pageRotations: state.pageRotations,
+});
+
+const initialStateSnapshot = {
+    viewport: initialViewport,
+    measurements: [],
+    shapes: [],
+    selectedIds: [],
+    currentPage: 1,
+    viewMode: 'continuous',
+    history: [{ shapes: [], measurements: [] }],
+    historyIndex: 0,
+    calibrationScales: {},
+    pageUnits: {},
+    pageRotations: {},
+};
 
 export default useAppStore;

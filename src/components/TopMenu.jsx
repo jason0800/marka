@@ -2,10 +2,11 @@ import { useRef, useState, useEffect } from 'react';
 import useAppStore from '../stores/useAppStore';
 import { loadPDF } from '../services/pdf-service';
 import html2canvas from 'html2canvas';
+import { jsPDF } from 'jspdf';
 import {
     FileText, FolderOpen, Save, Download, Printer,
     Undo, Redo, ZoomIn, ZoomOut, Sun, Moon,
-    ChevronDown, CreditCard, RotateCw, Clipboard, Scissors, Copy
+    ChevronDown, CreditCard, RotateCw, RotateCcw, Clipboard, Scissors, Copy
 } from 'lucide-react';
 import DocumentPropertiesDialog from './DocumentPropertiesDialog';
 
@@ -117,7 +118,7 @@ const TopMenu = ({ setPdfDocument, setIsLoading, isDocumentLoaded, onNewPDF, pdf
             setIsLoading(true);
             try {
                 const doc = await loadPDF(file);
-                setPdfDocument(doc);
+                setPdfDocument(doc, file.name, file.size);
                 setFileInfo(file.name, file.size);
             } catch (err) {
                 console.error("Failed to load PDF", err);
@@ -129,20 +130,38 @@ const TopMenu = ({ setPdfDocument, setIsLoading, isDocumentLoaded, onNewPDF, pdf
         setActiveMenu(null);
     };
 
-    const handleSave = () => {
+    const handleSave = async () => {
         if (!isDocumentLoaded) return;
-        const data = {
-            measurements,
-            calibrationScales,
-            pageUnits,
-            shapes,
-            timestamp: Date.now()
-        };
-        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-        const link = document.createElement('a');
-        link.href = URL.createObjectURL(blob);
-        link.download = `marka-project-${Date.now()}.json`;
-        link.click();
+        const element = document.querySelector('.main-content');
+        if (element) {
+            setIsLoading(true);
+            try {
+                const canvas = await html2canvas(element, {
+                    useCORS: true,
+                    allowTaint: true,
+                    ignoreElements: (el) => el.classList.contains('do-not-export'),
+                    logging: false,
+                    scale: 2 // Improved resolution
+                });
+                const imgData = canvas.toDataURL('image/png');
+                const imgWidth = canvas.width;
+                const imgHeight = canvas.height;
+
+                const pdf = new jsPDF({
+                    orientation: imgWidth > imgHeight ? 'l' : 'p',
+                    unit: 'px',
+                    format: [imgWidth, imgHeight]
+                });
+
+                pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight);
+                pdf.save('marka-document.pdf');
+            } catch (e) {
+                console.error("Save PDF failed", e);
+                alert("Save PDF failed");
+            } finally {
+                setIsLoading(false);
+            }
+        }
         setActiveMenu(null);
     };
 
@@ -222,13 +241,13 @@ const TopMenu = ({ setPdfDocument, setIsLoading, isDocumentLoaded, onNewPDF, pdf
                         className="bg-transparent border-none text-[var(--text-primary)] px-2 py-1 rounded cursor-pointer text-[13px] flex items-center gap-1 hover:bg-[var(--btn-hover)] hover:text-[var(--text-primary)]"
                         onClick={() => setActiveMenu(activeMenu === 'file' ? null : 'file')}
                     >
-                        File <ChevronDown size={14} />
+                        File
                     </button>
                     {activeMenu === 'file' && (
-                        <div className="absolute top-full left-0 mt-1 bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded min-w-[180px] shadow-[0_4px_12px_rgba(0,0,0,0.3)] py-1 z-[101] flex flex-col">
+                        <div className="absolute top-full left-0 mt-1 bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded min-w-[180px] shadow-[0_2px_10px_rgba(0,0,0,0.2)] py-1 z-[101] flex flex-col">
                             <button className="bg-transparent border-none text-[var(--text-primary)] px-4 py-2 text-left cursor-pointer text-[13px] flex items-center gap-2 w-full hover:bg-[#b4e6a0] hover:text-[#1a1a1a] disabled:opacity-50 disabled:cursor-default" onClick={handleNew}><FileText size={16} /> New PDF</button>
                             <button className="bg-transparent border-none text-[var(--text-primary)] px-4 py-2 text-left cursor-pointer text-[13px] flex items-center gap-2 w-full hover:bg-[#b4e6a0] hover:text-[#1a1a1a] disabled:opacity-50 disabled:cursor-default" onClick={handleOpen}><FolderOpen size={16} /> Open PDF</button>
-                            <button className={`bg-transparent border-none text-[var(--text-primary)] px-4 py-2 text-left cursor-pointer text-[13px] flex items-center gap-2 w-full hover:bg-[#b4e6a0] hover:text-[#1a1a1a] disabled:opacity-50 disabled:cursor-default ${!isDocumentLoaded ? 'opacity-50 cursor-default' : ''}`} onClick={handleSave} disabled={!isDocumentLoaded}><Save size={16} /> Save Project</button>
+                            <button className={`bg-transparent border-none text-[var(--text-primary)] px-4 py-2 text-left cursor-pointer text-[13px] flex items-center gap-2 w-full hover:bg-[#b4e6a0] hover:text-[#1a1a1a] disabled:opacity-50 disabled:cursor-default ${!isDocumentLoaded ? 'opacity-50 cursor-default' : ''}`} onClick={handleSave} disabled={!isDocumentLoaded}><Save size={16} /> Save PDF</button>
                             <div className="h-px bg-[#444] my-1" />
                             <button className={`bg-transparent border-none text-[var(--text-primary)] px-4 py-2 text-left cursor-pointer text-[13px] flex items-center gap-2 w-full hover:bg-[#b4e6a0] hover:text-[#1a1a1a] disabled:opacity-50 disabled:cursor-default ${!isDocumentLoaded ? 'opacity-50 cursor-default' : ''}`} onClick={handleExportPNG} disabled={!isDocumentLoaded}><Download size={16} /> Export as PNG</button>
                             <button className={`bg-transparent border-none text-[var(--text-primary)] px-4 py-2 text-left cursor-pointer text-[13px] flex items-center gap-2 w-full hover:bg-[#b4e6a0] hover:text-[#1a1a1a] disabled:opacity-50 disabled:cursor-default ${!isDocumentLoaded ? 'opacity-50 cursor-default' : ''}`} onClick={handleExportCSV} disabled={!isDocumentLoaded}><Download size={16} /> Export CSV</button>
@@ -245,10 +264,10 @@ const TopMenu = ({ setPdfDocument, setIsLoading, isDocumentLoaded, onNewPDF, pdf
                         onClick={() => isDocumentLoaded && setActiveMenu(activeMenu === 'edit' ? null : 'edit')}
                         disabled={!isDocumentLoaded}
                     >
-                        Edit <ChevronDown size={14} />
+                        Edit
                     </button>
                     {activeMenu === 'edit' && (
-                        <div className="absolute top-full left-0 mt-1 bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded min-w-[180px] shadow-[0_4px_12px_rgba(0,0,0,0.3)] py-1 z-[101] flex flex-col">
+                        <div className="absolute top-full left-0 mt-1 bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded min-w-[180px] shadow-[0_2px_10px_rgba(0,0,0,0.2)] py-1 z-[101] flex flex-col">
                             <button
                                 className="bg-transparent border-none text-[var(--text-primary)] px-4 py-2 text-left cursor-pointer text-[13px] flex items-center gap-2 w-full hover:bg-[#b4e6a0] hover:text-[#1a1a1a] disabled:opacity-50 disabled:cursor-default"
                                 onClick={() => { undo(); setActiveMenu(null); }}
@@ -294,10 +313,10 @@ const TopMenu = ({ setPdfDocument, setIsLoading, isDocumentLoaded, onNewPDF, pdf
                         onClick={() => isDocumentLoaded && setActiveMenu(activeMenu === 'document' ? null : 'document')}
                         disabled={!isDocumentLoaded}
                     >
-                        Document <ChevronDown size={14} />
+                        Document
                     </button>
                     {activeMenu === 'document' && (
-                        <div className="absolute top-full left-0 mt-1 bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded min-w-[180px] shadow-[0_4px_12px_rgba(0,0,0,0.3)] py-1 z-[101] flex flex-col">
+                        <div className="absolute top-full left-0 mt-1 bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded min-w-[190px] shadow-[0_2px_10px_rgba(0,0,0,0.2)] py-1 z-[101] flex flex-col">
                             <button
                                 className="bg-transparent border-none text-[var(--text-primary)] px-4 py-2 text-left cursor-pointer text-[13px] flex items-center gap-2 w-full hover:bg-[#b4e6a0] hover:text-[#1a1a1a] disabled:opacity-50 disabled:cursor-default"
                                 onClick={() => { setShowDocProps(true); setActiveMenu(null); }}
@@ -310,6 +329,12 @@ const TopMenu = ({ setPdfDocument, setIsLoading, isDocumentLoaded, onNewPDF, pdf
                             >
                                 <RotateCw size={16} /> Rotate Clockwise
                             </button>
+                            <button
+                                className="bg-transparent border-none text-[var(--text-primary)] px-4 py-2 text-left cursor-pointer text-[13px] flex items-center gap-2 w-full hover:bg-[#b4e6a0] hover:text-[#1a1a1a] disabled:opacity-50 disabled:cursor-default"
+                                onClick={() => { rotatePage(currentPage - 1, -90); setActiveMenu(null); }}
+                            >
+                                <RotateCcw size={16} /> Rotate Anti-Clockwise
+                            </button>
                         </div>
                     )}
                 </div>
@@ -321,10 +346,10 @@ const TopMenu = ({ setPdfDocument, setIsLoading, isDocumentLoaded, onNewPDF, pdf
                         onClick={() => isDocumentLoaded && setActiveMenu(activeMenu === 'view' ? null : 'view')}
                         disabled={!isDocumentLoaded}
                     >
-                        View <ChevronDown size={14} />
+                        View
                     </button>
                     {activeMenu === 'view' && (
-                        <div className="absolute top-full left-0 mt-1 bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded min-w-[180px] shadow-[0_4px_12px_rgba(0,0,0,0.3)] py-1 z-[101] flex flex-col">
+                        <div className="absolute top-full left-0 mt-1 bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded min-w-[180px] shadow-[0_2px_10px_rgba(0,0,0,0.2)] py-1 z-[101] flex flex-col">
                             <button className="bg-transparent border-none text-[var(--text-primary)] px-4 py-2 text-left cursor-pointer text-[13px] flex items-center gap-2 w-full hover:bg-[#b4e6a0] hover:text-[#1a1a1a] disabled:opacity-50 disabled:cursor-default" onClick={() => setZoom(zoom * 1.2)}><ZoomIn size={16} /> Zoom In</button>
                             <button className="bg-transparent border-none text-[var(--text-primary)] px-4 py-2 text-left cursor-pointer text-[13px] flex items-center gap-2 w-full hover:bg-[#b4e6a0] hover:text-[#1a1a1a] disabled:opacity-50 disabled:cursor-default" onClick={() => setZoom(zoom / 1.2)}><ZoomOut size={16} /> Zoom Out</button>
                             <button className="bg-transparent border-none text-[var(--text-primary)] px-4 py-2 text-left cursor-pointer text-[13px] flex items-center gap-2 w-full hover:bg-[#b4e6a0] hover:text-[#1a1a1a] disabled:opacity-50 disabled:cursor-default" onClick={() => setZoom(1)}><CreditCard size={16} /> Reset Zoom</button>
