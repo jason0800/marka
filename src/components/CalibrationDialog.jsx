@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { X, Ruler, ChevronDown, Check } from 'lucide-react';
+import { X, Scaling, ChevronDown, Check } from 'lucide-react';
 import useAppStore from '../stores/useAppStore';
 
 const PRESETS = [
@@ -183,7 +183,7 @@ const CalibrationDialog = ({ onClose }) => {
                 <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
                         <div className="p-2 bg-[var(--primary-color)] rounded-lg text-white">
-                            <Ruler size={20} />
+                            <Scaling size={20} />
                         </div>
                         <h2 className="text-xl font-semibold text-[var(--text-primary)]">Set Scale</h2>
                     </div>

@@ -9,7 +9,7 @@ import CalibrationDialog from './CalibrationDialog';
 const TOOLS = [
     { id: 'select', icon: MousePointer2, label: 'Select (V)', key: 'v' },
     { id: 'pan', icon: Hand, label: 'Pan (H)', key: 'h' },
-    { id: 'calibrate', icon: Scaling, label: 'Calibrate (C)', key: 'c' },
+    { id: 'calibrate', icon: Scaling, label: 'Set Scale (C)', key: 'c' },
     { type: 'separator' },
     { id: 'length', icon: Ruler, label: 'Length (L)', key: 'l' },
     { id: 'area', icon: Pentagon, label: 'Area (E)', key: 'e' },
