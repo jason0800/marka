@@ -9,7 +9,7 @@ import {
 } from 'lucide-react';
 
 
-const TopMenu = ({ setPdfDocument, setIsLoading, isDocumentLoaded }) => {
+const TopMenu = ({ setPdfDocument, setIsLoading, isDocumentLoaded, onNewPDF }) => {
     const {
         theme, setTheme, zoom, setZoom, measurements, calibrationScales, pageUnits, shapes,
         undo, redo, history, historyIndex, selectedIds, setSelectedIds, deleteShape, deleteMeasurement, pushHistory
@@ -66,9 +66,14 @@ const TopMenu = ({ setPdfDocument, setIsLoading, isDocumentLoaded }) => {
 
     // --- File Actions ---
     const handleNew = () => {
-        if (confirm("Are you sure you want to start a new project? Unsaved changes will be lost.")) {
-            window.location.reload();
+        if (isDocumentLoaded) {
+            if (confirm("Create new PDF? Unsaved changes will be lost.")) {
+                onNewPDF();
+            }
+        } else {
+            onNewPDF();
         }
+        setActiveMenu(null);
     };
 
     const handleOpen = () => fileInputRef.current?.click();
@@ -187,7 +192,7 @@ const TopMenu = ({ setPdfDocument, setIsLoading, isDocumentLoaded }) => {
                     </button>
                     {activeMenu === 'file' && (
                         <div className="absolute top-full left-0 mt-1 bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded min-w-[180px] shadow-[0_4px_12px_rgba(0,0,0,0.3)] py-1 z-[101] flex flex-col">
-                            <button className="bg-transparent border-none text-[var(--text-primary)] px-4 py-2 text-left cursor-pointer text-[13px] flex items-center gap-2 w-full hover:bg-[#b4e6a0] hover:text-[#1a1a1a] disabled:opacity-50 disabled:cursor-default" onClick={handleNew}><FileText size={16} /> New</button>
+                            <button className="bg-transparent border-none text-[var(--text-primary)] px-4 py-2 text-left cursor-pointer text-[13px] flex items-center gap-2 w-full hover:bg-[#b4e6a0] hover:text-[#1a1a1a] disabled:opacity-50 disabled:cursor-default" onClick={handleNew}><FileText size={16} /> New PDF</button>
                             <button className="bg-transparent border-none text-[var(--text-primary)] px-4 py-2 text-left cursor-pointer text-[13px] flex items-center gap-2 w-full hover:bg-[#b4e6a0] hover:text-[#1a1a1a] disabled:opacity-50 disabled:cursor-default" onClick={handleOpen}><FolderOpen size={16} /> Open PDF</button>
                             <button className={`bg-transparent border-none text-[var(--text-primary)] px-4 py-2 text-left cursor-pointer text-[13px] flex items-center gap-2 w-full hover:bg-[#b4e6a0] hover:text-[#1a1a1a] disabled:opacity-50 disabled:cursor-default ${!isDocumentLoaded ? 'opacity-50 cursor-default' : ''}`} onClick={handleSave} disabled={!isDocumentLoaded}><Save size={16} /> Save Project</button>
                             <div className="h-px bg-[#444] my-1" />

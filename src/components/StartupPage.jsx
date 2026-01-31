@@ -2,7 +2,7 @@ import React, { useRef, useState } from 'react';
 import { FileUp, Plus, FileText } from 'lucide-react';
 import { loadPDF } from '../services/pdf-service';
 
-const StartupPage = ({ setPdfDocument, setIsLoading }) => {
+const StartupPage = ({ setPdfDocument, setIsLoading, onNewPDF }) => {
     const fileInputRef = useRef(null);
     const [isDragging, setIsDragging] = useState(false);
 
@@ -48,12 +48,6 @@ const StartupPage = ({ setPdfDocument, setIsLoading }) => {
         handleFileChange(file);
     };
 
-    const handleNewProject = () => {
-        if (confirm("Start a new project?")) {
-            window.location.reload();
-        }
-    };
-
     return (
         <div
             className={`w-full h-full flex flex-col items-center justify-center bg-[var(--bg-primary)] text-[var(--text-primary)] transition-colors duration-200 ${isDragging ? 'bg-[var(--bg-hover)]' : ''}`}
@@ -87,15 +81,15 @@ const StartupPage = ({ setPdfDocument, setIsLoading }) => {
                     </button>
 
                     <button
-                        onClick={handleNewProject}
+                        onClick={onNewPDF}
                         className="group flex flex-col items-center justify-center gap-4 p-8 rounded-xl bg-[var(--bg-secondary)] border border-[var(--border-color)] hover:border-[var(--primary-color)] hover:shadow-md transition-all duration-200"
                     >
                         <div className="p-4 rounded-full bg-[var(--bg-primary)] group-hover:bg-[var(--primary-color)] group-hover:text-white transition-colors">
                             <Plus size={24} />
                         </div>
                         <div className="flex flex-col items-center">
-                            <span className="font-semibold text-lg">New Project</span>
-                            <span className="text-sm text-[var(--text-secondary)]">Start fresh</span>
+                            <span className="font-semibold text-lg">New PDF</span>
+                            <span className="text-sm text-[var(--text-secondary)]">Custom size</span>
                         </div>
                     </button>
                 </div>
