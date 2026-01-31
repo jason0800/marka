@@ -4,13 +4,33 @@ import { jsPDF } from 'jspdf';
 import { loadPDF } from '../services/pdf-service';
 
 const TEMPLATES = [
-    { name: 'A4', width: 210, height: 297, unit: 'mm' },
-    { name: 'A3', width: 297, height: 420, unit: 'mm' },
-    { name: 'A2', width: 420, height: 594, unit: 'mm' },
-    { name: 'A1', width: 594, height: 841, unit: 'mm' },
-    { name: 'A0', width: 841, height: 1189, unit: 'mm' },
+    // US Common
     { name: 'Letter', width: 215.9, height: 279.4, unit: 'mm' },
     { name: 'Legal', width: 215.9, height: 355.6, unit: 'mm' },
+
+    // ISO A Series
+    { name: 'A0', width: 841, height: 1189, unit: 'mm' },
+    { name: 'A1', width: 594, height: 841, unit: 'mm' },
+    { name: 'A2', width: 420, height: 594, unit: 'mm' },
+    { name: 'A3', width: 297, height: 420, unit: 'mm' },
+    { name: 'A4', width: 210, height: 297, unit: 'mm' },
+    { name: 'A5', width: 148, height: 210, unit: 'mm' },
+
+    // ISO B Series
+    { name: 'B0', width: 1000, height: 1414, unit: 'mm' },
+    { name: 'B1', width: 707, height: 1000, unit: 'mm' },
+    { name: 'B2', width: 500, height: 707, unit: 'mm' },
+    { name: 'B3', width: 353, height: 500, unit: 'mm' },
+    { name: 'B4', width: 250, height: 353, unit: 'mm' },
+    { name: 'B5', width: 176, height: 250, unit: 'mm' },
+
+    // ISO C Series
+    { name: 'C0', width: 917, height: 1297, unit: 'mm' },
+    { name: 'C1', width: 648, height: 917, unit: 'mm' },
+    { name: 'C2', width: 458, height: 648, unit: 'mm' },
+    { name: 'C3', width: 324, height: 458, unit: 'mm' },
+    { name: 'C4', width: 229, height: 324, unit: 'mm' },
+    { name: 'C5', width: 162, height: 229, unit: 'mm' },
 ];
 
 const UNIT_TO_MM = {
@@ -44,11 +64,14 @@ const CustomSelect = ({ value, onChange, options, placeholder }) => {
                 className="w-full bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-md px-3 h-9 text-sm text-[var(--text-primary)] flex items-center justify-between focus:outline-none focus:border-[var(--primary-color)] hover:border-[var(--primary-color)] transition-colors"
             >
                 <span className="truncate">{selectedLabel}</span>
-                <ChevronDown size={14} className={`text-[var(--text-secondary)] transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+                <ChevronDown size={14} className="text-[var(--text-secondary)]" />
             </button>
 
             {isOpen && (
-                <div className="absolute top-full left-0 right-0 mt-1 bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-md shadow-xl z-50 max-h-[200px] overflow-y-auto">
+                <div
+                    className="absolute top-full left-0 right-0 mt-1 bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-md shadow-xl z-50 max-h-[60px] overflow-y-scroll"
+                    style={{ scrollbarGutter: 'stable' }}
+                >
                     {options.map((option) => (
                         <button
                             key={option.value}
@@ -116,7 +139,6 @@ const NewPDFDialog = ({ onClose, onCreated }) => {
         setWidth(parseFloat((width * factor).toFixed(2)));
         setHeight(parseFloat((height * factor).toFixed(2)));
         setUnit(newUnit);
-        setTemplate('Custom');
     };
 
     const handleOrientationChange = (newOri) => {
@@ -166,8 +188,8 @@ const NewPDFDialog = ({ onClose, onCreated }) => {
     };
 
     const templateOptions = [
-        ...TEMPLATES.map(t => ({ value: t.name, label: t.name })),
-        { value: 'Custom', label: 'Custom' }
+        { value: 'Custom', label: 'Custom' },
+        ...TEMPLATES.map(t => ({ value: t.name, label: t.name }))
     ];
 
     const unitOptions = [
