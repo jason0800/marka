@@ -8,7 +8,7 @@ const TabBar = () => {
     if (tabs.length === 0) return null;
 
     return (
-        <div className="flex bg-[var(--bg-secondary)] h-9 select-none">
+        <div className="flex bg-black/5 h-9 select-none">
             <div className="flex overflow-x-auto no-scrollbar max-w-full h-full">
                 {tabs.map((tab) => {
                     const isActive = tab.id === activeTabId;
