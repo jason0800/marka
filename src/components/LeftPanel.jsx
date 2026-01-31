@@ -4,6 +4,7 @@ import ThumbnailsPanel from './ThumbnailsPanel';
 import PropertiesPanel from './PropertiesPanel';
 import useAppStore from '../stores/useAppStore'; // Just in case, though might not need it here directly
 
+// Left panel with thumbnails, properties, and bookmarks.
 const LeftPanel = ({ pdfDocument }) => {
     const [activeTab, setActiveTab] = useState('thumbnails');
 

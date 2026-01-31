@@ -6,7 +6,7 @@ const ThumbnailsPanel = ({ pdfDocument }) => {
     const { currentPage, setCurrentPage, setJumpToPage } = useAppStore();
     const scrollRef = useRef(null);
     const [thumbScale, setThumbScale] = useState(1);
-    const [sliderVal, setSliderVal] = useState(200);
+    const [sliderVal, setSliderVal] = useState(160);
 
     // Initial scroll to active thumbnail logic
     useEffect(() => {
