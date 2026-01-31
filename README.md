@@ -3,12 +3,32 @@
 Marka is a browser-based PDF measurement + markup tool. It runs fully client-side with no backend dependencies.
 
 ## Features
+
+### 📄 Document Management
 - **PDF Viewer**: Smooth zoom/pan, multi-page rendering.
-- **Measurement Tools**: Length, Area, Perimeter, Count.
-- **Calibration**: Set scale from known dimensions (supports units like m, ft, mm).
+- **New PDF Creation**: Create blank documents with presets:
+  - **ISO Series**: A0-A5, B0-B5, C0-C5
+  - **US Sizes**: Letter, Legal
+  - **Custom**: Define width/height in mm, cm, in, or pt.
+
+### 📐 Measurement & Calibration
+- **Tools**: Length, Area, Perimeter, Count (Tally).
+- **Calibration**: Set scale from known dimensions.
+- **Precision**: Real-time unit conversion.
+
+### 🖌️ Drawing & Markup
+- **Vector Shapes**: Rectangle, Circle, Line, Arrow.
 - **Annotations**: Leadered comment callouts.
+- **Styling**:
+  - **Fill/Stroke**: Custom colors, hex input.
+  - **Line Styles**: Continuous, Dashed, Dotted.
+  - **Opacity**: 0-100% transparency control.
+  - **Rotation**: Precise angle adjustment (hidden for non-rotatable shapes like lines).
+
+### ⚙️ Core Application
+- **Zero Backend**: All processing happens in the browser.
+- **Offline Support**: PWA capable.
 - **Export**: PNG screenshots and CSV data export.
-- **Offline Capable**: PWA support.
 
 ## Setup
 
@@ -28,12 +48,11 @@ Marka is a browser-based PDF measurement + markup tool. It runs fully client-sid
    ```
 
 ## Tech Stack
-- React
-- Vite
-- PDF.js (v5.x)
-- Zustand (State Management)
-- IDB (IndexedDB Persistence)
-- Lucide React (Icons)
+- **Framework**: React + Vite
+- **Engine**: PDF.js (v5.x), jsPDF
+- **State**: Zustand
+- **Persistence**: IDB (IndexedDB)
+- **UI**: Tailwind CSS, Lucide React
 
 ## Coordinate System
 - Measurements are stored in **PDF Page Space** (points).
