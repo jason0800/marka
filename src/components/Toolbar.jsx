@@ -3,7 +3,8 @@ import {
     Box, Circle, Minus, ArrowRight, Pentagon, RectangleHorizontal
 } from 'lucide-react';
 import useAppStore from '../stores/useAppStore';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
+import CalibrationDialog from './CalibrationDialog';
 
 const TOOLS = [
     { id: 'select', icon: MousePointer2, label: 'Select (V)', key: 'v' },
@@ -25,6 +26,7 @@ const TOOLS = [
 
 const Toolbar = () => {
     const { activeTool, setActiveTool } = useAppStore();
+    const [showCalibrationDialog, setShowCalibrationDialog] = useState(false);
 
     useEffect(() => {
         const handleKeyDown = (e) => {
@@ -36,7 +38,11 @@ const Toolbar = () => {
 
             const tool = TOOLS.find(t => t.key === e.key);
             if (tool) {
-                setActiveTool(tool.id);
+                if (tool.id === 'calibrate') {
+                    setShowCalibrationDialog(true);
+                } else {
+                    setActiveTool(tool.id);
+                }
             }
         };
 
@@ -50,7 +56,7 @@ const Toolbar = () => {
                 if (tool.type === 'separator') {
                     return <div key={i} className="w-[60%] h-px bg-[var(--border-color)] my-1" />;
                 }
-                const isActive = activeTool === tool.id;
+                const isActive = activeTool === tool.id && tool.id !== 'calibrate';
                 return (
                     <button
                         key={tool.id}
@@ -58,13 +64,23 @@ const Toolbar = () => {
                             ? '!bg-[var(--primary-color)] !text-[var(--text-active)] shadow-[0_0_10px_rgba(var(--primary-color-rgb),0.25)]'
                             : ''
                             }`}
-                        onClick={() => setActiveTool(tool.id)}
+                        onClick={() => {
+                            if (tool.id === 'calibrate') {
+                                setShowCalibrationDialog(true);
+                            } else {
+                                setActiveTool(tool.id);
+                            }
+                        }}
                         title={tool.label}
                     >
                         <tool.icon size={20} />
                     </button>
                 );
             })}
+
+            {showCalibrationDialog && (
+                <CalibrationDialog onClose={() => setShowCalibrationDialog(false)} />
+            )}
         </aside>
     );
 };
