@@ -8,20 +8,20 @@ const TabBar = () => {
     if (tabs.length === 0) return null;
 
     return (
-        <div className="flex items-center bg-[var(--bg-secondary)] border-b border-[var(--border-color)] h-9 px-2 select-none">
-            <div className="flex gap-1 overflow-x-auto no-scrollbar max-w-full">
+        <div className="flex bg-[var(--bg-secondary)] h-9 select-none">
+            <div className="flex overflow-x-auto no-scrollbar max-w-full h-full">
                 {tabs.map((tab) => {
                     const isActive = tab.id === activeTabId;
                     return (
                         <div
                             key={tab.id}
                             className={`
-                                group flex items-center gap-2 px-3 py-1.5 rounded-t-lg cursor-pointer text-xs font-medium border-t border-x
+                                group flex items-center gap-2 pl-3 pr-1.5 cursor-pointer text-xs font-medium border-r border-white/25
                                 ${isActive
-                                    ? 'bg-[var(--bg-primary)] border-[var(--border-color)] border-b-transparent text-[var(--text-primary)] mb-[-1px] pb-2 z-10'
-                                    : 'bg-[var(--bg-tertiary)] border-transparent text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)] opacity-80 hover:opacity-100'
+                                    ? 'bg-[var(--bg-secondary)] text-[var(--text-primary)]'
+                                    : 'bg-black/15 text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
                                 }
-                                transition-all
+                                transition-colors
                                 min-w-[120px] max-w-[200px]
                             `}
                             onClick={() => switchTab(tab.id)}
@@ -29,7 +29,7 @@ const TabBar = () => {
                         >
                             <span className="truncate flex-1">{tab.title}</span>
                             <button
-                                className={`p-0.5 rounded-full hover:bg-[var(--bg-hover-strong)] opacity-0 group-hover:opacity-100 ${isActive ? 'opacity-100' : ''} transition-opacity`}
+                                className={`p-1 rounded-md hover:bg-black/10 opacity-0 group-hover:opacity-100 ${isActive ? 'opacity-100' : ''} transition-all`}
                                 onClick={(e) => {
                                     e.stopPropagation();
                                     closeTab(tab.id);

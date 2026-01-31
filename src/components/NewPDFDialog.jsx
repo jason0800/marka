@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { X, FileText, ChevronDown, Check } from 'lucide-react';
 import { jsPDF } from 'jspdf';
+import { loadPDF } from '../services/pdf-service';
 
 const TEMPLATES = [
     // US Common
