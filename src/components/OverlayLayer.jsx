@@ -1,6 +1,8 @@
 import { useMemo, useRef, useState, useEffect, useCallback } from "react";
 import useAppStore from "../stores/useAppStore";
 import { calculateDistance, calculatePolygonArea } from "../geometry/transforms";
+import { findShapeAtPoint } from "../geometry/hitTest";
+import OverlayCanvasLayer from "./OverlayCanvasLayer";
 
 const OverlayLayer = ({ page, width, height, viewScale = 1.0 }) => {
     const {
@@ -137,6 +139,19 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0 }) => {
 
             if (e.key === "Enter") finishDrawing();
 
+            if (e.key === "Delete" || e.key === "Backspace") {
+                if (selectedIds.length > 0) {
+                    // Check if shapes or measurements
+                    const shapeIds = selectedIds.filter(id => pageShapes.some(s => s.id === id));
+                    const measIds = selectedIds.filter(id => pageMeasurements.some(m => m.id === id));
+
+                    shapeIds.forEach(id => deleteShape(id));
+                    measIds.forEach(id => deleteMeasurement(id));
+                    setSelectedIds([]);
+                    pushHistory();
+                }
+            }
+
             if (e.key === "Escape") {
                 setIsDrawing(false);
                 setDrawingPoints([]);
@@ -193,6 +208,7 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0 }) => {
             const hitId = targetShapeId || targetMeasId;
 
             if (hitId) {
+                // DOM Hit (SVG element)
                 const isSelected = selectedIds.includes(hitId);
 
                 if (isShift) {
@@ -205,9 +221,28 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0 }) => {
 
                 setDragStart({ x: point.x, y: point.y });
                 setIsDraggingItems(true);
-                // Push history before starting to drag (for undo of moves)
                 pushHistory();
             } else {
+                // CANVAS Hit Test (Manual)
+                const hitShape = findShapeAtPoint(point, pageShapes);
+                if (hitShape) {
+                    // Found a shape on canvas!
+                    const isSelected = selectedIds.includes(hitShape.id);
+                    if (isShift) {
+                        setSelectedIds((prev) =>
+                            isSelected ? prev.filter((id) => id !== hitShape.id) : [...prev, hitShape.id]
+                        );
+                    } else {
+                        setSelectedIds([hitShape.id]);
+                    }
+                    // Prepare drag immediately?
+                    setDragStart({ x: point.x, y: point.y });
+                    setIsDraggingItems(true);
+                    pushHistory();
+                    return;
+                }
+
+                // If no hit, box selection
                 if (!isShift) setSelectedIds([]);
                 setSelectionStart({ x: point.x, y: point.y });
             }
@@ -840,134 +875,134 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0 }) => {
     };
 
     return (
-        <svg
-            ref={svgRef}
-            className="absolute top-0 left-0 w-full h-full select-none z-10"
-            width={width}
-            height={height}
-            viewBox={viewBox}
-            onMouseDown={handleMouseDown}
-            onMouseUp={handleMouseUp}
-            onMouseMove={handleMouseMove}
-            onDoubleClick={() => finishDrawing()}
-        >
-            {/* Shapes */}
-            {pageShapes.map(renderShape)}
+        <div style={{ position: "absolute", top: 0, left: 0, width, height, pointerEvents: 'none' }}>
+            {/* 1. Canvas Layer (Static shapes) */}
+            <OverlayCanvasLayer
+                width={width}
+                height={height}
+                viewScale={viewScale}
+                shapes={pageShapes}
+                measurements={pageMeasurements}
+                selectedIds={selectedIds}
+                pageIndex={pageIndex}
+                pageUnits={pageUnits}
+                calibrationScales={calibrationScales}
+            />
 
-            {/* Measurements */}
-            {pageMeasurements.map(renderMeasurement)}
+            {/* 2. SVG Layer (Interactive/Selected shapes + Tools) */}
+            <svg
+                ref={svgRef}
+                width={width}
+                height={height}
+                viewBox={viewBox}
+                style={{ position: "absolute", top: 0, left: 0, pointerEvents: "all" }} // SVG must catch clicks for handles
+                onMouseDown={handleMouseDown}
+                onMouseMove={handleMouseMove}
+                onMouseUp={handleMouseUp}
+                onDoubleClick={() => finishDrawing()}
+            >
+                <defs>
+                    {/* Markers could be large if we render all of them? No, define one generic? 
+                             Current code defines markers per-ID. 
+                             If shapes are on Canvas, we don't need markers here unless they are selected.
+                             We only render selected shapes here. */}
+                </defs>
 
-            {/* Drawing Previews */}
-            {isDrawing && cursor && (
-                <g pointerEvents="none">
-                    {/* Measurement previews */}
-                    {["length", "calibrate", "comment"].includes(activeTool) && drawingPoints.length > 0 && (
-                        <line
-                            x1={drawingPoints[0].x}
-                            y1={drawingPoints[0].y}
-                            x2={cursor.x}
-                            y2={cursor.y}
-                            stroke={activeTool === "comment" ? "#333" : "#e74c3c"}
-                            strokeDasharray="5,5"
-                            strokeWidth={nonScalingStroke}
-                            vectorEffect="non-scaling-stroke"
-                        />
-                    )}
+                {/* RENDER ONLY SELECTED SHAPES in SVG */}
+                {pageShapes.filter(s => selectedIds.includes(s.id)).map(s => renderShape(s))}
 
-                    {activeTool === "comment" && drawingPoints.length > 0 && (
-                        <rect
-                            x={cursor.x}
-                            y={cursor.y}
-                            width={150}
-                            height={50}
-                            fill="rgba(255,255,255,0.5)"
-                            stroke="#333"
-                            strokeDasharray="3,3"
-                            strokeWidth={1 / Math.max(1e-6, viewScale)}
-                            vectorEffect="non-scaling-stroke"
-                        />
-                    )}
+                {/* Render active drawing shape */}
+                {isDrawingRef.current && shapeStart && cursor && (
+                    (() => {
+                        // Temporary shape for preview
+                        const tempId = "temp-draw";
+                        let s = { id: tempId, type: activeTool, ...defaultShapeStyle, stroke: defaultShapeStyle.stroke, start: shapeStart, end: cursor, x: 0, y: 0, width: 0, height: 0, rotation: 0 };
 
-                    {["area", "perimeter"].includes(activeTool) && drawingPoints.length > 0 && (
-                        <>
-                            <polyline
-                                points={[...drawingPoints.map((p) => `${p.x},${p.y}`), `${cursor.x},${cursor.y}`].join(" ")}
-                                fill={activeTool === "area" ? "rgba(108, 176, 86, 0.25)" : "none"}
-                                stroke="#e74c3c"
-                                strokeDasharray="5,5"
-                                strokeWidth={nonScalingStroke}
-                                vectorEffect="non-scaling-stroke"
-                            />
-                            {drawingPoints.map((p, i) => (
-                                <circle
-                                    key={i}
-                                    cx={p.x}
-                                    cy={p.y}
-                                    r={3 / Math.max(1e-6, viewScale)}
-                                    fill="white"
-                                    stroke="#e74c3c"
-                                    strokeWidth={1 / Math.max(1e-6, viewScale)}
-                                    vectorEffect="non-scaling-stroke"
-                                />
-                            ))}
-                        </>
-                    )}
-
-                    {/* Shape previews (Real-time WYSIWYG) */}
-                    {["rectangle", "circle", "line", "arrow"].includes(activeTool) && shapeStart && (
-                        (() => {
-                            const style = {
-                                stroke: defaultShapeStyle.stroke,
-                                strokeWidth: defaultShapeStyle.strokeWidth,
-                                strokeDasharray: defaultShapeStyle.strokeDasharray === 'none' ? undefined : defaultShapeStyle.strokeDasharray,
-                                fill: defaultShapeStyle.fill,
-                                opacity: defaultShapeStyle.opacity,
-                            };
-
-                            if (activeTool === "line") {
-                                return <line x1={shapeStart.x} y1={shapeStart.y} x2={cursor.x} y2={cursor.y} {...style} strokeLinecap="round" />;
-                            }
-                            if (activeTool === "arrow") {
-                                const headLength = 10;
-                                const angle = Math.atan2(cursor.y - shapeStart.y, cursor.x - shapeStart.x);
-                                const arrowHeadPath = `M ${cursor.x} ${cursor.y} L ${cursor.x - headLength * Math.cos(angle - Math.PI / 6)} ${cursor.y - headLength * Math.sin(angle - Math.PI / 6)} L ${cursor.x - headLength * Math.cos(angle + Math.PI / 6)} ${cursor.y - headLength * Math.sin(angle + Math.PI / 6)} Z`;
-                                return (
-                                    <g>
-                                        <line x1={shapeStart.x} y1={shapeStart.y} x2={cursor.x} y2={cursor.y} {...style} strokeLinecap="round" />
-                                        <path d={arrowHeadPath} fill={style.stroke} />
-                                    </g>
-                                );
-                            }
-
+                        if (activeTool === "line" || activeTool === "arrow") {
+                            // s is set needed props
+                        } else {
                             const x = Math.min(shapeStart.x, cursor.x);
                             const y = Math.min(shapeStart.y, cursor.y);
                             const w = Math.abs(cursor.x - shapeStart.x);
                             const h = Math.abs(cursor.y - shapeStart.y);
+                            s.x = x; s.y = y; s.width = w; s.height = h;
+                        }
+                        return renderShape(s);
+                    })()
+                )}
 
-                            if (activeTool === "rectangle") return <rect x={x} y={y} width={w} height={h} {...style} />;
-                            if (activeTool === "circle") return <ellipse cx={x + w / 2} cy={y + h / 2} rx={w / 2} ry={h / 2} {...style} />;
-                            return null;
-                        })()
-                    )}
-                </g>
-            )}
+                {/* Measurements - Render ONLY selected or 'comment' box if needed? 
+                    Canvas renders unselected measurements.
+                */}
+                {pageMeasurements.filter(m => selectedIds.includes(m.id) || m.type === "comment").map(m => renderMeasurement(m))}
 
-            {/* Selection box */}
-            {selectionStart && cursor && activeTool === "select" && (
-                <rect
-                    x={Math.min(selectionStart.x, cursor.x)}
-                    y={Math.min(selectionStart.y, cursor.y)}
-                    width={Math.abs(cursor.x - selectionStart.x)}
-                    height={Math.abs(cursor.y - selectionStart.y)}
-                    fill="rgba(0, 120, 215, 0.1)"
-                    stroke="rgba(0, 120, 215, 0.5)"
-                    strokeWidth={1 / Math.max(1e-6, viewScale)}
-                    strokeDasharray="3,3"
-                    vectorEffect="non-scaling-stroke"
-                    pointerEvents="none"
-                />
-            )}
-        </svg>
+                {/* Drawing feedback for measurements */}
+                {isDrawingRef.current && activeTool === "choice" ? null : null}
+                {/* (drawingPoints rendering logic if needed, e.g. polyline for area/perimeter) */}
+                {isDrawingRef.current && drawingPoints.length > 0 && (
+                    <g pointerEvents="none">
+                        {/* Render partial polyline */}
+                        {activeTool === "area" || activeTool === "perimeter" ? (
+                            <>
+                                <polyline
+                                    points={[...drawingPoints, cursor].map(p => p ? `${p.x},${p.y}` : "").join(" ")}
+                                    fill={activeTool === "area" ? "rgba(108,176,86,0.25)" : "none"}
+                                    stroke="var(--primary-color)"
+                                    strokeWidth={2 / Math.max(1e-6, viewScale)}
+                                />
+                                {drawingPoints.map((p, i) => (
+                                    <circle
+                                        key={i}
+                                        cx={p.x}
+                                        cy={p.y}
+                                        r={3 / Math.max(1e-6, viewScale)}
+                                        fill="white"
+                                        stroke="#e74c3c"
+                                        strokeWidth={1 / Math.max(1e-6, viewScale)}
+                                        vectorEffect="non-scaling-stroke"
+                                    />
+                                ))}
+                            </>
+                        ) : null}
+                        {/* Render line for length */}
+                        {activeTool === "length" && cursor ? (
+                            <line x1={drawingPoints[0].x} y1={drawingPoints[0].y} x2={cursor.x} y2={cursor.y} stroke="#e74c3c" strokeWidth={2 / Math.max(1e-6, viewScale)} />
+                        ) : null}
+
+                        {/* Comment preview */}
+                        {activeTool === "comment" && drawingPoints.length > 0 && (
+                            <rect
+                                x={cursor.x}
+                                y={cursor.y}
+                                width={150}
+                                height={50}
+                                fill="rgba(255,255,255,0.5)"
+                                stroke="#333"
+                                strokeDasharray="3,3"
+                                strokeWidth={1 / Math.max(1e-6, viewScale)}
+                                vectorEffect="non-scaling-stroke"
+                            />
+                        )}
+                    </g>
+                )}
+
+                {/* Selection Box */}
+                {selectionStart && cursor && (
+                    <rect
+                        x={Math.min(selectionStart.x, cursor.x)}
+                        y={Math.min(selectionStart.y, cursor.y)}
+                        width={Math.abs(cursor.x - selectionStart.x)}
+                        height={Math.abs(cursor.y - selectionStart.y)}
+                        fill="rgba(0, 123, 255, 0.1)"
+                        stroke="rgba(0, 123, 255, 0.5)"
+                        strokeWidth={1 / Math.max(1e-6, viewScale)}
+                        vectorEffect="non-scaling-stroke"
+                        pointerEvents="none"
+                    />
+                )}
+
+            </svg>
+        </div>
     );
 };
 
