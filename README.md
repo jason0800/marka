@@ -1,63 +1,57 @@
 # Marka
 
-Marka is a browser-based PDF measurement + markup tool. It runs fully client-side with no backend dependencies.
+Marka is a powerful PDF annotation and measurement tool built for professionals. It allows you to view, annotate, measure, and create PDFs directly in your browser with a highly responsive and intuitive interface.
 
-## Features
+## ✨ Features
 
-### 📄 Document Management
-- **PDF Viewer**: Smooth zoom/pan, multi-page rendering.
-- **New PDF Creation**: Create blank documents with presets:
-  - **ISO Series**: A0-A5, B0-B5, C0-C5
-  - **US Sizes**: Letter, Legal
-  - **Custom**: Define width/height in mm, cm, in, or pt.
+### 📄 PDF Management
+- **View PDFs**: Fast and accurate PDF rendering using `pdf.js`.
+- **Create New PDFs**: Generate blank documents with custom dimensions or standard templates:
+  - **ISO Series**: A0-A5, B0-B5, C0-C5.
+  - **US Sizes**: Letter, Legal.
+  - **Custom**: Define exact width/height in mm, cm, in, or pt.
+- **Export**: Save your annotated documents.
 
-### 📐 Measurement & Calibration
-- **Tools**: Length, Area, Perimeter, Count (Tally).
-- **Calibration**: Set scale from known dimensions.
-- **Precision**: Real-time unit conversion.
+### ✏️ Annotation Tools
+- **Shapes**: Draw Rectangles, Circles, Lines, and Arrows.
+- **Styling**: Customize appearance via the **Properties Panel**:
+  - **Stroke & Fill**: Color picker with hex input and presets.
+  - **Line Styles**: Continuous, Dashed, or Dotted lines.
+  - **Opacity**: Fine-grained transparency control.
+  - **Rotation**: Precise angle adjustment (hidden for simple lines/arrows).
+- **Comments**: Add text notes to specific areas of the document.
 
-### 🖌️ Drawing & Markup
-- **Vector Shapes**: Rectangle, Circle, Line, Arrow.
-- **Annotations**: Leadered comment callouts.
-- **Styling**:
-  - **Fill/Stroke**: Custom colors, hex input.
-  - **Line Styles**: Continuous, Dashed, Dotted.
-  - **Opacity**: 0-100% transparency control.
-  - **Rotation**: Precise angle adjustment (hidden for non-rotatable shapes like lines).
+### 📐 Measurement & Quantification
+- **Calibration**: Set custom scales to measure accurately on technical drawings.
+- **Length**: Measure linear distances.
+- **Area**: Calculate polygon areas.
+- **Perimeter**: Measure path lengths.
+- **Count**: Place markers to tally items quickly.
 
-### ⚙️ Core Application
-- **Zero Backend**: All processing happens in the browser.
-- **Offline Support**: PWA capable.
-- **Export**: PNG screenshots and CSV data export.
+### 🛠 Tech Stack
+- **Framework**: React + Vite
+- **Styling**: Tailwind CSS
+- **PDF Core**: `react-pdf`, `jspdf`, `pdf-lib`
+- **Icons**: `lucide-react`
 
-## Setup
+## 🚀 Getting Started
 
-1. Install dependencies:
+1. **Install Dependencies**
    ```bash
    npm install
    ```
 
-2. Run development server:
+2. **Run Development Server**
    ```bash
    npm run dev
    ```
 
-3. Build for production:
+3. **Build for Production**
    ```bash
    npm run build
    ```
 
-## Tech Stack
-- **Framework**: React + Vite
-- **Engine**: PDF.js (v5.x), jsPDF
-- **State**: Zustand
-- **Persistence**: IDB (IndexedDB)
-- **UI**: Tailwind CSS, Lucide React
-
-## Coordinate System
-- Measurements are stored in **PDF Page Space** (points).
-- Calibration converts pixels (points) to real-world units.
-- Transforms handle alignment during zoom/pan.
-
-## Disclaimer
-Measurements depend on correct calibration. Always verify critical dimensions.
+## 🎨 UI/UX Highlights
+- **Dark/Light Mode**: Fully theme-aware interface.
+- **Responsive Design**: Polished layout with adjustable panels.
+- **Shortcuts**: Keyboard shortcuts for efficient workflows.

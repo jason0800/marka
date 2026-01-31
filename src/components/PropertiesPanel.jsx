@@ -29,10 +29,6 @@ const PropertiesPanel = () => {
         activeTool, deleteShape, defaultShapeStyle, setDefaultShapeStyle
     } = useAppStore();
 
-    // Local state for rotation input to allow typing "-"
-    const [isEditingRot, setIsEditingRot] = useState(false);
-    const [rotationInput, setRotationInput] = useState("");
-
     // Helper to find selected items
     const selectedShapes = shapes.filter(s => selectedIds.includes(s.id));
 
@@ -66,6 +62,18 @@ const PropertiesPanel = () => {
     const strokeWidth = source?.strokeWidth || defaultShapeStyle.strokeWidth;
     const strokeDasharray = source?.strokeDasharray || defaultShapeStyle.strokeDasharray;
     const opacity = source?.opacity ?? defaultShapeStyle.opacity;
+
+    // Local state for rotation input to allow typing "-"
+    const [tempRotation, setTempRotation] = useState(null);
+
+    // Sync temp rotation if selection changes (optional, but good practice to reset if we switch shapes)
+    // Actually, on blur we reset, so switching shapes should be fine if we assume blur happens.
+    // But if we click another shape directly, input might keep old temp value if we don't clear it.
+    // Let's just use key-based reset or `useEffect` on `selectedIds`.
+
+    React.useEffect(() => {
+        setTempRotation(null);
+    }, [selectedIds]);
 
     return (
         <div className="bg-[var(--bg-secondary)] flex flex-col text-[var(--text-primary)] h-full">
@@ -246,33 +254,43 @@ const PropertiesPanel = () => {
                                 <div className="flex items-center bg-[var(--bg-color)] px-2 py-0.5 rounded border border-transparent focus-within:border-[var(--primary-color)] transition-colors h-5 w-[50px]">
                                     <input
                                         type="text"
-                                        value={isEditingRot ? rotationInput : Math.round(source?.rotation || 0)}
-                                        onFocus={() => {
-                                            setIsEditingRot(true);
-                                            setRotationInput(Math.round(source?.rotation || 0).toString());
-                                        }}
-                                        onBlur={() => setIsEditingRot(false)}
+                                        value={tempRotation !== null ? tempRotation : Math.round(source?.rotation || 0)}
                                         onChange={(e) => {
-                                            const valStr = e.target.value;
-                                            setRotationInput(valStr);
+                                            const valStr = e.target.value.replace(/[^0-9-]/g, '');
+                                            setTempRotation(valStr);
 
-                                            // Only update prop if it's a valid integer (and not just "-")
-                                            // Allow "-" to just sit in local state until more is typed
-                                            if (valStr === '-' || valStr === '') return;
-
-                                            const val = parseInt(valStr.replace(/[^0-9-]/g, ''));
-                                            if (!isNaN(val)) {
-                                                updateProp('rotation', val);
+                                            // Only update actual prop if it's a valid number
+                                            if (valStr !== '' && valStr !== '-') {
+                                                const val = parseInt(valStr);
+                                                if (!isNaN(val)) {
+                                                    updateProp('rotation', val);
+                                                }
                                             }
                                         }}
+                                        onBlur={() => {
+                                            // Commit final value (if we left it as '-')
+                                            if (tempRotation === '-') {
+                                                updateProp('rotation', 0);
+                                            }
+                                            setTempRotation(null);
+                                        }}
                                         onKeyDown={(e) => {
-                                            if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+                                            if (e.key === 'Enter') {
+                                                e.target.blur();
+                                            }
+                                            if (e.key === 'ArrowUp') {
                                                 e.preventDefault();
-                                                const current = Math.round(source?.rotation || 0);
-                                                const step = e.shiftKey ? 15 : 1;
-                                                const next = e.key === 'ArrowUp' ? current + step : current - step;
-                                                updateProp('rotation', next);
-                                                setRotationInput(next.toString());
+                                                const current = parseInt(tempRotation !== null ? tempRotation : (source?.rotation || 0)) || 0;
+                                                const newVal = current + (e.shiftKey ? 15 : 1);
+                                                updateProp('rotation', newVal);
+                                                setTempRotation(String(newVal));
+                                            }
+                                            if (e.key === 'ArrowDown') {
+                                                e.preventDefault();
+                                                const current = parseInt(tempRotation !== null ? tempRotation : (source?.rotation || 0)) || 0;
+                                                const newVal = current - (e.shiftKey ? 15 : 1);
+                                                updateProp('rotation', newVal);
+                                                setTempRotation(String(newVal));
                                             }
                                         }}
                                         className="w-full text-xs text-[var(--text-primary)] bg-transparent outline-none text-right font-mono"
