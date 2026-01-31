@@ -4,7 +4,7 @@ import { calculateDistance, calculatePolygonArea } from "../geometry/transforms"
 import { findShapeAtPoint } from "../geometry/hitTest";
 import OverlayCanvasLayer from "./OverlayCanvasLayer";
 
-const OverlayLayer = ({ page, width, height, viewScale = 1.0 }) => {
+const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0 }) => {
     const {
         activeTool,
         setActiveTool,

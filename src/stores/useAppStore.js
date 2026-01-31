@@ -309,7 +309,10 @@ const useAppStore = create((set, get) => ({
         }),
 
     // --- Page Features ---
+    numPages: 0,
+    setNumPages: (n) => set({ numPages: n }),
     pageRotations: {}, // pageIndex -> degrees (0, 90, 180, 270)
+
     rotatePage: (pageIndex, angle) =>
         set((state) => {
             const currentRot = state.pageRotations[pageIndex] || 0;
@@ -320,6 +323,21 @@ const useAppStore = create((set, get) => ({
                     [pageIndex]: (newRot < 0 ? newRot + 360 : newRot),
                 },
             };
+        }),
+
+    rotateAllPages: (angle) =>
+        set((state) => {
+            const newRotations = { ...state.pageRotations };
+            for (let i = 0; i < state.numPages; i++) {
+                // Check if pageIndex is 0-based or 1-based?
+                // PDFViewer uses 1-based for display data-page-number, but array index 0-based.
+                // rotatePage usage in TopMenu is `currentPage - 1`. So 0-based index.
+                const currentRot = newRotations[i] || 0;
+                let newRot = (currentRot + angle) % 360;
+                newRot = (newRot < 0 ? newRot + 360 : newRot);
+                newRotations[i] = newRot;
+            }
+            return { pageRotations: newRotations };
         }),
 
     // --- Tabs & Multi-Document Support ---

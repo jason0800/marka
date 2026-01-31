@@ -5,6 +5,7 @@ const OverlayCanvasLayer = ({
     width,
     height,
     viewScale = 1.0,
+    renderScale = 1.0,
     shapes = [],
     measurements = [],
     selectedIds = [],
@@ -25,12 +26,13 @@ const OverlayCanvasLayer = ({
         const canvas = canvasRef.current;
         if (!canvas) return;
 
-        // Handle High DPI
+        // Handle High DPI + Render Scale (Crispness)
         const dpr = window.devicePixelRatio || 1;
+        const effectiveDpr = dpr * renderScale;
 
         // Resize canvas if needed
-        const targetW = Math.floor(width * dpr);
-        const targetH = Math.floor(height * dpr);
+        const targetW = Math.floor(width * effectiveDpr);
+        const targetH = Math.floor(height * effectiveDpr);
 
         if (canvas.width !== targetW || canvas.height !== targetH) {
             canvas.width = targetW;
@@ -39,7 +41,7 @@ const OverlayCanvasLayer = ({
 
         const ctx = canvas.getContext("2d", { alpha: true });
         ctx.setTransform(1, 0, 0, 1, 0, 0); // Reset
-        ctx.scale(dpr, dpr);
+        ctx.scale(effectiveDpr, effectiveDpr);
         ctx.clearRect(0, 0, width, height);
 
         // Global Scaling
@@ -279,7 +281,7 @@ const OverlayCanvasLayer = ({
 
 
         ctx.restore(); // End global scale
-    }, [width, height, viewScale, shapes, measurements, selectedIds, pageIndex, calibrationScales, pageUnits]);
+    }, [width, height, viewScale, renderScale, shapes, measurements, selectedIds, pageIndex, calibrationScales, pageUnits]);
 
     return (
         <canvas

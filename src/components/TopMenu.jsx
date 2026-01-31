@@ -15,7 +15,7 @@ const TopMenu = ({ setPdfDocument, setIsLoading, isDocumentLoaded, onNewPDF, pdf
     const {
         theme, setTheme, zoom, setZoom, measurements, calibrationScales, pageUnits, shapes,
         undo, redo, history, historyIndex, selectedIds, setSelectedIds, deleteShape, deleteMeasurement, pushHistory,
-        copy, cut, paste, clipboard, rotatePage, currentPage,
+        copy, cut, paste, clipboard, rotateAllPages, currentPage,
         fileName, fileSize, setFileInfo
     } = useAppStore();
 
@@ -325,13 +325,13 @@ const TopMenu = ({ setPdfDocument, setIsLoading, isDocumentLoaded, onNewPDF, pdf
                             </button>
                             <button
                                 className="bg-transparent border-none text-[var(--text-primary)] px-4 py-2 text-left cursor-pointer text-[13px] flex items-center gap-2 w-full hover:bg-[#b4e6a0] hover:text-[#1a1a1a] disabled:opacity-50 disabled:cursor-default"
-                                onClick={() => { rotatePage(currentPage - 1, 90); setActiveMenu(null); }}
+                                onClick={() => { rotateAllPages(90); setActiveMenu(null); }}
                             >
                                 <RotateCw size={16} /> Rotate Clockwise
                             </button>
                             <button
                                 className="bg-transparent border-none text-[var(--text-primary)] px-4 py-2 text-left cursor-pointer text-[13px] flex items-center gap-2 w-full hover:bg-[#b4e6a0] hover:text-[#1a1a1a] disabled:opacity-50 disabled:cursor-default"
-                                onClick={() => { rotatePage(currentPage - 1, -90); setActiveMenu(null); }}
+                                onClick={() => { rotateAllPages(-90); setActiveMenu(null); }}
                             >
                                 <RotateCcw size={16} /> Rotate Anti-Clockwise
                             </button>

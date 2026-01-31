@@ -32,6 +32,7 @@ const PDFViewer = ({ document }) => {
         setCurrentPage,
         viewMode,
         pageRotations,
+        setNumPages: setStoreNumPages,
     } = useAppStore();
 
     // --- DOM refs ---
@@ -152,6 +153,7 @@ const PDFViewer = ({ document }) => {
 
         const n = document.numPages || 0;
         setNumPages(n);
+        setStoreNumPages(n); // Sync to store
 
         pageCacheRef.current = new Map();
         loadingRef.current = new Set();
