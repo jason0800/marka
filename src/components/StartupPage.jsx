@@ -59,45 +59,39 @@ const StartupPage = ({ setPdfDocument, setIsLoading, onNewPDF }) => {
             onDragLeave={handleDragLeave}
             onDrop={handleDrop}
         >
-            <div className="flex flex-col items-center gap-8 p-12 max-w-2xl w-full">
+            <div className="flex flex-col items-center gap-10 p-8 max-w-2xl w-full">
                 {/* Logo / Header */}
-                <div className="flex flex-col items-center gap-2 mb-8">
+                <div className="flex flex-col items-center gap-2">
                     <img src="/marka-icon.png" alt="Marka Logo" className="w-40 h-40 mb-2" />
                     <h1 className="text-4xl font-bold tracking-tight">Marka</h1>
                     <p className="text-[var(--text-secondary)] text-lg">Web-Based PDF Markup & Measurement Tool</p>
                 </div>
 
                 {/* Actions */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full h-10">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 w-full max-w-[400px]">
                     <button
                         onClick={() => fileInputRef.current?.click()}
-                        className="group flex flex-col items-center justify-center gap-4 p-8 rounded-xl bg-[var(--bg-secondary)] border border-[var(--border-color)] hover:border-[var(--primary-color)] hover:shadow-md transition-all duration-200"
+                        className="group flex flex-row items-center justify-center gap-1 p-4 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border-color)] hover:border-[var(--primary-color)] hover:shadow-md transition-all duration-200"
                     >
-                        <div className="p-4 rounded-full bg-[var(--bg-primary)] group-hover:bg-[var(--primary-color)] group-hover:text-white transition-colors">
-                            <FileUp size={24} />
+                        <div className="p-1 rounded-full bg-[var(--bg-primary)] transition-colors">
+                            <FileUp size={20} />
                         </div>
-                        <div className="flex flex-col items-center">
-                            <span className="font-semibold text-lg">Open PDF</span>
-                            <span className="text-sm text-[var(--text-secondary)]">From your computer</span>
-                        </div>
+                        <span className="font-semibold text-sm">Open PDF</span>
                     </button>
 
                     <button
                         onClick={onNewPDF}
-                        className="group flex flex-col items-center justify-center gap-4 p-8 rounded-xl bg-[var(--bg-secondary)] border border-[var(--border-color)] hover:border-[var(--primary-color)] hover:shadow-md transition-all duration-200"
+                        className="group flex flex-row items-center justify-center gap-1 p-4 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border-color)] hover:border-[var(--primary-color)] hover:shadow-md transition-all duration-200"
                     >
-                        <div className="p-4 rounded-full bg-[var(--bg-primary)] group-hover:bg-[var(--primary-color)] group-hover:text-white transition-colors">
-                            <Plus size={24} />
+                        <div className="p-1 rounded-full bg-[var(--bg-primary)] transition-colors">
+                            <Plus size={20} />
                         </div>
-                        <div className="flex flex-col items-center">
-                            <span className="font-semibold text-lg">New PDF</span>
-                            <span className="text-sm text-[var(--text-secondary)]">Custom size</span>
-                        </div>
+                        <span className="font-semibold text-sm">New PDF</span>
                     </button>
                 </div>
 
                 {/* Drop Zone Hint */}
-                <div className="mt-8 p-8 border-2 border-dashed border-[var(--border-color)] rounded-xl w-full flex items-center justify-center text-[var(--text-secondary)] bg-[var(--bg-secondary)]/50">
+                <div className="p-6 border-2 border-dashed border-[var(--border-color)] rounded-xl w-full max-w-[400px] flex items-center justify-center text-[var(--text-secondary)] bg-[var(--bg-secondary)]/50">
                     <p>or drag and drop a PDF file anywhere</p>
                 </div>
 
