@@ -277,13 +277,13 @@ const NewPDFDialog = ({ onClose, onCreated }) => {
                         <div className="flex bg-[var(--bg-primary)] rounded-md border border-[var(--border-color)] p-1">
                             <button
                                 onClick={() => handleOrientationChange('portrait')}
-                                className={`flex-1 py-1.5 text-xs font-semibold rounded-md transition-all ${orientation === 'portrait' ? 'bg-[var(--primary-color)] text-[var(--text-active)] shadow-md' : 'text-[var(--text-primary)] hover:bg-[var(--bg-hover)] hover:shadow-sm'}`}
+                                className={`flex-1 py-1.5 text-xs font-semibold rounded-md transition-all ${orientation === 'portrait' ? 'bg-[var(--primary-color)] text-[var(--text-active)]' : 'text-[var(--text-primary)] hover:bg-[var(--bg-hover)] hover:shadow-sm'}`}
                             >
                                 Portrait
                             </button>
                             <button
                                 onClick={() => handleOrientationChange('landscape')}
-                                className={`flex-1 py-1.5 text-xs font-semibold rounded-md transition-all ${orientation === 'landscape' ? 'bg-[var(--primary-color)] text-[var(--text-active)] shadow-md' : 'text-[var(--text-primary)] hover:bg-[var(--bg-hover)] hover:shadow-sm'}`}
+                                className={`flex-1 py-1.5 text-xs font-semibold rounded-md transition-all ${orientation === 'landscape' ? 'bg-[var(--primary-color)] text-[var(--text-active)]' : 'text-[var(--text-primary)] hover:bg-[var(--bg-hover)] hover:shadow-sm'}`}
                             >
                                 Landscape
                             </button>
@@ -303,7 +303,7 @@ const NewPDFDialog = ({ onClose, onCreated }) => {
                     <button
                         onClick={handleCreate}
                         disabled={isCreating}
-                        className="px-6 py-2 text-sm font-semibold bg-[var(--primary-color)] text-[var(--text-active)] hover:opacity-90 rounded-lg transition-all flex items-center gap-2 disabled:opacity-50 h-10 shadow-lg"
+                        className="px-6 py-2 text-sm font-semibold bg-[var(--primary-color)] text-[var(--text-active)] hover:opacity-90 rounded-lg transition-all flex items-center gap-2 disabled:opacity-50 h-10"
                     >
                         {isCreating ? 'Creating...' : 'Create PDF'}
                     </button>

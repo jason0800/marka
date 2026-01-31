@@ -204,7 +204,7 @@ const useAppStore = create((set, get) => ({
             const offset = 20;
 
             state.clipboard.forEach((item) => {
-                const newId = crypto.randomUUID();
+                const newId = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `pasted-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
                 newSelectedIds.push(newId);
 
                 // Check if it's a shape or measurement based on properties (shapes have 'type' and usually 'x'/'y' or 'start'/'end')
@@ -217,12 +217,13 @@ const useAppStore = create((set, get) => ({
                 // Measurement types: length, area, perimeter, count, comment
 
                 const isShape = ['rectangle', 'circle', 'line', 'arrow'].includes(item.type);
+                console.log("Paste Item Processing:", item.type, "isShape:", isShape);
 
                 if (isShape) {
                     const newItem = {
                         ...item,
                         id: newId,
-                        pageIndex: state.currentPage - 1, // Paste to current page
+                        pageIndex: state.currentPage, // Paste to current page (1-based)
                     };
 
                     // Offset logic
@@ -239,7 +240,7 @@ const useAppStore = create((set, get) => ({
                     const newItem = {
                         ...item,
                         id: newId,
-                        pageIndex: state.currentPage - 1, // Paste to current page
+                        pageIndex: state.currentPage, // Paste to current page (1-based)
                     };
 
                     if (newItem.points) {

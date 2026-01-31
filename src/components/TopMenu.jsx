@@ -43,23 +43,26 @@ const TopMenu = ({ setPdfDocument, setIsLoading, isDocumentLoaded, onNewPDF, pdf
             }
 
             // Copy
-            if ((e.ctrlKey || e.metaKey) && e.key === 'c') {
+            if ((e.ctrlKey || e.metaKey) && (e.key.toLowerCase() === 'c' || e.code === 'KeyC')) {
                 e.preventDefault();
+                console.log("Shortcut: Copy");
                 copy();
                 return;
             }
 
             // Paste
-            if ((e.ctrlKey || e.metaKey) && e.key === 'v') {
+            if ((e.ctrlKey || e.metaKey) && (e.key.toLowerCase() === 'v' || e.code === 'KeyV')) {
                 e.preventDefault();
+                console.log("Shortcut: Paste");
                 paste();
                 pushHistory(); // Push history after paste
                 return;
             }
 
             // Cut
-            if ((e.ctrlKey || e.metaKey) && e.key === 'x') {
+            if ((e.ctrlKey || e.metaKey) && (e.key.toLowerCase() === 'x' || e.code === 'KeyX')) {
                 e.preventDefault();
+                console.log("Shortcut: Cut");
                 cut();
                 pushHistory(); // Push history after cut
                 return;

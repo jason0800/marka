@@ -136,7 +136,7 @@ const DocumentPropertiesDialog = ({ document, onClose, fileName, fileSize }) => 
                 <div className="p-4 border-t border-[var(--border-color)] bg-[var(--bg-tertiary)] flex justify-end">
                     <button
                         onClick={onClose}
-                        className="px-4 py-2 bg-[var(--bg-color)] hover:bg-[var(--bg-hover)] border border-[var(--border-color)] rounded text-xs font-medium text-[var(--text-primary)] transition-colors"
+                        className="px-4 py-2 text-sm font-medium text-[var(--text-primary)] bg-[var(--bg-primary)] border border-[var(--border-color)] hover:bg-[var(--bg-hover)] rounded-md transition-colors h-10 shadow-sm"
                     >
                         Close
                     </button>
