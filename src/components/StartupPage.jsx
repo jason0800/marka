@@ -59,7 +59,7 @@ const StartupPage = ({ setPdfDocument, setIsLoading, onNewPDF }) => {
             onDragLeave={handleDragLeave}
             onDrop={handleDrop}
         >
-            <div className="flex flex-col items-center gap-10 p-8 max-w-2xl w-full">
+            <div className="flex flex-col items-center gap-10 p-8 max-w-2xl w-full -translate-y-12">
                 {/* Logo / Header */}
                 <div className="flex flex-col items-center gap-2">
                     <img src="/marka-icon.png" alt="Marka Logo" className="w-40 h-40 mb-2" />
