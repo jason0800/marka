@@ -31,6 +31,7 @@ const PDFViewer = ({ document }) => {
         currentPage,
         setCurrentPage,
         viewMode,
+        pageRotations,
     } = useAppStore();
 
     // --- DOM refs ---
@@ -698,6 +699,7 @@ const PDFViewer = ({ document }) => {
                                         page={page}
                                         scale={1}
                                         renderScale={effectiveRenderScale}
+                                        rotation={pageRotations?.[currentPage - 1] || 0}
                                         isInteracting={isZooming || dragging}
                                     />
                                 ) : (
@@ -733,6 +735,7 @@ const PDFViewer = ({ document }) => {
                                             page={page}
                                             scale={1}
                                             renderScale={effectiveRenderScale}
+                                            rotation={pageRotations?.[pageNumber - 1] || 0}
                                             isInteracting={isZooming || dragging}
                                         />
                                     ) : (

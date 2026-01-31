@@ -147,6 +147,11 @@ const useAppStore = create((set, get) => ({
             pageUnits: data.pageUnits || {},
         }),
 
+    // --- File Info ---
+    fileName: "Untitled.pdf",
+    fileSize: 0,
+    setFileInfo: (name, size) => set({ fileName: name, fileSize: size }),
+
     addMeasurement: (measurement) =>
         set((state) => ({ measurements: [...state.measurements, measurement] })),
 
@@ -176,6 +181,137 @@ const useAppStore = create((set, get) => ({
         set((state) => ({
             shapes: state.shapes.filter((s) => s.id !== id),
         })),
+    // --- Clipboard ---
+    clipboard: [],
+    copy: () =>
+        set((state) => {
+            const selectedShapes = state.shapes.filter((s) => state.selectedIds.includes(s.id));
+            const selectedMeasurements = state.measurements.filter((m) =>
+                state.selectedIds.includes(m.id)
+            );
+            return {
+                clipboard: [...selectedShapes, ...selectedMeasurements],
+            };
+        }),
+
+    paste: () =>
+        set((state) => {
+            if (state.clipboard.length === 0) return {};
+
+            const newShapes = [];
+            const newMeasurements = [];
+            const newSelectedIds = [];
+            const offset = 20;
+
+            state.clipboard.forEach((item) => {
+                const newId = crypto.randomUUID();
+                newSelectedIds.push(newId);
+
+                // Check if it's a shape or measurement based on properties (shapes have 'type' and usually 'x'/'y' or 'start'/'end')
+                // Actually both have 'type'. We can check if it exists in original shapes or measurements
+                // But clipboard is mixed. Let's assume common structure or distinguishing prop.
+                // Measurements usually have 'points' or 'point'. Shapes have 'x','y','width','height' OR 'start','end'.
+
+                // Better approach: verify against known types or structure.
+                // Shape types: rectangle, circle, line, arrow
+                // Measurement types: length, area, perimeter, count, comment
+
+                const isShape = ['rectangle', 'circle', 'line', 'arrow'].includes(item.type);
+
+                if (isShape) {
+                    const newItem = {
+                        ...item,
+                        id: newId,
+                        pageIndex: state.currentPage - 1, // Paste to current page
+                    };
+
+                    // Offset logic
+                    if (newItem.type === 'line' || newItem.type === 'arrow') {
+                        newItem.start = { x: newItem.start.x + offset, y: newItem.start.y + offset };
+                        newItem.end = { x: newItem.end.x + offset, y: newItem.end.y + offset };
+                    } else {
+                        newItem.x += offset;
+                        newItem.y += offset;
+                    }
+                    newShapes.push(newItem);
+                } else {
+                    // Measurement
+                    const newItem = {
+                        ...item,
+                        id: newId,
+                        pageIndex: state.currentPage - 1, // Paste to current page
+                    };
+
+                    if (newItem.points) {
+                        newItem.points = newItem.points.map(p => ({ x: p.x + offset, y: p.y + offset }));
+                    }
+                    if (newItem.point) {
+                        newItem.point = { x: newItem.point.x + offset, y: newItem.point.y + offset };
+                    }
+                    if (newItem.tip) {
+                        newItem.tip = { x: newItem.tip.x + offset, y: newItem.tip.y + offset };
+                    }
+                    if (newItem.box) {
+                        newItem.box = { ...newItem.box, x: newItem.box.x + offset, y: newItem.box.y + offset };
+                    }
+
+                    newMeasurements.push(newItem);
+                }
+            });
+
+            // Push history first? No, we need to update state, THEN push history.
+            // But `set` merges state. History needs previous state? 
+            // `pushHistory` takes CURRENT state and pushes it. So we apply changes, then call pushHistory via logic (or user action).
+            // Actually `pushHistory` in store reads current state.
+            // So if we update here, we should probably call pushHistory manually?
+            // Usually Undo/Redo/Push flow: user does action -> update state -> pushHistory.
+
+            // To be safe, we'll return new state, and the component calling paste should trigger pushHistory?
+            // OR we do side-effect here? Zustand set is synchronous.
+
+            return {
+                shapes: [...state.shapes, ...newShapes],
+                measurements: [...state.measurements, ...newMeasurements],
+                selectedIds: newSelectedIds,
+            };
+        }),
+
+    cut: () =>
+        set((state) => {
+            const selectedShapes = state.shapes.filter((s) => state.selectedIds.includes(s.id));
+            const selectedMeasurements = state.measurements.filter((m) =>
+                state.selectedIds.includes(m.id)
+            );
+
+            if (selectedShapes.length === 0 && selectedMeasurements.length === 0) return {};
+
+            const clipboard = [...selectedShapes, ...selectedMeasurements];
+
+            const remainingShapes = state.shapes.filter(s => !state.selectedIds.includes(s.id));
+            const remainingMeasurements = state.measurements.filter(m => !state.selectedIds.includes(m.id));
+
+            return {
+                clipboard,
+                shapes: remainingShapes,
+                measurements: remainingMeasurements,
+                selectedIds: [],
+            };
+        }),
+
+    // --- Page Features ---
+    pageRotations: {}, // pageIndex -> degrees (0, 90, 180, 270)
+    rotatePage: (pageIndex, angle) =>
+        set((state) => {
+            const currentRot = state.pageRotations[pageIndex] || 0;
+            const newRot = (currentRot + angle) % 360;
+            return {
+                pageRotations: {
+                    ...state.pageRotations,
+                    [pageIndex]: (newRot < 0 ? newRot + 360 : newRot),
+                },
+            };
+        }),
+
 }));
 
 export default useAppStore;

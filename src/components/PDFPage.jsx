@@ -60,6 +60,7 @@ const PDFPage = memo(function PDFPage({
     page,
     scale = 1.0,          // CSS/layout scale (often 1 in your viewer)
     renderScale = 1.0,     // "crispness" scale (what you were changing on zoom)
+    rotation = 0,          // Page rotation in degrees
     isInteracting = false, // ✅ pass from viewer: (isZooming || dragging)
 }) {
     const canvasRef = useRef(null);
@@ -76,7 +77,7 @@ const PDFPage = memo(function PDFPage({
     const lastRenderKeyRef = useRef("");
 
     // CSS viewport (stable box)
-    const cssViewport = useMemo(() => page.getViewport({ scale }), [page, scale]);
+    const cssViewport = useMemo(() => page.getViewport({ scale, rotation }), [page, scale, rotation]);
     const { width, height } = cssViewport;
 
     // Always keep the visible canvas CSS sized correctly (cheap)
@@ -124,7 +125,7 @@ const PDFPage = memo(function PDFPage({
             const desired = Math.max(0.01, scale * renderScale);
 
             // Compute safe scale under pixel + side limits
-            const baseVp = page.getViewport({ scale: 1 });
+            const baseVp = page.getViewport({ scale: 1, rotation });
             const baseW = baseVp.width;
             const baseH = baseVp.height;
 
@@ -141,11 +142,11 @@ const PDFPage = memo(function PDFPage({
 
             // If we already rendered at essentially the same safe scale, skip.
             // (Prevents micro-stutter from tiny floating-point changes.)
-            const renderKey = `${page.pageNumber}|${Math.round(safeRenderScale * 1000)}|${Math.round(dpr * 100)}|${Math.round(scale * 1000)}`;
+            const renderKey = `${page.pageNumber}|${Math.round(safeRenderScale * 1000)}|${Math.round(dpr * 100)}|${Math.round(scale * 1000)}|${rotation}`;
             if (lastRenderKeyRef.current === renderKey) return;
             lastRenderKeyRef.current = renderKey;
 
-            const renderViewport = page.getViewport({ scale: safeRenderScale });
+            const renderViewport = page.getViewport({ scale: safeRenderScale, rotation });
 
             // Offscreen buffer
             let offscreen = offscreenRef.current;
@@ -260,7 +261,7 @@ const PDFPage = memo(function PDFPage({
             } catch { }
             renderTaskRef.current = null;
         };
-    }, [page, scale, renderScale, isInteracting, width, height]);
+    }, [page, scale, renderScale, isInteracting, width, height, rotation]);
 
     return (
         <div className="relative leading-[0]" style={{ width, height }}>

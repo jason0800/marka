@@ -40,6 +40,7 @@ function App() {
         setIsLoading={setIsLoading}
         isDocumentLoaded={isDocumentLoaded}
         onNewPDF={() => setShowNewPDFDialog(true)}
+        pdfDocument={pdfDocument}
       />
 
       {!isDocumentLoaded && !isLoading ? (

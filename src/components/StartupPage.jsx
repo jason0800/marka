@@ -2,9 +2,12 @@ import React, { useRef, useState } from 'react';
 import { FileUp, Plus, FileText } from 'lucide-react';
 import { loadPDF } from '../services/pdf-service';
 
+import useAppStore from '../stores/useAppStore';
+
 const StartupPage = ({ setPdfDocument, setIsLoading, onNewPDF }) => {
     const fileInputRef = useRef(null);
     const [isDragging, setIsDragging] = useState(false);
+    const setFileInfo = useAppStore(state => state.setFileInfo);
 
     const handleFileChange = async (file) => {
         if (!file) return;
@@ -19,6 +22,7 @@ const StartupPage = ({ setPdfDocument, setIsLoading, onNewPDF }) => {
         try {
             const doc = await loadPDF(file);
             setPdfDocument(doc);
+            setFileInfo(file.name, file.size);
         } catch (err) {
             console.error("Failed to load PDF", err);
             alert("Failed to load PDF");

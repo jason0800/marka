@@ -5,17 +5,22 @@ import html2canvas from 'html2canvas';
 import {
     FileText, FolderOpen, Save, Download, Printer,
     Undo, Redo, ZoomIn, ZoomOut, Sun, Moon,
-    ChevronDown, CreditCard
+    ChevronDown, CreditCard, RotateCw, Clipboard, Scissors, Copy
 } from 'lucide-react';
+import DocumentPropertiesDialog from './DocumentPropertiesDialog';
 
 
-const TopMenu = ({ setPdfDocument, setIsLoading, isDocumentLoaded, onNewPDF }) => {
+const TopMenu = ({ setPdfDocument, setIsLoading, isDocumentLoaded, onNewPDF, pdfDocument }) => {
     const {
         theme, setTheme, zoom, setZoom, measurements, calibrationScales, pageUnits, shapes,
-        undo, redo, history, historyIndex, selectedIds, setSelectedIds, deleteShape, deleteMeasurement, pushHistory
+        undo, redo, history, historyIndex, selectedIds, setSelectedIds, deleteShape, deleteMeasurement, pushHistory,
+        copy, cut, paste, clipboard, rotatePage, currentPage,
+        fileName, fileSize, setFileInfo
     } = useAppStore();
 
-    // Global Key Handlers (Undo/Redo/Delete)
+    const [showDocProps, setShowDocProps] = useState(false);
+
+    // Global Key Handlers (Undo/Redo/Delete/Cut/Copy/Paste)
     useEffect(() => {
         if (!isDocumentLoaded) return; // Disable shortcuts if no doc
 
@@ -34,6 +39,29 @@ const TopMenu = ({ setPdfDocument, setIsLoading, isDocumentLoaded, onNewPDF }) =
             if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) {
                 e.preventDefault();
                 redo();
+                return;
+            }
+
+            // Copy
+            if ((e.ctrlKey || e.metaKey) && e.key === 'c') {
+                e.preventDefault();
+                copy();
+                return;
+            }
+
+            // Paste
+            if ((e.ctrlKey || e.metaKey) && e.key === 'v') {
+                e.preventDefault();
+                paste();
+                pushHistory(); // Push history after paste
+                return;
+            }
+
+            // Cut
+            if ((e.ctrlKey || e.metaKey) && e.key === 'x') {
+                e.preventDefault();
+                cut();
+                pushHistory(); // Push history after cut
                 return;
             }
 
@@ -59,7 +87,7 @@ const TopMenu = ({ setPdfDocument, setIsLoading, isDocumentLoaded, onNewPDF }) =
 
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [undo, redo, selectedIds, shapes, measurements, deleteShape, deleteMeasurement, setSelectedIds, pushHistory, isDocumentLoaded]);
+    }, [undo, redo, selectedIds, shapes, measurements, deleteShape, deleteMeasurement, setSelectedIds, pushHistory, isDocumentLoaded, copy, cut, paste]);
 
     const fileInputRef = useRef(null);
     const [activeMenu, setActiveMenu] = useState(null);
@@ -69,9 +97,11 @@ const TopMenu = ({ setPdfDocument, setIsLoading, isDocumentLoaded, onNewPDF }) =
         if (isDocumentLoaded) {
             if (confirm("Create new PDF? Unsaved changes will be lost.")) {
                 onNewPDF();
+                setFileInfo("Untitled.pdf", 0);
             }
         } else {
             onNewPDF();
+            setFileInfo("Untitled.pdf", 0);
         }
         setActiveMenu(null);
     };
@@ -85,6 +115,7 @@ const TopMenu = ({ setPdfDocument, setIsLoading, isDocumentLoaded, onNewPDF }) =
             try {
                 const doc = await loadPDF(file);
                 setPdfDocument(doc);
+                setFileInfo(file.name, file.size);
             } catch (err) {
                 console.error("Failed to load PDF", err);
                 alert("Failed to load PDF");
@@ -229,6 +260,53 @@ const TopMenu = ({ setPdfDocument, setIsLoading, isDocumentLoaded, onNewPDF }) =
                             >
                                 <Redo size={16} /> Redo
                             </button>
+                            <div className="h-px bg-[#444] my-1" />
+                            <button
+                                className="bg-transparent border-none text-[var(--text-primary)] px-4 py-2 text-left cursor-pointer text-[13px] flex items-center gap-2 w-full hover:bg-[#b4e6a0] hover:text-[#1a1a1a] disabled:opacity-50 disabled:cursor-default"
+                                onClick={() => { cut(); pushHistory(); setActiveMenu(null); }}
+                            >
+                                <Scissors size={16} /> Cut
+                            </button>
+                            <button
+                                className="bg-transparent border-none text-[var(--text-primary)] px-4 py-2 text-left cursor-pointer text-[13px] flex items-center gap-2 w-full hover:bg-[#b4e6a0] hover:text-[#1a1a1a] disabled:opacity-50 disabled:cursor-default"
+                                onClick={() => { copy(); setActiveMenu(null); }}
+                            >
+                                <Copy size={16} /> Copy
+                            </button>
+                            <button
+                                className="bg-transparent border-none text-[var(--text-primary)] px-4 py-2 text-left cursor-pointer text-[13px] flex items-center gap-2 w-full hover:bg-[#b4e6a0] hover:text-[#1a1a1a] disabled:opacity-50 disabled:cursor-default"
+                                onClick={() => { paste(); pushHistory(); setActiveMenu(null); }}
+                                disabled={clipboard.length === 0}
+                            >
+                                <Clipboard size={16} /> Paste
+                            </button>
+                        </div>
+                    )}
+                </div>
+
+                {/* DOCUMENT MENU */}
+                <div className="relative">
+                    <button
+                        className={`bg-transparent border-none text-[var(--text-primary)] px-2 py-1 rounded cursor-pointer text-[13px] flex items-center gap-1 hover:bg-[var(--btn-hover)] hover:text-[var(--text-primary)] ${!isDocumentLoaded ? 'opacity-50 cursor-default hover:bg-transparent' : ''}`}
+                        onClick={() => isDocumentLoaded && setActiveMenu(activeMenu === 'document' ? null : 'document')}
+                        disabled={!isDocumentLoaded}
+                    >
+                        Document <ChevronDown size={14} />
+                    </button>
+                    {activeMenu === 'document' && (
+                        <div className="absolute top-full left-0 mt-1 bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded min-w-[180px] shadow-[0_4px_12px_rgba(0,0,0,0.3)] py-1 z-[101] flex flex-col">
+                            <button
+                                className="bg-transparent border-none text-[var(--text-primary)] px-4 py-2 text-left cursor-pointer text-[13px] flex items-center gap-2 w-full hover:bg-[#b4e6a0] hover:text-[#1a1a1a] disabled:opacity-50 disabled:cursor-default"
+                                onClick={() => { setShowDocProps(true); setActiveMenu(null); }}
+                            >
+                                <FileText size={16} /> Document Properties
+                            </button>
+                            <button
+                                className="bg-transparent border-none text-[var(--text-primary)] px-4 py-2 text-left cursor-pointer text-[13px] flex items-center gap-2 w-full hover:bg-[#b4e6a0] hover:text-[#1a1a1a] disabled:opacity-50 disabled:cursor-default"
+                                onClick={() => { rotatePage(currentPage - 1, 90); setActiveMenu(null); }}
+                            >
+                                <RotateCw size={16} /> Rotate Clockwise
+                            </button>
                         </div>
                     )}
                 </div>
@@ -276,6 +354,15 @@ const TopMenu = ({ setPdfDocument, setIsLoading, isDocumentLoaded, onNewPDF }) =
             {/* Click outside closer */}
             {activeMenu && (
                 <div className="fixed inset-0 z-[99] bg-transparent" onClick={() => setActiveMenu(null)} />
+            )}
+
+            {showDocProps && (
+                <DocumentPropertiesDialog
+                    document={pdfDocument}
+                    fileName={fileName}
+                    fileSize={fileSize}
+                    onClose={() => setShowDocProps(false)}
+                />
             )}
         </div>
     );
