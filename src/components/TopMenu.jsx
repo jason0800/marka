@@ -6,7 +6,7 @@ import { jsPDF } from 'jspdf';
 import {
     FileText, FolderOpen, Save, Download, Printer,
     Undo, Redo, ZoomIn, ZoomOut, Sun, Moon,
-    ChevronDown, CreditCard, RotateCw, RotateCcw, Clipboard, Scissors, Copy
+    ChevronDown, RotateCw, RotateCcw, Clipboard, Scissors, Copy
 } from 'lucide-react';
 import DocumentPropertiesDialog from './DocumentPropertiesDialog';
 
@@ -102,11 +102,25 @@ const TopMenu = ({ setPdfDocument, setIsLoading, isDocumentLoaded, onNewPDF, pdf
                 rotateAllPages(-90);
                 return;
             }
+
+            // Zoom In (Ctrl + + or Ctrl + =)
+            if ((e.ctrlKey || e.metaKey) && !e.shiftKey && (e.key === '=' || e.key === '+' || e.code === 'Equal' || e.code === 'NumpadAdd')) {
+                e.preventDefault();
+                setZoom(zoom * 1.2);
+                return;
+            }
+
+            // Zoom Out (Ctrl + -)
+            if ((e.ctrlKey || e.metaKey) && !e.shiftKey && (e.key === '-' || e.code === 'Minus' || e.code === 'NumpadSubtract')) {
+                e.preventDefault();
+                setZoom(zoom / 1.2);
+                return;
+            }
         };
 
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [undo, redo, selectedIds, shapes, measurements, deleteShape, deleteMeasurement, setSelectedIds, pushHistory, isDocumentLoaded, copy, cut, paste, rotateAllPages]);
+    }, [undo, redo, selectedIds, shapes, measurements, deleteShape, deleteMeasurement, setSelectedIds, pushHistory, isDocumentLoaded, copy, cut, paste, rotateAllPages, zoom, setZoom]);
 
     const fileInputRef = useRef(null);
     const [activeMenu, setActiveMenu] = useState(null);
@@ -282,20 +296,20 @@ const TopMenu = ({ setPdfDocument, setIsLoading, isDocumentLoaded, onNewPDF, pdf
                         Edit
                     </button>
                     {activeMenu === 'edit' && (
-                        <div className="absolute top-full left-0 mt-1 bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded min-w-[180px] shadow-[0_2px_10px_rgba(0,0,0,0.2)] py-1 z-[101] flex flex-col">
+                        <div className="absolute top-full left-0 mt-1 bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded min-w-[200px] shadow-[0_2px_10px_rgba(0,0,0,0.2)] py-1 z-[101] flex flex-col">
                             <button
                                 className="bg-transparent border-none text-[var(--text-primary)] px-4 py-2 text-left cursor-pointer text-[13px] flex items-center gap-2 w-full hover:bg-[#b4e6a0] hover:text-[#1a1a1a] disabled:opacity-50 disabled:cursor-default"
                                 onClick={() => { undo(); setActiveMenu(null); }}
                                 disabled={historyIndex <= 0}
                             >
-                                <Undo size={16} /> Undo
+                                <Undo size={16} /> Undo <span className="ml-auto text-xs text-[#888] pl-4">Ctrl+Z</span>
                             </button>
                             <button
                                 className="bg-transparent border-none text-[var(--text-primary)] px-4 py-2 text-left cursor-pointer text-[13px] flex items-center gap-2 w-full hover:bg-[#b4e6a0] hover:text-[#1a1a1a] disabled:opacity-50 disabled:cursor-default"
                                 onClick={() => { redo(); setActiveMenu(null); }}
                                 disabled={historyIndex >= history.length - 1}
                             >
-                                <Redo size={16} /> Redo
+                                <Redo size={16} /> Redo <span className="ml-auto text-xs text-[#888] pl-4">Ctrl+Y</span>
                             </button>
                             <div className="h-px bg-[#444] my-1" />
                             <button
@@ -308,14 +322,14 @@ const TopMenu = ({ setPdfDocument, setIsLoading, isDocumentLoaded, onNewPDF, pdf
                                 className="bg-transparent border-none text-[var(--text-primary)] px-4 py-2 text-left cursor-pointer text-[13px] flex items-center gap-2 w-full hover:bg-[#b4e6a0] hover:text-[#1a1a1a] disabled:opacity-50 disabled:cursor-default"
                                 onClick={() => { copy(); setActiveMenu(null); }}
                             >
-                                <Copy size={16} /> Copy
+                                <Copy size={16} /> Copy <span className="ml-auto text-xs text-[#888] pl-4">Ctrl+C</span>
                             </button>
                             <button
                                 className="bg-transparent border-none text-[var(--text-primary)] px-4 py-2 text-left cursor-pointer text-[13px] flex items-center gap-2 w-full hover:bg-[#b4e6a0] hover:text-[#1a1a1a] disabled:opacity-50 disabled:cursor-default"
                                 onClick={() => { paste(); pushHistory(); setActiveMenu(null); }}
                                 disabled={clipboard.length === 0}
                             >
-                                <Clipboard size={16} /> Paste
+                                <Clipboard size={16} /> Paste <span className="ml-auto text-xs text-[#888] pl-4">Ctrl+V</span>
                             </button>
                         </div>
                     )}
@@ -352,22 +366,21 @@ const TopMenu = ({ setPdfDocument, setIsLoading, isDocumentLoaded, onNewPDF, pdf
                         View
                     </button>
                     {activeMenu === 'view' && (
-                        <div className="absolute top-full left-0 mt-1 bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded min-w-[210px] shadow-[0_2px_10px_rgba(0,0,0,0.2)] py-1 z-[101] flex flex-col">
-                            <button className="bg-transparent border-none text-[var(--text-primary)] px-4 py-2 text-left cursor-pointer text-[13px] flex items-center gap-2 w-full hover:bg-[#b4e6a0] hover:text-[#1a1a1a] disabled:opacity-50 disabled:cursor-default" onClick={() => setZoom(zoom * 1.2)}><ZoomIn size={16} /> Zoom In</button>
-                            <button className="bg-transparent border-none text-[var(--text-primary)] px-4 py-2 text-left cursor-pointer text-[13px] flex items-center gap-2 w-full hover:bg-[#b4e6a0] hover:text-[#1a1a1a] disabled:opacity-50 disabled:cursor-default" onClick={() => setZoom(zoom / 1.2)}><ZoomOut size={16} /> Zoom Out</button>
-                            <button className="bg-transparent border-none text-[var(--text-primary)] px-4 py-2 text-left cursor-pointer text-[13px] flex items-center gap-2 w-full hover:bg-[#b4e6a0] hover:text-[#1a1a1a] disabled:opacity-50 disabled:cursor-default" onClick={() => setZoom(1)}><CreditCard size={16} /> Reset Zoom</button>
+                        <div className="absolute top-full left-0 mt-1 bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded min-w-[240px] shadow-[0_2px_10px_rgba(0,0,0,0.2)] py-1 z-[101] flex flex-col">
+                            <button className="bg-transparent border-none text-[var(--text-primary)] px-4 py-2 text-left cursor-pointer text-[13px] flex items-center gap-2 w-full hover:bg-[#b4e6a0] hover:text-[#1a1a1a] disabled:opacity-50 disabled:cursor-default" onClick={() => setZoom(zoom * 1.2)}><ZoomIn size={16} /> Zoom In <span className="ml-auto text-xs text-[#888] pl-4">Ctrl + +</span></button>
+                            <button className="bg-transparent border-none text-[var(--text-primary)] px-4 py-2 text-left cursor-pointer text-[13px] flex items-center gap-2 w-full hover:bg-[#b4e6a0] hover:text-[#1a1a1a] disabled:opacity-50 disabled:cursor-default" onClick={() => setZoom(zoom / 1.2)}><ZoomOut size={16} /> Zoom Out <span className="ml-auto text-xs text-[#888] pl-4">Ctrl + -</span></button>
                             <div className="h-px bg-[#444] my-1" />
                             <button
                                 className="bg-transparent border-none text-[var(--text-primary)] px-4 py-2 text-left cursor-pointer text-[13px] flex items-center gap-2 w-full hover:bg-[#b4e6a0] hover:text-[#1a1a1a] disabled:opacity-50 disabled:cursor-default"
                                 onClick={() => { rotateAllPages(90); setActiveMenu(null); }}
                             >
-                                <RotateCw size={16} /> Rotate Clockwise
+                                <RotateCw size={16} /> Rotate Clockwise <span className="ml-auto text-xs text-[#888] pl-4">Ctrl+Shift++</span>
                             </button>
                             <button
                                 className="bg-transparent border-none text-[var(--text-primary)] px-4 py-2 text-left cursor-pointer text-[13px] flex items-center gap-2 w-full hover:bg-[#b4e6a0] hover:text-[#1a1a1a] disabled:opacity-50 disabled:cursor-default"
                                 onClick={() => { rotateAllPages(-90); setActiveMenu(null); }}
                             >
-                                <RotateCcw size={16} /> Rotate Anti-Clockwise
+                                <RotateCcw size={16} /> Rotate Anti-Clockwise <span className="ml-auto text-xs text-[#888] pl-4">Ctrl+Shift+-</span>
                             </button>
                             <div className="h-px bg-[#444] my-1" />
                             <button

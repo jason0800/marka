@@ -199,8 +199,31 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
                     startShape: JSON.parse(JSON.stringify(shape)),
                     startPoint: { x: point.x, y: point.y },
                 });
+                return;
+            } else {
+                // Check measurements
+                const meas = pageMeasurements.find(m => m.id === resizeId);
+                if (meas && (meas.type === 'text' || meas.type === 'callout')) {
+                    pushHistory();
+                    // Normalize to shape-like for resizing logic
+                    const startShape = {
+                        ...meas,
+                        x: meas.box.x,
+                        y: meas.box.y,
+                        width: meas.box.w,
+                        height: meas.box.h,
+                        rotation: meas.rotation || 0
+                    };
+                    setResizingState({
+                        id: resizeId,
+                        handle: resizeHandle,
+                        startShape: JSON.parse(JSON.stringify(startShape)),
+                        startPoint: { x: point.x, y: point.y },
+                        isMeasurement: true
+                    });
+                    return;
+                }
             }
-            return;
         }
 
         // 2) Select tool
@@ -347,6 +370,20 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
                 return;
             }
 
+            // Callout tip
+            if (handle === 'callout-tip') {
+                // Just move the tip
+                // For callout, startShape is the measurement
+                // We stored it as normalized shape, but for tip we need original fields or jus update directly
+                // Actually startShape has 'tip' if we copied all props.
+                const newTip = {
+                    x: startShape.tip.x + dx,
+                    y: startShape.tip.y + dy
+                };
+                updateMeasurement(id, { tip: newTip });
+                return;
+            }
+
             const { x: startX, y: startY, width: w0, height: h0, rotation: rot0 = 0 } = startShape;
 
             if (handle === "rotate") {
@@ -355,7 +392,16 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
                 const currentAngle = (Math.atan2(point.y - cy, point.x - cx) * 180) / Math.PI;
                 let newRot = currentAngle + 90;
                 if (e.shiftKey) newRot = Math.round(newRot / 15) * 15;
-                updateShape(id, { rotation: newRot });
+
+                if (resizingState.isMeasurement) {
+                    // Measurements don't strictly support rotation in rendering yet (foreignObject transform?), 
+                    // but let's store it if we added support. 
+                    // For now, if no rotation support for text/callout, skip or implement.
+                    // The proxy shape has it.
+                    updateMeasurement(id, { rotation: newRot });
+                } else {
+                    updateShape(id, { rotation: newRot });
+                }
                 return;
             }
 
@@ -405,7 +451,13 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
             const finalX = newCenterX - finalW / 2;
             const finalY = newCenterY - finalH / 2;
 
-            updateShape(id, { x: finalX, y: finalY, width: finalW, height: finalH });
+            if (resizingState.isMeasurement) {
+                updateMeasurement(id, {
+                    box: { x: finalX, y: finalY, w: finalW, h: finalH }
+                });
+            } else {
+                updateShape(id, { x: finalX, y: finalY, width: finalW, height: finalH });
+            }
             return;
         }
 
@@ -416,15 +468,25 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
 
             selectedIds.forEach((id) => {
                 const shape = pageShapes.find((s) => s.id === id);
-                if (!shape) return;
-
-                if (shape.type === "line" || shape.type === "arrow") {
-                    updateShape(id, {
-                        start: { x: shape.start.x + dx, y: shape.start.y + dy },
-                        end: { x: shape.end.x + dx, y: shape.end.y + dy },
-                    });
+                if (shape) {
+                    if (shape.type === "line" || shape.type === "arrow") {
+                        updateShape(id, {
+                            start: { x: shape.start.x + dx, y: shape.start.y + dy },
+                            end: { x: shape.end.x + dx, y: shape.end.y + dy },
+                        });
+                    } else {
+                        updateShape(id, { x: shape.x + dx, y: shape.y + dy });
+                    }
                 } else {
-                    updateShape(id, { x: shape.x + dx, y: shape.y + dy });
+                    const meas = pageMeasurements.find(m => m.id === id);
+                    if (meas && meas.box) {
+                        const newBox = { ...meas.box, x: meas.box.x + dx, y: meas.box.y + dy };
+                        let patch = { box: newBox };
+                        if (meas.type === 'callout' && meas.tip) {
+                            patch.tip = { x: meas.tip.x + dx, y: meas.tip.y + dy };
+                        }
+                        updateMeasurement(id, patch);
+                    }
                 }
             });
 
@@ -976,7 +1038,7 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
                     return (
                         <>
                             <defs>
-                                <marker id={arrowId} markerWidth="6" markerHeight="4" refX="0" refY="2" orient="auto-start-reverse">
+                                <marker id={arrowId} markerWidth="6" markerHeight="4" refX="6" refY="2" orient="auto-start-reverse">
                                     <polygon points="0 0, 6 2, 0 4" fill={m.stroke || "#333"} />
                                 </marker>
                             </defs>
@@ -1044,19 +1106,18 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
                                     width: "100%",
                                     height: "100%",
                                     border: m.type === "text" ? `1px dashed ${activeTool === 'select' ? '#ccc' : 'transparent'}` : `1px solid ${borderColor}`,
-                                    // If 'text' tool, only show border if stroke provided explicit, else transparent/dashed
-                                    // But we used 'stroke' mainly for Border now.
-                                    // Let's respect m.stroke if present.
                                     background: bgColor,
                                     color: textColor,
                                     padding: "4px",
                                     fontSize: `${fontSize}px`,
                                     fontFamily: 'sans-serif',
-                                    overflow: "hidden",
+                                    fontFamily: 'sans-serif',
+                                    overflow: "visible",
                                     whiteSpace: "pre-wrap",
                                     cursor: isSelected ? "move" : "pointer",
                                     pointerEvents: 'auto', // Catch clicks
-                                    userSelect: 'none'
+                                    userSelect: 'none',
+                                    lineHeight: 1.2
                                 }}
                                 onDoubleClick={(ev) => {
                                     ev.stopPropagation();
@@ -1066,12 +1127,35 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
                                 {m.text || "Type..."}
                             </div>
                         )}
-                        {/* Selected Resize handles logic could be reused here if we map it? 
-                            Since it's a measurement, `renderSelectionFrame` assumes `shape`. 
-                            We might need to duplicate resize logic for measurements or unify. 
-                            For now, use textarea resize for editing, or simple box. 
-                        */}
                     </foreignObject>
+
+                    {isSelected && (
+                        <g transform={`translate(${m.box.x}, ${m.box.y})`}>
+                            {renderSelectionFrame({
+                                id: m.id,
+                                x: 0,
+                                y: 0,
+                                width: m.box.w,
+                                height: m.box.h,
+                                rotation: m.rotation || 0,
+                                type: "rectangle" // Proxy
+                            })}
+                        </g>
+                    )}
+
+                    {isSelected && m.type === 'callout' && m.tip && (
+                        <circle
+                            cx={m.tip.x}
+                            cy={m.tip.y}
+                            r={6 / Math.max(1e-6, viewScale)}
+                            fill="#b4e6a0"
+                            stroke="#3a6b24"
+                            strokeWidth={1 / Math.max(1e-6, viewScale)}
+                            data-resize-id={m.id}
+                            data-resize-handle="callout-tip"
+                            cursor="crosshair"
+                        />
+                    )}
                 </g>
             );
         }
