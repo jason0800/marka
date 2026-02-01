@@ -29,33 +29,40 @@ const PropertiesPanel = () => {
         activeTool, deleteShape, defaultShapeStyle, setDefaultShapeStyle
     } = useAppStore();
 
-    // Helper to find selected items
-    const selectedShapes = shapes.filter(s => selectedIds.includes(s.id));
+    // Helper to find selected items (Shapes + Measurements)
+    const selectedItems = [
+        ...shapes.filter(s => selectedIds.includes(s.id)),
+        ...measurements.filter(m => selectedIds.includes(m.id))
+    ];
 
     // Logic: If selection -> Show Selection Props. If No Selection -> Hide Panel.
     const hasSelection = selectedIds.length > 0;
 
-
-
     // --- Property Handlers ---
     const updateProp = (key, value) => {
         // 1. "Sticky" Behavior: Always update the global default style
-        // so the user's preference persists for the next shape they draw.
+        // so the user's preference persists for the next shape/measurement they draw.
         if (key !== 'text') {
             setDefaultShapeStyle({ [key]: value });
         }
 
         if (hasSelection) {
             selectedIds.forEach(id => {
-                if (selectedShapes.find(s => s.id === id)) {
+                const shape = shapes.find(s => s.id === id);
+                if (shape) {
                     updateShape(id, { [key]: value });
+                } else {
+                    const measurement = measurements.find(m => m.id === id);
+                    if (measurement) {
+                        updateMeasurement(id, { [key]: value });
+                    }
                 }
             });
         }
     };
 
     // Properties source: First selected item OR Defaults
-    const source = selectedShapes[0] || defaultShapeStyle;
+    const source = selectedItems[0] || defaultShapeStyle;
 
     const stroke = source?.stroke || defaultShapeStyle.stroke;
     const fill = source?.fill || defaultShapeStyle.fill;

@@ -162,7 +162,12 @@ const useAppStore = create((set, get) => ({
     }),
 
     addMeasurement: (measurement) =>
-        set((state) => ({ measurements: [...state.measurements, measurement] })),
+        set((state) => ({
+            measurements: [...state.measurements, {
+                ...state.defaultShapeStyle, // Apply defaults
+                ...measurement
+            }]
+        })),
 
     updateMeasurement: (id, data) =>
         set((state) => ({

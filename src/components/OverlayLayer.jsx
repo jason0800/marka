@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState, useEffect, useCallback } from "react";
 import useAppStore from "../stores/useAppStore";
 import { calculateDistance, calculatePolygonArea } from "../geometry/transforms";
-import { findShapeAtPoint } from "../geometry/hitTest";
+import { findShapeAtPoint, findItemAtPoint } from "../geometry/hitTest";
 import OverlayCanvasLayer from "./OverlayCanvasLayer";
 
 const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0, rotation = 0 }) => {
@@ -224,18 +224,18 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
                 pushHistory();
             } else {
                 // CANVAS Hit Test (Manual)
-                const hitShape = findShapeAtPoint(point, pageShapes);
-                if (hitShape) {
-                    // Found a shape on canvas!
-                    const isSelected = selectedIds.includes(hitShape.id);
+                // Import finding logic (make sure to update imports too!)
+                const hit = findItemAtPoint(point, pageShapes, pageMeasurements);
+                if (hit) {
+                    const hitId = hit.item.id;
+                    const isSelected = selectedIds.includes(hitId);
                     if (isShift) {
                         setSelectedIds((prev) =>
-                            isSelected ? prev.filter((id) => id !== hitShape.id) : [...prev, hitShape.id]
+                            isSelected ? prev.filter((id) => id !== hitId) : [...prev, hitId]
                         );
                     } else {
-                        setSelectedIds([hitShape.id]);
+                        setSelectedIds([hitId]);
                     }
-                    // Prepare drag immediately?
                     setDragStart({ x: point.x, y: point.y });
                     setIsDraggingItems(true);
                     pushHistory();

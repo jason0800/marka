@@ -44,68 +44,44 @@ const OverlayCanvasLayer = ({
         ctx.scale(effectiveDpr, effectiveDpr);
         ctx.clearRect(0, 0, width, height);
 
-        // Global Scaling
+        // Global Scaling: Map PDF coordinates to Screen pixels
         ctx.save();
         ctx.scale(viewScale, viewScale);
 
-        // Pre-calculate constants
-        const nonScalingLineWidth = 2 / Math.max(1e-6, viewScale);
-        const textFontSize = 14 / Math.max(1e-6, viewScale);
-        const textOffset = 8 / Math.max(1e-6, viewScale);
+        // Pre-calculate constants for "non-scaling" look
+        // viewScale is applied to context. So to get 1px visual width, we need 1/viewScale.
+        // effectiveDpr is handled by canvas transform.
+        // But we actually want "2px" or "1.5px" essentially.
+        // The safe buffer 1e-6 prevents divide by zero.
+        const safeScale = Math.max(1e-6, viewScale);
+
+        // We want the stroke to effectively be ~2px on screen regardless of zoom?
+        // Or do we want it to scale? 
+        // User wants "non-scaling-stroke".
+        // If we zoom in (viewScale=2), 1 unit = 2px. 1/2 unit = 1px.
+        // So 2px visual = 2/viewScale.
+        // BUT we also have renderScale which affects resolution but NOT coordinate space (handled by initial scale).
+        // Wait, initial scale is `effectiveDpr`.
+        // Then `ctx.scale(viewScale, ...)`
+        // So 1 unit = `viewScale * effectiveDpr` physical pixels.
+        // We want constant visual thickness.
+        // Thickness in units = DesiredPixels / (viewScale * effectiveDpr) ? 
+        // No, the initial scale handles Dpr. `ctx.lineWidth` 1 means 1 * viewScale * effectiveDpr pixels?
+        // No. If I set ctx.scale(2,2), drawing rect(0,0,10,10) draws 20x20 pixels.
+        // ctx.lineWidth=1 draws 2px line.
+        // So to get 2px line, we need lineWidth = 2 / viewScale.
+        // We do NOT divide by renderScale because renderScale should increase resolution (more pixels).
+        // Actually, if renderScale=2, effectiveDpr=2.
+        // If viewScale=1.
+        // ctx.scale(2,2).
+        // lineWidth=2 line becomes 4px physical.
+        // But on high DPI screen, 4px physical looks like 2px CSS. So that's correct?
+        // Yes. We just divide by viewScale.
+
+        const nonScalingLineWidth = 2 / safeScale;
+        const textFontSize = 14 / safeScale;
+        const textOffset = 8 / safeScale;
         const selectedSet = new Set(selectedIds);
-
-        // --- BATCH RENDERING STATE ---
-        let currentStroke = null;
-        let currentStrokeWidth = -1;
-        let currentOpacity = -1;
-        let currentDash = ""; // "none" or "5,5"
-        let isBatching = false;
-
-        // Helper to flush current batch
-        const flushBatch = () => {
-            if (!isBatching) return;
-            // Stroke first
-            if (currentStroke && currentStroke !== "none") {
-                ctx.strokeStyle = currentStroke;
-                ctx.lineWidth = currentStrokeWidth;
-                ctx.stroke();
-            }
-            ctx.beginPath(); // Clear path
-            isBatching = false;
-        };
-
-        const beginBatch = (stroke, strokeWidth, opacity, dash) => {
-            // Check if matches current
-            if (
-                isBatching &&
-                currentStroke === stroke &&
-                Math.abs(currentStrokeWidth - strokeWidth) < 0.001 &&
-                Math.abs(currentOpacity - opacity) < 0.001 &&
-                currentDash === dash
-            ) {
-                return; // Continue batch
-            }
-
-            // Mismatch, flush and start new
-            flushBatch();
-
-            currentStroke = stroke;
-            currentStrokeWidth = strokeWidth;
-            currentOpacity = opacity;
-            currentDash = dash;
-
-            ctx.globalAlpha = opacity;
-
-            if (dash && dash !== "none") {
-                const dashes = dash.split(",").map(Number);
-                ctx.setLineDash(dashes);
-            } else {
-                ctx.setLineDash([]);
-            }
-
-            ctx.beginPath();
-            isBatching = true;
-        };
 
         // --- SHAPE LOOP ---
         for (let i = 0; i < shapes.length; i++) {
@@ -115,106 +91,121 @@ const OverlayCanvasLayer = ({
             const hasFill = shape.fill && shape.fill !== "none" && shape.fill !== "transparent";
             const opacity = shape.opacity ?? 1;
 
-            // Note: shape.strokeWidth scales with viewScale (it is "vector" width)
-            const strokeWidth = shape.strokeWidth || 2;
+            // Note: shape.strokeWidth might be stored (e.g. 2).
+            // If we want it "vector" (scaling), we leave it.
+            // If we want "non-scaling", we divide by viewScale.
+            // Typically user shapes usually scale? The user said "non-scaling-stroke" in the SVG code.
+            // SVG code: `strokeWidth={1 / viewScale}`.
+            // So default shapes ARE non-scaling.
+
+            const rawStrokeWidth = shape.strokeWidth || 2;
+            const strokeWidth = rawStrokeWidth / safeScale;
+
             const stroke = shape.stroke || "#000";
             const dash = shape.strokeDasharray || "none";
 
-            if (hasFill) {
-                // Determine if we can batch fills? 
-                // Hard to batch fills correctly if they overlap. 
-                // Let's flush, draw individually, continue.
-                flushBatch();
+            ctx.save();
+            ctx.globalAlpha = opacity;
+            ctx.strokeStyle = stroke;
+            ctx.lineWidth = strokeWidth;
+            ctx.lineCap = "round";
+            ctx.lineJoin = "round";
 
-                ctx.save();
-                ctx.globalAlpha = opacity;
-                ctx.strokeStyle = stroke;
-                ctx.lineWidth = strokeWidth;
-                ctx.fillStyle = shape.fill;
-
-                if (dash !== "none") {
-                    ctx.setLineDash(dash.split(",").map(Number));
-                }
-
-                // Draw geometry
-                ctx.beginPath();
-                if (shape.type === "rectangle") {
-                    drawRotatedRect(ctx, shape);
-                } else if (shape.type === "circle") {
-                    drawRotatedEllipse(ctx, shape);
-                } else if (shape.type === "line" || shape.type === "arrow") {
-                    ctx.moveTo(shape.start.x, shape.start.y);
-                    ctx.lineTo(shape.end.x, shape.end.y);
-                }
-
-                ctx.fill();
-                ctx.stroke();
-
-                // Arrow head handling
-                if (shape.type === "arrow") drawArrowHead(ctx, shape, stroke);
-
-                ctx.restore();
-                continue;
+            if (dash && dash !== "none") {
+                ctx.setLineDash(dash.split(",").map(Number));
+            } else {
+                ctx.setLineDash([]);
             }
 
-            // NO FILL -> Batch candidate
-            beginBatch(stroke, strokeWidth, opacity, dash);
-
-            if (shape.type === "line" || shape.type === "arrow") {
+            // Geometry
+            ctx.beginPath();
+            if (shape.type === "rectangle") {
+                if (hasFill && shape.rotation) drawRotatedRect(ctx, shape, true); // Path only
+                else if (shape.rotation) drawRotatedRectPath(ctx, shape);
+                else ctx.rect(shape.x, shape.y, shape.width, shape.height);
+            } else if (shape.type === "circle") {
+                if (shape.rotation) drawRotatedEllipsePath(ctx, shape);
+                else {
+                    const cx = shape.x + shape.width / 2;
+                    const cy = shape.y + shape.height / 2;
+                    const rx = shape.width / 2;
+                    const ry = shape.height / 2;
+                    ctx.ellipse(cx, cy, rx, ry, 0, 0, 2 * Math.PI);
+                }
+            } else if (shape.type === "line" || shape.type === "arrow") {
                 ctx.moveTo(shape.start.x, shape.start.y);
                 ctx.lineTo(shape.end.x, shape.end.y);
             }
-            else if (shape.type === "rectangle") {
-                drawRotatedRectPath(ctx, shape);
-            }
-            else if (shape.type === "circle") {
-                drawRotatedEllipsePath(ctx, shape);
+
+            if (hasFill) {
+                ctx.fillStyle = shape.fill;
+                ctx.fill();
             }
 
-            // If arrow, we need to draw the head. 
+            if (stroke !== "none") {
+                ctx.stroke();
+            }
+
+            // Arrow head
             if (shape.type === "arrow") {
-                flushBatch(); // Draw current lines to ensure head is on top/correct
-                drawArrowHead(ctx, shape, stroke); // Draw head independent
+                drawArrowHead(ctx, shape, stroke);
             }
-        }
-        flushBatch(); // Finish shapes
 
+            ctx.restore();
+        }
 
         // --- MEASUREMENTS LOOP ---
         ctx.textAlign = "center";
         ctx.textBaseline = "bottom";
-
-        const fontStr = `${textFontSize}px sans-serif`;
-        ctx.font = fontStr;
+        ctx.font = `${textFontSize}px sans-serif`;
 
         measurements.forEach(m => {
             if (selectedSet.has(m.id)) return;
 
             ctx.save();
 
+            const opacity = m.opacity ?? 1;
+            ctx.globalAlpha = opacity;
+
+            const strokeColor = m.stroke || (
+                m.type === "length" ? "#e74c3c" :
+                    m.type === "area" ? "#2ecc71" :
+                        m.type === "perimeter" ? "#9b59b6" :
+                            m.type === "count" ? "white" : "#333"
+            );
+
+            const fillColor = m.fill || (
+                m.type === "area" ? "rgba(108, 176, 86, 0.25)" :
+                    m.type === "count" ? "#e67e22" :
+                        "none"
+            );
+
+            const rawStrokeWidth = m.strokeWidth ? m.strokeWidth : 2;
+            // Measurements are usually non-scaling 2px
+            const strokeWidth = rawStrokeWidth / safeScale;
+
+            ctx.lineWidth = strokeWidth;
+            ctx.strokeStyle = strokeColor;
+            ctx.fillStyle = fillColor;
+            ctx.lineCap = "round";
+            ctx.lineJoin = "round";
+
             if (m.type === "length" && m.points?.length === 2) {
                 const [a, b] = m.points;
                 const dist = calculateDistance(a, b);
-
-                ctx.strokeStyle = "#e74c3c";
-                ctx.fillStyle = "#e74c3c";
-                ctx.lineWidth = nonScalingLineWidth;
 
                 ctx.beginPath();
                 ctx.moveTo(a.x, a.y);
                 ctx.lineTo(b.x, b.y);
                 ctx.stroke();
 
+                ctx.fillStyle = strokeColor;
                 const midX = (a.x + b.x) / 2;
                 const midY = (a.y + b.y) / 2;
                 ctx.fillText(`${toUnits(dist).toFixed(2)} ${unit}`, midX, midY - textOffset);
 
             } else if (m.type === "area" && m.points?.length >= 3) {
                 const area = calculatePolygonArea(m.points);
-
-                ctx.fillStyle = "rgba(108, 176, 86, 0.25)";
-                ctx.strokeStyle = "#2ecc71";
-                ctx.lineWidth = nonScalingLineWidth;
 
                 ctx.beginPath();
                 m.points.forEach((p, i) => {
@@ -225,17 +216,12 @@ const OverlayCanvasLayer = ({
                 ctx.fill();
                 ctx.stroke();
 
-                ctx.fillStyle = "#2ecc71";
+                ctx.fillStyle = strokeColor;
                 ctx.textAlign = "left";
                 ctx.fillText(`${toUnits2(area).toFixed(2)} ${unit}²`, m.points[0].x, m.points[0].y - textOffset);
-                ctx.textAlign = "center"; // reset
 
             } else if (m.type === "perimeter" && m.points?.length >= 2) {
                 let len = 0;
-                ctx.strokeStyle = "#9b59b6";
-                ctx.fillStyle = "#9b59b6";
-                ctx.lineWidth = nonScalingLineWidth;
-
                 ctx.beginPath();
                 m.points.forEach((p, i) => {
                     if (i === 0) ctx.moveTo(p.x, p.y);
@@ -246,22 +232,18 @@ const OverlayCanvasLayer = ({
                 });
                 ctx.stroke();
 
+                ctx.fillStyle = strokeColor;
                 ctx.textAlign = "left";
                 ctx.fillText(`${toUnits(len).toFixed(2)} ${unit}`, m.points[0].x, m.points[0].y - textOffset);
-                ctx.textAlign = "center"; // reset
+
             } else if (m.type === "count" && m.point) {
-                ctx.fillStyle = "#e67e22";
-                ctx.strokeStyle = "white";
-                ctx.lineWidth = nonScalingLineWidth;
-                const r = 8 / viewScale;
+                const r = 8 / safeScale;
 
                 ctx.beginPath();
                 ctx.arc(m.point.x, m.point.y, r, 0, Math.PI * 2);
                 ctx.fill();
                 ctx.stroke();
             } else if (m.type === "comment" && m.tip && m.box) {
-                ctx.strokeStyle = "#333";
-                ctx.lineWidth = 1 / viewScale;
                 const midX = m.box.x + m.box.w / 2;
                 const midY = m.box.y + m.box.h / 2;
 
@@ -270,15 +252,14 @@ const OverlayCanvasLayer = ({
                 ctx.lineTo(midX, midY);
                 ctx.stroke();
 
-                ctx.fillStyle = "#333";
+                ctx.fillStyle = strokeColor;
                 ctx.beginPath();
-                ctx.arc(m.tip.x, m.tip.y, 3 / viewScale, 0, Math.PI * 2);
+                ctx.arc(m.tip.x, m.tip.y, 3 / safeScale, 0, Math.PI * 2);
                 ctx.fill();
             }
 
             ctx.restore();
         });
-
 
         ctx.restore(); // End global scale
     }, [width, height, viewScale, renderScale, shapes, measurements, selectedIds, pageIndex, calibrationScales, pageUnits]);
@@ -299,57 +280,33 @@ const OverlayCanvasLayer = ({
     );
 };
 
-// --- Shape drawing helpers ---
+// --- Helper Functions ---
 
 function drawRotatedRectPath(ctx, shape) {
-    const { x, y, width, height, rotation } = shape;
-    if (!rotation) {
-        ctx.rect(x, y, width, height);
-        return;
-    }
-    // Calculate corners
-    const cx = x + width / 2;
-    const cy = y + height / 2;
-    const rad = (rotation * Math.PI) / 180;
-    const c = Math.cos(rad);
-    const s = Math.sin(rad);
-
-    const hw = width / 2;
-    const hh = height / 2;
-
-    // Rotate and translate
-    // We already moved to origin (subtracted cx, cy) then added back
-    const corners = [
-        { x: -hw, y: -hh },
-        { x: hw, y: -hh },
-        { x: hw, y: hh },
-        { x: -hw, y: hh },
-    ].map(p => ({
-        x: cx + (p.x * c - p.y * s),
-        y: cy + (p.x * s + p.y * c)
-    }));
-
-    ctx.moveTo(corners[0].x, corners[0].y);
-    ctx.lineTo(corners[1].x, corners[1].y);
-    ctx.lineTo(corners[2].x, corners[2].y);
-    ctx.lineTo(corners[3].x, corners[3].y);
-    ctx.closePath();
-}
-
-function drawRotatedRect(ctx, shape) {
-    if (!shape.rotation) {
-        ctx.fillRect(shape.x, shape.y, shape.width, shape.height);
-        ctx.strokeRect(shape.x, shape.y, shape.width, shape.height);
-        return;
-    }
     const cx = shape.x + shape.width / 2;
     const cy = shape.y + shape.height / 2;
+    const w = shape.width;
+    const h = shape.height;
+
     ctx.translate(cx, cy);
-    ctx.rotate((shape.rotation * Math.PI) / 180);
+    ctx.rotate((shape.rotation || 0) * Math.PI / 180);
     ctx.translate(-cx, -cy);
 
-    ctx.fillRect(shape.x, shape.y, shape.width, shape.height);
-    ctx.strokeRect(shape.x, shape.y, shape.width, shape.height);
+    ctx.rect(shape.x, shape.y, w, h);
+}
+
+// For fills where we might want path only or rect
+function drawRotatedRect(ctx, shape, pathOnly = false) {
+    // simplified for canvas transform
+    // Actually simpler to just use transform on context:
+    const cx = shape.x + shape.width / 2;
+    const cy = shape.y + shape.height / 2;
+
+    ctx.translate(cx, cy);
+    ctx.rotate((shape.rotation || 0) * Math.PI / 180);
+    ctx.translate(-cx, -cy);
+
+    ctx.rect(shape.x, shape.y, shape.width, shape.height);
 }
 
 function drawRotatedEllipsePath(ctx, shape) {
@@ -357,31 +314,17 @@ function drawRotatedEllipsePath(ctx, shape) {
     const cy = shape.y + shape.height / 2;
     const rx = shape.width / 2;
     const ry = shape.height / 2;
-
-    if (shape.rotation) {
-        ctx.moveTo(cx + rx, cy); // Correct start point might be needed or let ellipse handle
-        ctx.ellipse(cx, cy, rx, ry, (shape.rotation * Math.PI) / 180, 0, 2 * Math.PI);
-    } else {
-        ctx.moveTo(cx + rx, cy);
-        ctx.ellipse(cx, cy, rx, ry, 0, 0, 2 * Math.PI);
-    }
-}
-
-function drawRotatedEllipse(ctx, shape) {
-    const cx = shape.x + shape.width / 2;
-    const cy = shape.y + shape.height / 2;
-    const rx = shape.width / 2;
-    const ry = shape.height / 2;
     const rot = (shape.rotation || 0) * Math.PI / 180;
 
-    ctx.beginPath();
     ctx.ellipse(cx, cy, rx, ry, rot, 0, 2 * Math.PI);
-    ctx.fill();
-    ctx.stroke();
 }
 
 function drawArrowHead(ctx, shape, color) {
     ctx.save();
+    // No linecap on arrow head usually, or round
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+
     const dx = shape.end.x - shape.start.x;
     const dy = shape.end.y - shape.start.y;
     const angle = Math.atan2(dy, dx);
