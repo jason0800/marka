@@ -109,8 +109,58 @@ const PropertiesPanel = () => {
                 </div>
             ) : (
                 <div className="flex-1 p-4 flex flex-col gap-4 overflow-y-auto">
+                    {/* Text Properties */}
+                    {(['text', 'callout', 'comment'].includes(source?.type)) && (
+                        <>
+                            {/* Font Size */}
+                            <div className="flex flex-col gap-1">
+                                <label className="text-xs text-[var(--text-secondary)] font-medium">Font Size</label>
+                                <div className="flex items-center bg-[var(--bg-color)] px-2 py-0.5 rounded border border-transparent focus-within:border-[var(--primary-color)] transition-colors h-7 w-[80px]">
+                                    <input
+                                        type="number"
+                                        min="8"
+                                        max="100"
+                                        value={source?.fontSize || 14}
+                                        onChange={(e) => updateProp('fontSize', parseInt(e.target.value) || 14)}
+                                        className="w-full text-xs text-[var(--text-primary)] bg-transparent outline-none font-mono"
+                                    />
+                                    <span className="text-xs text-[var(--text-secondary)] ml-1 select-none">px</span>
+                                </div>
+                            </div>
+
+                            {/* Text Color */}
+                            <div className="flex flex-col gap-1">
+                                <label className="text-xs text-[var(--text-secondary)] font-medium">Text Color</label>
+                                <div className="flex gap-2 flex-wrap items-center">
+                                    {STROKE_COLORS.map(c => (
+                                        <button
+                                            key={c}
+                                            className={`w-5 h-5 rounded border-2 border-transparent cursor-pointer transition-transform duration-100 hover:scale-110 ${(source?.textColor || source?.stroke) === c ? 'ring-2 ring-[var(--text-primary)] ring-offset-1 ring-offset-[var(--bg-secondary)]' : ''}`}
+                                            style={{ backgroundColor: c }}
+                                            onClick={() => updateProp('textColor', c)}
+                                        />
+                                    ))}
+                                    <div className="flex items-center bg-[var(--bg-color)] border border-transparent rounded-[6px] px-2 py-0.5 flex-1 h-6 transition-colors duration-200 focus-within:bg-[var(--bg-secondary)] focus-within:border-[var(--primary-color)]">
+                                        <span className="text-[0.8em] text-[var(--text-secondary)] mr-1 select-none">#</span>
+                                        <input
+                                            type="text"
+                                            value={(source?.textColor || source?.stroke || '').replace('#', '')}
+                                            onChange={(e) => updateProp('textColor', '#' + e.target.value)}
+                                            className="w-full text-[11px] border-none bg-transparent text-[var(--text-primary)] outline-none font-mono uppercase"
+                                            maxLength={6}
+                                            placeholder="000000"
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="w-full h-px bg-[var(--border-color)] my-2" />
+                        </>
+                    )}
+
                     <div className="flex flex-col gap-1">
-                        <label className="text-xs text-[var(--text-secondary)] font-medium">Stroke</label>
+                        <label className="text-xs text-[var(--text-secondary)] font-medium">
+                            {source?.type === 'callout' ? 'Line Color' : (source?.type === 'text' ? 'Border Color' : 'Stroke')}
+                        </label>
                         <div className="flex gap-2 flex-wrap items-center">
                             {STROKE_COLORS.map(c => (
                                 <button
@@ -137,7 +187,9 @@ const PropertiesPanel = () => {
                     </div>
 
                     <div className="flex flex-col gap-1">
-                        <label className="text-xs text-[var(--text-secondary)] font-medium">Fill</label>
+                        <label className="text-xs text-[var(--text-secondary)] font-medium">
+                            {['text', 'callout', 'comment'].includes(source?.type) ? 'Background' : 'Fill'}
+                        </label>
                         <div className="flex gap-2 flex-wrap items-center">
                             {FILL_COLORS.map(c => (
                                 <button

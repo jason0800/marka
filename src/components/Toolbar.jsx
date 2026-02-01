@@ -1,6 +1,6 @@
 import {
     MousePointer2, Hand, Ruler, Scaling, Square, Milestone, Hash, MessageSquare,
-    Box, Circle, Minus, ArrowRight, Pentagon, RectangleHorizontal
+    Box, Circle, Minus, ArrowRight, Pentagon, RectangleHorizontal, Type, MessageCircle
 } from 'lucide-react';
 import useAppStore from '../stores/useAppStore';
 import { useEffect, useState } from 'react';
@@ -21,7 +21,8 @@ const TOOLS = [
     { id: 'line', icon: Minus, label: 'Line (I)', key: 'i' },
     { id: 'arrow', icon: ArrowRight, label: 'Arrow (A)', key: 'a' },
     { type: 'separator' },
-    { id: 'comment', icon: MessageSquare, label: 'Comment (M)', key: 'm' },
+    { id: 'text', icon: Type, label: 'Text Box (T)', key: 't' },
+    { id: 'callout', icon: MessageCircle, label: 'Callout (K)', key: 'k' },
 ];
 
 const Toolbar = () => {

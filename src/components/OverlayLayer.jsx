@@ -176,8 +176,8 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
             return;
         }
 
-        // ignore textarea/foreignObject editing interactions
-        if (e.target.tagName === "TEXTAREA" || e.target.closest(".foreignObject")) return;
+        // ignore textarea editing interactions
+        if (e.target.tagName === "TEXTAREA") return;
 
         const point = getPagePoint(e);
         if (!point) return;
@@ -203,8 +203,11 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
 
         // 2) Select tool
         if (activeTool === "select") {
-            const targetShapeId = e.target.getAttribute("data-shape-id");
-            const targetMeasId = e.target.getAttribute("data-meas-id");
+            const targetShapeRef = e.target.closest('[data-shape-id]');
+            const targetMeasRef = e.target.closest('[data-meas-id]');
+
+            const targetShapeId = targetShapeRef?.getAttribute("data-shape-id");
+            const targetMeasId = targetMeasRef?.getAttribute("data-meas-id");
             const hitId = targetShapeId || targetMeasId;
 
             if (hitId) {
@@ -250,7 +253,7 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
         }
 
         // 3) Shape tools (start drag)
-        if (["rectangle", "circle", "line", "arrow"].includes(activeTool)) {
+        if (["rectangle", "circle", "line", "arrow", "text", "callout"].includes(activeTool)) {
             setIsDrawing(true);
             setShapeStart({ x: point.x, y: point.y });
             setCursor({ x: point.x, y: point.y });
@@ -511,6 +514,120 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
             return;
         }
 
+        // finalize text/callout
+        if (["text", "callout"].includes(activeTool) && isDrawingRef.current && shapeStart && point) {
+            const id = crypto.randomUUID();
+            let newMeas = null;
+
+            if (activeTool === "text") {
+                const x = Math.min(shapeStart.x, point.x);
+                const y = Math.min(shapeStart.y, point.y);
+                const w = Math.abs(point.x - shapeStart.x);
+                const h = Math.abs(point.y - shapeStart.y);
+
+                // If distinct box dragged
+                if (w > 10 && h > 10) {
+                    newMeas = {
+                        id,
+                        type: "text",
+                        pageIndex,
+                        box: { x, y, w, h },
+                        text: "Text",
+                        ...defaultShapeStyle
+                    };
+                } else {
+                    // Default box click
+                    newMeas = {
+                        id,
+                        type: "text",
+                        pageIndex,
+                        box: { x: point.x, y: point.y, w: 200, h: 50 },
+                        text: "Text",
+                        ...defaultShapeStyle
+                    };
+                }
+            } else if (activeTool === "callout") {
+                newMeas = {
+                    id,
+                    type: "callout",
+                    pageIndex,
+                    tip: shapeStart,
+                    box: { x: point.x, y: point.y - 25, w: 150, h: 50 }, // Center-ish relative to drag end? Or treat drag end as box position.
+                    text: "Callout",
+                    ...defaultShapeStyle
+                };
+            }
+
+            if (newMeas) {
+                addMeasurement(newMeas);
+                pushHistory();
+                setActiveTool("select");
+                setEditingId(id); // Auto-edit
+            }
+
+            setIsDrawing(false);
+            setShapeStart(null);
+            // setCursor(null) // handled by mousemove?
+            return;
+        }
+
+        // finalize text/callout
+        if (["text", "callout"].includes(activeTool) && isDrawingRef.current && shapeStart && point) {
+            const id = crypto.randomUUID();
+            let newMeas = null;
+
+            if (activeTool === "text") {
+                const x = Math.min(shapeStart.x, point.x);
+                const y = Math.min(shapeStart.y, point.y);
+                const w = Math.abs(point.x - shapeStart.x);
+                const h = Math.abs(point.y - shapeStart.y);
+
+                // If distinct box dragged
+                if (w > 10 && h > 10) {
+                    newMeas = {
+                        id,
+                        type: "text",
+                        pageIndex,
+                        box: { x, y, w, h },
+                        text: "Text",
+                        ...defaultShapeStyle
+                    };
+                } else {
+                    // Default box click
+                    newMeas = {
+                        id,
+                        type: "text",
+                        pageIndex,
+                        box: { x: point.x, y: point.y, w: 200, h: 50 },
+                        text: "Text",
+                        ...defaultShapeStyle
+                    };
+                }
+            } else if (activeTool === "callout") {
+                newMeas = {
+                    id,
+                    type: "callout",
+                    pageIndex,
+                    tip: shapeStart,
+                    box: { x: point.x, y: point.y - 25, w: 150, h: 50 }, // Center-ish relative to drag end? Or treat drag end as box position.
+                    text: "Callout",
+                    ...defaultShapeStyle
+                };
+            }
+
+            if (newMeas) {
+                addMeasurement(newMeas);
+                pushHistory();
+                setActiveTool("select");
+                setEditingId(id); // Auto-edit
+            }
+
+            setIsDrawing(false);
+            setShapeStart(null);
+            // setCursor(null) // handled by mousemove?
+            return;
+        }
+
         // finalize comment (tip -> release defines box)
         if (activeTool === "comment" && isDrawingRef.current && drawingPoints.length > 0 && point) {
             const tip = drawingPoints[0];
@@ -690,6 +807,7 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
     };
 
     const renderMeasurement = (m) => {
+        const isSelected = selectedIds.includes(m.id);
         const measCommon = {
             "data-meas-id": m.id,
             cursor: activeTool === "select" ? "move" : "default",
@@ -796,35 +914,101 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
             );
         }
 
-        if (m.type === "comment" && m.tip && m.box) {
+        if ((m.type === "comment" || m.type === "text" || m.type === "callout") && m.box) {
             const isEditing = editingId === m.id;
-            const midX = m.box.x + m.box.w / 2;
-            const midY = m.box.y + m.box.h / 2;
+
+            // Comment: Line + Dot. Callout: Arrow. Text: None.
+            const renderConnector = () => {
+                if (m.type === "comment" && m.tip) {
+                    return (
+                        <>
+                            <line
+                                x1={m.tip.x}
+                                y1={m.tip.y}
+                                x2={m.box.x + m.box.w / 2} // connect to center
+                                y2={m.box.y + m.box.h / 2}
+                                stroke={m.stroke || "#333"}
+                                strokeWidth={1 / Math.max(1e-6, viewScale)}
+                                vectorEffect="non-scaling-stroke"
+                            />
+                            <circle
+                                cx={m.tip.x}
+                                cy={m.tip.y}
+                                r={3 / Math.max(1e-6, viewScale)}
+                                fill={m.stroke || "#333"}
+                                vectorEffect="non-scaling-stroke"
+                            />
+                        </>
+                    );
+                }
+                if (m.type === "callout" && m.tip) {
+                    // Dog-leg connector: Box Side -> Knee -> Tip
+                    const boxCx = m.box.x + m.box.w / 2;
+                    const boxCy = m.box.y + m.box.h / 2;
+
+                    // Determine start point on box (closest to tip)
+                    // Actually, simplified dog-leg:
+                    // Horizontal line from box center-y (at nearest side) -> Knee -> Tip
+
+                    const isRight = m.tip.x > boxCx;
+                    const startX = isRight ? m.box.x + m.box.w : m.box.x;
+                    const startY = boxCy;
+
+                    // Knee distance from box (e.g. 20px or mid-way)
+                    // Let's use a fixed stub or dynamic? User image shows quite a long horizontal run.
+                    // Mid-point x seems safe?
+                    // const kneeX = (startX + m.tip.x) / 2;
+
+                    // Actually user image: Box -> Horizontal -> Tip. 
+                    // This implies the diagonal part connects to the tip. 
+                    // Knee is at (Tip.x - delta, StartY)? No.
+                    // Knee is at (KneeX, StartY).
+                    // Let's guess KneeX is mid-way.
+                    const kneeX = (startX + m.tip.x) / 2;
+
+                    const arrowId = `callout-arrow-${m.id}`;
+
+                    // Points: Start -> Knee -> Tip
+                    const points = `${startX},${startY} ${kneeX},${startY} ${m.tip.x},${m.tip.y}`;
+
+                    return (
+                        <>
+                            <defs>
+                                <marker id={arrowId} markerWidth="6" markerHeight="4" refX="0" refY="2" orient="auto-start-reverse">
+                                    <polygon points="0 0, 6 2, 0 4" fill={m.stroke || "#333"} />
+                                </marker>
+                            </defs>
+                            <polyline
+                                points={points}
+                                fill="none"
+                                stroke={m.stroke || "#333"}
+                                strokeWidth={2 / Math.max(1e-6, viewScale)}
+                                markerEnd={`url(#${arrowId})`}
+                                vectorEffect="non-scaling-stroke"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                            />
+                        </>
+                    );
+                }
+                return null;
+            };
+
+            const fontSize = m.fontSize || 14;
+            const textColor = m.textColor || m.stroke || "black";
+            const borderColor = m.stroke || "#333";
+            const bgColor = m.fill && m.fill !== 'none' ? m.fill : (m.type === "text" ? "transparent" : "#fff");
 
             return (
                 <g key={m.id} {...measCommon}>
-                    <line
-                        x1={m.tip.x}
-                        y1={m.tip.y}
-                        x2={midX}
-                        y2={midY}
-                        stroke="#333"
-                        strokeWidth={1 / Math.max(1e-6, viewScale)}
-                        vectorEffect="non-scaling-stroke"
-                    />
-                    <circle
-                        cx={m.tip.x}
-                        cy={m.tip.y}
-                        r={3 / Math.max(1e-6, viewScale)}
-                        fill="#333"
-                        vectorEffect="non-scaling-stroke"
-                    />
+                    {renderConnector()}
                     <foreignObject
                         x={m.box.x}
                         y={m.box.y}
                         width={m.box.w}
                         height={m.box.h}
                         className="foreignObject"
+                        style={{ overflow: 'visible', pointerEvents: 'none' }} // Let clicks pass through container
                     >
                         {isEditing ? (
                             <textarea
@@ -832,10 +1016,15 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
                                 style={{
                                     width: "100%",
                                     height: "100%",
-                                    resize: "none",
-                                    border: "1px solid var(--primary-color)",
+                                    resize: "both",
+                                    border: `1px solid ${borderColor}`,
                                     padding: "4px",
-                                    fontSize: "12px",
+                                    fontSize: `${fontSize}px`,
+                                    background: bgColor,
+                                    color: textColor,
+                                    outline: "none",
+                                    fontFamily: 'sans-serif',
+                                    pointerEvents: 'auto'
                                 }}
                                 defaultValue={m.text}
                                 onBlur={(ev) => {
@@ -844,6 +1033,7 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
                                 }}
                                 onKeyDown={(ev) => {
                                     if (ev.key === "Escape") setEditingId(null);
+                                    ev.stopPropagation(); // Prevent shortcuts
                                 }}
                             />
                         ) : (
@@ -851,21 +1041,34 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
                                 style={{
                                     width: "100%",
                                     height: "100%",
-                                    border: "1px solid #ccc",
-                                    background: "rgba(255,255,255,0.92)",
+                                    border: m.type === "text" ? `1px dashed ${activeTool === 'select' ? '#ccc' : 'transparent'}` : `1px solid ${borderColor}`,
+                                    // If 'text' tool, only show border if stroke provided explicit, else transparent/dashed
+                                    // But we used 'stroke' mainly for Border now.
+                                    // Let's respect m.stroke if present.
+                                    background: bgColor,
+                                    color: textColor,
                                     padding: "4px",
-                                    fontSize: "12px",
+                                    fontSize: `${fontSize}px`,
+                                    fontFamily: 'sans-serif',
                                     overflow: "hidden",
-                                    color: "black",
+                                    whiteSpace: "pre-wrap",
+                                    cursor: isSelected ? "move" : "pointer",
+                                    pointerEvents: 'auto', // Catch clicks
+                                    userSelect: 'none'
                                 }}
-                                onClick={(ev) => {
+                                onDoubleClick={(ev) => {
                                     ev.stopPropagation();
                                     setEditingId(m.id);
                                 }}
                             >
-                                {m.text || "Enter comment..."}
+                                {m.text || "Type..."}
                             </div>
                         )}
+                        {/* Selected Resize handles logic could be reused here if we map it? 
+                            Since it's a measurement, `renderSelectionFrame` assumes `shape`. 
+                            We might need to duplicate resize logic for measurements or unify. 
+                            For now, use textarea resize for editing, or simple box. 
+                        */}
                     </foreignObject>
                 </g>
             );
@@ -893,10 +1096,11 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
             {/* 2. SVG Layer (Interactive/Selected shapes + Tools) */}
             <svg
                 ref={svgRef}
+                className="absolute top-0 left-0 w-full h-full select-none z-10"
                 width={width}
                 height={height}
                 viewBox={viewBox}
-                style={{ position: "absolute", top: 0, left: 0, pointerEvents: "all" }} // SVG must catch clicks for handles
+                style={{ position: "absolute", top: 0, left: 0, pointerEvents: "all", overflow: "visible" }} // SVG must catch clicks for handles
                 onMouseDown={handleMouseDown}
                 onMouseMove={handleMouseMove}
                 onMouseUp={handleMouseUp}
@@ -935,7 +1139,8 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
                 {/* Measurements - Render ONLY selected or 'comment' box if needed? 
                     Canvas renders unselected measurements.
                 */}
-                {pageMeasurements.filter(m => selectedIds.includes(m.id) || m.type === "comment").map(m => renderMeasurement(m))}
+                {/* Measurements - Render Only Selected or complex types (comment/text/callout) in SVG to allow overflow/interaction */}
+                {pageMeasurements.filter(m => selectedIds.includes(m.id) || m.type === "comment" || m.type === "text" || m.type === "callout").map(m => renderMeasurement(m))}
 
                 {/* Drawing feedback for measurements */}
                 {isDrawingRef.current && activeTool === "choice" ? null : null}

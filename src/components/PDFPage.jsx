@@ -268,7 +268,7 @@ const PDFPage = memo(function PDFPage({
     }, [page, scale, renderScale, isInteracting, width, height, effectiveRotation]);
 
     return (
-        <div className="relative leading-[0]" style={{ width, height }}>
+        <div className="relative leading-[0] overflow-visible" style={{ width, height }}>
             <canvas ref={canvasRef} className="block" />
             <div
                 ref={textLayerRef}
