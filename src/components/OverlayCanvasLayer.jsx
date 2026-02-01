@@ -83,10 +83,41 @@ const OverlayCanvasLayer = ({
         const textOffset = 8 / safeScale;
         const selectedSet = new Set(selectedIds);
 
+        const isOutOfBounds = (item) => {
+            if (item.type === "line" || item.type === "arrow" || (item.type === "length" && item.points)) {
+                const pts = item.points || [item.start, item.end];
+                if (!pts) return false;
+                const minX = Math.min(...pts.map(p => p.x));
+                const maxX = Math.max(...pts.map(p => p.x));
+                const minY = Math.min(...pts.map(p => p.y));
+                const maxY = Math.max(...pts.map(p => p.y));
+                return minX < 0 || minY < 0 || maxX > width || maxY > height;
+            }
+            if ((item.type === "area" || item.type === "perimeter") && item.points) {
+                const minX = Math.min(...item.points.map(p => p.x));
+                const maxX = Math.max(...item.points.map(p => p.x));
+                const minY = Math.min(...item.points.map(p => p.y));
+                const maxY = Math.max(...item.points.map(p => p.y));
+                return minX < 0 || minY < 0 || maxX > width || maxY > height;
+            }
+            if (item.type === "count" && item.point) {
+                const { x, y } = item.point;
+                const r = 8;
+                return x - r < 0 || y - r < 0 || x + r > width || y + r > height;
+            }
+
+            // Box based
+            const x = item.x ?? item.box?.x ?? 0;
+            const y = item.y ?? item.box?.y ?? 0;
+            const w = item.width ?? item.box?.w ?? 0;
+            const h = item.height ?? item.box?.h ?? 0;
+            return x < 0 || y < 0 || x + w > width || y + h > height;
+        };
+
         // --- SHAPE LOOP ---
         for (let i = 0; i < shapes.length; i++) {
             const shape = shapes[i];
-            if (selectedSet.has(shape.id)) continue;
+            if (selectedSet.has(shape.id) || isOutOfBounds(shape)) continue;
 
             const hasFill = shape.fill && shape.fill !== "none" && shape.fill !== "transparent";
             const opacity = shape.opacity ?? 1;

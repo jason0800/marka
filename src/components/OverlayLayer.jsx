@@ -168,13 +168,15 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
         return () => window.removeEventListener("keydown", onKeyDown);
     }, [editingId, finishDrawing, selectedIds, pageShapes, pageMeasurements, deleteShape, deleteMeasurement, setSelectedIds, pushHistory, undo, redo, setIsDrawing]);
 
-    // ---- Mouse handlers ----
-    const handleMouseDown = (e) => {
+    // ---- Pointer handlers (was Mouse) ----
+    const handlePointerDown = (e) => {
         // Left click only
         if (e.button !== 0) {
-            if (e.button === 1) e.preventDefault();
             return;
         }
+
+        // Capture pointer to ensure we get events even outside the element
+        e.target.setPointerCapture(e.pointerId);
 
         // ignore textarea editing interactions
         if (e.target.tagName === "TEXTAREA") return;
@@ -317,7 +319,7 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
         }
     };
 
-    const handleMouseMove = (e) => {
+    const handlePointerMove = (e) => {
         const point = getPagePoint(e);
         if (!point) return;
 
@@ -430,7 +432,7 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
         }
     };
 
-    const handleMouseUp = (e) => {
+    const handlePointerUp = (e) => {
         if (e.button !== 0) return;
 
         const point = getPagePoint(e);
@@ -1077,6 +1079,26 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
         return null;
     };
 
+    // Helper to check if shape is "out of bounds"
+    const isOutOfBounds = (s) => {
+        // Line/Arrow
+        if (s.type === "line" || s.type === "arrow" || (s.type === "length" && s.points)) {
+            const points = s.points || [s.start, s.end];
+            const minX = Math.min(...points.map(p => p.x));
+            const maxX = Math.max(...points.map(p => p.x));
+            const minY = Math.min(...points.map(p => p.y));
+            const maxY = Math.max(...points.map(p => p.y));
+            return minX < 0 || minY < 0 || maxX > width || maxY > height;
+        }
+        // Box shapes
+        const x = s.x ?? s.box?.x;
+        const y = s.y ?? s.box?.y;
+        const w = s.width ?? s.box?.w ?? 0;
+        const h = s.height ?? s.box?.h ?? 0;
+
+        return x < 0 || y < 0 || x + w > width || y + h > height;
+    };
+
     return (
         <div style={{ position: "absolute", top: 0, left: 0, width, height, pointerEvents: 'none' }}>
             {/* 1. Canvas Layer (Static shapes) */}
@@ -1101,9 +1123,9 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
                 height={height}
                 viewBox={viewBox}
                 style={{ position: "absolute", top: 0, left: 0, pointerEvents: "all", overflow: "visible" }} // SVG must catch clicks for handles
-                onMouseDown={handleMouseDown}
-                onMouseMove={handleMouseMove}
-                onMouseUp={handleMouseUp}
+                onPointerDown={handlePointerDown}
+                onPointerMove={handlePointerMove}
+                onPointerUp={handlePointerUp}
                 onDoubleClick={() => finishDrawing()}
             >
                 <defs>
@@ -1113,8 +1135,8 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
                              We only render selected shapes here. */}
                 </defs>
 
-                {/* RENDER ONLY SELECTED SHAPES in SVG */}
-                {pageShapes.filter(s => selectedIds.includes(s.id)).map(s => renderShape(s))}
+                {/* RENDER ONLY SELECTED SHAPES in SVG OR Out-Of-Bounds */}
+                {pageShapes.filter(s => selectedIds.includes(s.id) || isOutOfBounds(s)).map(s => renderShape(s))}
 
                 {/* Render active drawing shape */}
                 {isDrawingRef.current && shapeStart && cursor && (
@@ -1139,8 +1161,14 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
                 {/* Measurements - Render ONLY selected or 'comment' box if needed? 
                     Canvas renders unselected measurements.
                 */}
-                {/* Measurements - Render Only Selected or complex types (comment/text/callout) in SVG to allow overflow/interaction */}
-                {pageMeasurements.filter(m => selectedIds.includes(m.id) || m.type === "comment" || m.type === "text" || m.type === "callout").map(m => renderMeasurement(m))}
+                {/* Measurements - Render Only Selected or complex types (comment/text/callout) or Out-Of-Bounds in SVG */}
+                {pageMeasurements.filter(m =>
+                    selectedIds.includes(m.id) ||
+                    m.type === "comment" ||
+                    m.type === "text" ||
+                    m.type === "callout" ||
+                    isOutOfBounds(m)
+                ).map(m => renderMeasurement(m))}
 
                 {/* Drawing feedback for measurements */}
                 {isDrawingRef.current && activeTool === "choice" ? null : null}
