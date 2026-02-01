@@ -881,6 +881,7 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
                 width={width}
                 height={height}
                 viewScale={viewScale}
+                renderScale={renderScale}
                 shapes={pageShapes}
                 measurements={pageMeasurements}
                 selectedIds={selectedIds}
