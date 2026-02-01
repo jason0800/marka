@@ -87,11 +87,26 @@ const TopMenu = ({ setPdfDocument, setIsLoading, isDocumentLoaded, onNewPDF, pdf
                     pushHistory();
                 }
             }
+
+            // Rotate Shortcuts
+            // Ctrl + Shift + + (Clockwise)
+            if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === '+' || e.code === 'Equal')) {
+                e.preventDefault();
+                rotateAllPages(90);
+                return;
+            }
+
+            // Ctrl + Shift + - (Anti-Clockwise)
+            if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === '-' || e.key === '_' || e.code === 'Minus')) {
+                e.preventDefault();
+                rotateAllPages(-90);
+                return;
+            }
         };
 
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [undo, redo, selectedIds, shapes, measurements, deleteShape, deleteMeasurement, setSelectedIds, pushHistory, isDocumentLoaded, copy, cut, paste]);
+    }, [undo, redo, selectedIds, shapes, measurements, deleteShape, deleteMeasurement, setSelectedIds, pushHistory, isDocumentLoaded, copy, cut, paste, rotateAllPages]);
 
     const fileInputRef = useRef(null);
     const [activeMenu, setActiveMenu] = useState(null);
@@ -323,18 +338,6 @@ const TopMenu = ({ setPdfDocument, setIsLoading, isDocumentLoaded, onNewPDF, pdf
                             >
                                 <FileText size={16} /> Document Properties
                             </button>
-                            <button
-                                className="bg-transparent border-none text-[var(--text-primary)] px-4 py-2 text-left cursor-pointer text-[13px] flex items-center gap-2 w-full hover:bg-[#b4e6a0] hover:text-[#1a1a1a] disabled:opacity-50 disabled:cursor-default"
-                                onClick={() => { rotateAllPages(90); setActiveMenu(null); }}
-                            >
-                                <RotateCw size={16} /> Rotate Clockwise
-                            </button>
-                            <button
-                                className="bg-transparent border-none text-[var(--text-primary)] px-4 py-2 text-left cursor-pointer text-[13px] flex items-center gap-2 w-full hover:bg-[#b4e6a0] hover:text-[#1a1a1a] disabled:opacity-50 disabled:cursor-default"
-                                onClick={() => { rotateAllPages(-90); setActiveMenu(null); }}
-                            >
-                                <RotateCcw size={16} /> Rotate Anti-Clockwise
-                            </button>
                         </div>
                     )}
                 </div>
@@ -349,10 +352,23 @@ const TopMenu = ({ setPdfDocument, setIsLoading, isDocumentLoaded, onNewPDF, pdf
                         View
                     </button>
                     {activeMenu === 'view' && (
-                        <div className="absolute top-full left-0 mt-1 bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded min-w-[180px] shadow-[0_2px_10px_rgba(0,0,0,0.2)] py-1 z-[101] flex flex-col">
+                        <div className="absolute top-full left-0 mt-1 bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded min-w-[210px] shadow-[0_2px_10px_rgba(0,0,0,0.2)] py-1 z-[101] flex flex-col">
                             <button className="bg-transparent border-none text-[var(--text-primary)] px-4 py-2 text-left cursor-pointer text-[13px] flex items-center gap-2 w-full hover:bg-[#b4e6a0] hover:text-[#1a1a1a] disabled:opacity-50 disabled:cursor-default" onClick={() => setZoom(zoom * 1.2)}><ZoomIn size={16} /> Zoom In</button>
                             <button className="bg-transparent border-none text-[var(--text-primary)] px-4 py-2 text-left cursor-pointer text-[13px] flex items-center gap-2 w-full hover:bg-[#b4e6a0] hover:text-[#1a1a1a] disabled:opacity-50 disabled:cursor-default" onClick={() => setZoom(zoom / 1.2)}><ZoomOut size={16} /> Zoom Out</button>
                             <button className="bg-transparent border-none text-[var(--text-primary)] px-4 py-2 text-left cursor-pointer text-[13px] flex items-center gap-2 w-full hover:bg-[#b4e6a0] hover:text-[#1a1a1a] disabled:opacity-50 disabled:cursor-default" onClick={() => setZoom(1)}><CreditCard size={16} /> Reset Zoom</button>
+                            <div className="h-px bg-[#444] my-1" />
+                            <button
+                                className="bg-transparent border-none text-[var(--text-primary)] px-4 py-2 text-left cursor-pointer text-[13px] flex items-center gap-2 w-full hover:bg-[#b4e6a0] hover:text-[#1a1a1a] disabled:opacity-50 disabled:cursor-default"
+                                onClick={() => { rotateAllPages(90); setActiveMenu(null); }}
+                            >
+                                <RotateCw size={16} /> Rotate Clockwise
+                            </button>
+                            <button
+                                className="bg-transparent border-none text-[var(--text-primary)] px-4 py-2 text-left cursor-pointer text-[13px] flex items-center gap-2 w-full hover:bg-[#b4e6a0] hover:text-[#1a1a1a] disabled:opacity-50 disabled:cursor-default"
+                                onClick={() => { rotateAllPages(-90); setActiveMenu(null); }}
+                            >
+                                <RotateCcw size={16} /> Rotate Anti-Clockwise
+                            </button>
                             <div className="h-px bg-[#444] my-1" />
                             <button
                                 className="bg-transparent border-none text-[var(--text-primary)] px-4 py-2 text-left cursor-pointer text-[13px] flex items-center gap-2 w-full hover:bg-[#b4e6a0] hover:text-[#1a1a1a] disabled:opacity-50 disabled:cursor-default"

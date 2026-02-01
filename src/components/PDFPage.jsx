@@ -1,176 +1,288 @@
-import { useEffect, useRef, useMemo, memo } from "react";
-import * as pdfjsLib from "pdfjs-dist";
-
+import { memo, useEffect, useMemo, useRef } from "react";
 import OverlayLayer from "./OverlayLayer";
 
-// Worker configuration
-// In Vite/Webpack, often we need to explicitly point to the worker file.
-// If the previous code worked, it might have been doing this differently.
-// Let's try the standard pattern for modern bundlers.
-
-if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
-    pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
-        "pdfjs-dist/build/pdf.worker.min.mjs",
-        import.meta.url
-    ).toString();
-}
-
 /**
- * PDFPage: Renders a single PDF page to a canvas (+ TextLayer + Overlay).
- *
- * Uses renderScale (DPR-like) for crispness but relies on `scale` for layout size.
- * Uses requestIdleCallback or similar to avoid blocking UI during heavy zoom operations.
+ * Why this version feels smoother on "one insanely detailed page":
+ * - While user is zooming/panning fast: we DO NOT call page.render() at all.
+ *   We just let the parent viewer's CSS transform scale/pan the existing bitmap.
+ * - When interaction stops: we render ONCE (idle/debounced), canceling any in-flight render.
+ * - We avoid re-importing pdfjs every render (cached).
+ * - We keep canvas sizing stable and cap DPR + pixel budget.
  */
+
+// Tweak these
+const MAX_CANVAS_PIXELS = 20_000_000; // try 12–24MP for heavy drawings
+const MAX_SIDE = 8192;               // many GPUs hate >8192 textures
+const MAX_DPR = 2;                   // cap to reduce spikes on 3x/4x displays
+
+// Cached, one-time import for renderTextLayer (if you want it)
+let pdfjsTextLayerPromise = null;
+const getTextLayerRenderer = () => {
+    if (!pdfjsTextLayerPromise) {
+        // renderTextLayer lives in different places depending on pdfjs version/build.
+        // This tries a couple common ones.
+        pdfjsTextLayerPromise = Promise.allSettled([
+            import("pdfjs-dist/web/pdf_viewer"), // often has renderTextLayer
+            import("pdfjs-dist/build/pdf"),      // fallback
+        ]).then((results) => {
+            for (const r of results) {
+                if (r.status === "fulfilled") {
+                    const mod = r.value;
+                    if (mod?.renderTextLayer) return mod.renderTextLayer;
+                    if (mod?.TextLayerBuilder?.prototype?.render) {
+                        // Not a direct renderer; skip.
+                    }
+                }
+            }
+            return null;
+        });
+    }
+    return pdfjsTextLayerPromise;
+};
+
+// requestIdleCallback fallback
+const requestIdle = (cb) => {
+    if (typeof window !== "undefined" && "requestIdleCallback" in window) {
+        return window.requestIdleCallback(cb, { timeout: 250 });
+    }
+    return window.setTimeout(() => cb({ didTimeout: true, timeRemaining: () => 0 }), 50);
+};
+
+const cancelIdle = (id) => {
+    if (typeof window !== "undefined" && "cancelIdleCallback" in window) {
+        window.cancelIdleCallback(id);
+        return;
+    }
+    clearTimeout(id);
+};
+
 const PDFPage = memo(function PDFPage({
     page,
-    scale = 1.0,          // CSS/layout scale
-    renderScale = 1.0,     // "crispness" scale
-    rotation = 0,
+    scale = 1.0,          // CSS/layout scale (often 1 in your viewer)
+    renderScale = 1.0,     // "crispness" scale (what you were changing on zoom)
+    rotation = 0,         // User rotation override
     isInteracting = false, // ✅ pass from viewer: (isZooming || dragging)
 }) {
     const canvasRef = useRef(null);
     const textLayerRef = useRef(null);
+
     const renderTaskRef = useRef(null);
+    const idleRef = useRef(0);
+    const seqRef = useRef(0);
+
+    // Reuse offscreen buffer to avoid realloc churn
+    const offscreenRef = useRef(null);
+
+    // Remember last rendered params to avoid pointless re-renders
+    const lastRenderKeyRef = useRef("");
 
     // CSS viewport (stable box)
-    const cssViewport = useMemo(() => page.getViewport({ scale, rotation }), [page, scale, rotation]);
+    // Combine native page rotation with user rotation override
+    const effectiveRotation = (rotation + page.rotate) % 360;
+    const cssViewport = useMemo(() => page.getViewport({ scale, rotation: effectiveRotation }), [page, scale, effectiveRotation]);
     const { width, height } = cssViewport;
 
+    // Always keep the visible canvas CSS sized correctly (cheap)
     useEffect(() => {
         const canvas = canvasRef.current;
+        if (!canvas) return;
+        canvas.style.width = `${Math.floor(width)}px`;
+        canvas.style.height = `${Math.floor(height)}px`;
+    }, [width, height]);
+
+    useEffect(() => {
+        if (!page || !canvasRef.current || !textLayerRef.current) return;
+
+        const canvas = canvasRef.current;
         const textLayerDiv = textLayerRef.current;
-        if (!canvas || !page) return;
 
-        // Cancel previous render
-        if (renderTaskRef.current) {
-            renderTaskRef.current.cancel();
-            renderTaskRef.current = null;
+        // Cancel any scheduled/ongoing work on changes
+        if (idleRef.current) cancelIdle(idleRef.current);
+        idleRef.current = 0;
+
+        try {
+            renderTaskRef.current?.cancel?.();
+        } catch { }
+        renderTaskRef.current = null;
+
+        const seq = ++seqRef.current;
+
+        // While interacting: DO NOT re-render PDF.
+        // Keep current bitmap and (optionally) hide heavy text layer.
+        if (isInteracting) {
+            // Optional: hide text layer during interaction to avoid layout/reflow spikes
+            // (especially if you had it enabled).
+            textLayerDiv.innerHTML = "";
+            return;
         }
 
-        // Logic:
-        // 1. If we are interacting (zooming/panning), we might want to SKIP heavy re-renders
-        //    if we already have a reasonably close texture.
-        //    HOWEVER, for simplicity, we just debounce or prioritize.
-        //    We'll do a simple "idle" check or just render.
+        // Defer the heavy render until the browser is idle-ish.
+        idleRef.current = requestIdle(async () => {
+            idleRef.current = 0;
+            if (seqRef.current !== seq) return;
 
-        // For now, let's just Render. Ideally use OffscreenCanvas or similar for smooth perf.
-        // To avoid "flashing", we can use an offscreen canvas.
+            const dpr = Math.min(MAX_DPR, window.devicePixelRatio || 1);
 
-        const dpr = window.devicePixelRatio || 1;
+            // Desired raster scale
+            const desired = Math.max(0.01, scale * renderScale);
 
-        // The "effective" rendering density
-        // If renderScale is high (quality), we multiply.
-        // BUT if isInteracting is true, maybe we cap it? (User pref)
-        // For now, respect props.
-        let finalScale = renderScale;
+            // Compute safe scale under pixel + side limits
+            // Use effectiveRotation for baseVp check too, although rotation mostly swaps w/h
+            const baseVp = page.getViewport({ scale: 1, rotation: effectiveRotation });
+            const baseW = baseVp.width;
+            const baseH = baseVp.height;
 
-        // Safety cap for extremely large canvases
-        const MAX_CANVAS_PIXELS = 4096 * 4096; // 16MP safety
-        // Estimate pixels: (width * dpr * finalScale) * (height * dpr * finalScale)
-        // If too big, reduce finalScale
-        const estimatedPixels = (width * dpr * finalScale) * (height * dpr * finalScale);
-        if (estimatedPixels > MAX_CANVAS_PIXELS) {
-            finalScale = Math.sqrt(MAX_CANVAS_PIXELS / ((width * dpr) * (height * dpr)));
-        }
+            const sMaxByPixels = Math.sqrt(
+                MAX_CANVAS_PIXELS / Math.max(1, baseW * baseH * dpr * dpr)
+            );
 
-        const outputScale = finalScale; // Multiplier relative to CSS viewport
+            const sMaxBySide = Math.min(
+                MAX_SIDE / Math.max(1, baseW * dpr),
+                MAX_SIDE / Math.max(1, baseH * dpr)
+            );
 
-        // Setup Offscreen Canvas for background rendering
-        const offCanvas = document.createElement("canvas");
-        const offCtx = offCanvas.getContext("2d", { alpha: false });
-        if (!offCtx) return;
+            const safeRenderScale = Math.min(desired, sMaxByPixels, sMaxBySide);
 
-        // The actual PDF viewport for rendering
-        const renderViewport = page.getViewport({
-            scale: scale * outputScale,
-            rotation,
-        });
+            // If we already rendered at essentially the same safe scale, skip.
+            // (Prevents micro-stutter from tiny floating-point changes.)
+            // Include rotation in key
+            const renderKey = `${page.pageNumber}|${Math.round(safeRenderScale * 1000)}|${Math.round(dpr * 100)}|${Math.round(scale * 1000)}|${effectiveRotation}`;
+            if (lastRenderKeyRef.current === renderKey) return;
+            lastRenderKeyRef.current = renderKey;
 
-        offCanvas.width = renderViewport.width * dpr;
-        offCanvas.height = renderViewport.height * dpr;
+            const renderViewport = page.getViewport({ scale: safeRenderScale, rotation: effectiveRotation });
 
-        // Render Task
-        const task = page.render({
-            canvasContext: offCtx,
-            viewport: renderViewport,
-            transform: [dpr, 0, 0, dpr, 0, 0], // manually apply DPR
-        });
-
-        renderTaskRef.current = task;
-
-        // --- Text Layer ---
-        // Clear text layer
-        textLayerDiv.innerHTML = "";
-
-        // Render text only if not interacting to save perf, OR if we really want it
-        // Usually text layer is cheap enough if we just dump divs? 
-        // Actually pdf.js textContent is heavy.
-        if (isInteracting && outputScale < 0.8) {
-            // skip text layer during fast zoom out?
-        } else {
-            // We can schedule text layer
-        }
-
-        task.promise.then(async () => {
-            // 1. Blit offscreen to onscreen
-            if (!canvasRef.current) return;
-
-            canvas.width = offCanvas.width;
-            canvas.height = offCanvas.height;
-            const ctx = canvas.getContext("2d");
-            ctx.drawImage(offCanvas, 0, 0);
-
-            // 2. Render Text?
-            if (isInteracting) return; // Skip text if still moving?
-
-            try {
-                const textContent = await page.getTextContent();
-                if (!textLayerRef.current) return;
-                // pdfjsLib.renderTextLayer({ ... }) is deprecated in new versions or different.
-                // We need to use new API or manual:
-                // In >3.x: new TextLayer({}).render()
-                // Let's assume standard pdfjs usage or simpler:
-                // We will skip advanced TextLayer impl for now unless user asks.
-                // But wait, the user's code HAD a text layer div.
-                // Let's check `pdfjs-dist` version logic.
-                // Assuming the user wants text selection.
-
-                // If the user's setup supports it:
-                const { TextLayer } = await import("pdfjs-dist");
-                if (!TextLayer) return; /* fallback */
-
-                const textLayer = new TextLayer({
-                    textContentSource: textContent,
-                    container: textLayerDiv,
-                    viewport: renderViewport, // MATCH render viewport
-                });
-                await textLayer.render();
-
-            } catch (err) {
-                // ignore cancel
+            // Offscreen buffer
+            let offscreen = offscreenRef.current;
+            if (!offscreen) {
+                offscreen = document.createElement("canvas");
+                offscreenRef.current = offscreen;
             }
 
-        }).catch(() => {
-            // cancelled
+            const targetW = Math.max(1, Math.floor(renderViewport.width * dpr));
+            const targetH = Math.max(1, Math.floor(renderViewport.height * dpr));
+
+            // Resize only if needed (resize itself can be expensive)
+            if (offscreen.width !== targetW) offscreen.width = targetW;
+            if (offscreen.height !== targetH) offscreen.height = targetH;
+
+            const offCtx = offscreen.getContext("2d", { alpha: false });
+
+            // Clear
+            offCtx.setTransform(1, 0, 0, 1, 0, 0);
+            offCtx.clearRect(0, 0, offscreen.width, offscreen.height);
+
+            // Start render
+            const task = page.render({
+                canvasContext: offCtx,
+                viewport: renderViewport,
+                transform: [dpr, 0, 0, dpr, 0, 0],
+            });
+            renderTaskRef.current = task;
+
+            // Text layer: for heavy drawings, it can be expensive.
+            // Suggest: keep it OFF or only enable at modest scales.
+            const ENABLE_TEXT_LAYER = safeRenderScale <= 2.5; // tune
+            const textPromise = ENABLE_TEXT_LAYER
+                ? (async () => {
+                    try {
+                        const renderTextLayer = await getTextLayerRenderer();
+                        if (!renderTextLayer) return null;
+
+                        const textContent = await page.getTextContent();
+                        if (seqRef.current !== seq) return null;
+
+                        const tmp = document.createElement("div");
+                        tmp.style.width = `${Math.floor(width)}px`;
+                        tmp.style.height = `${Math.floor(height)}px`;
+                        tmp.style.setProperty("--scale-factor", String(safeRenderScale));
+
+                        // pdfjs renderTextLayer API differs across versions; this matches the common signature.
+                        const res = renderTextLayer({
+                            textContentSource: textContent,
+                            container: tmp,
+                            viewport: renderViewport,
+                            textDivs: [],
+                        });
+
+                        // Some versions return { promise }, some return a Promise directly.
+                        if (res?.promise) await res.promise;
+                        else if (res?.then) await res;
+
+                        return tmp;
+                    } catch {
+                        return null;
+                    }
+                })()
+                : Promise.resolve(null);
+
+            let tmpTextDiv = null;
+
+            try {
+                await task.promise;
+                tmpTextDiv = await textPromise;
+            } catch (err) {
+                // ignore cancels
+                if (err?.name !== "RenderingCancelledException") {
+                    console.error("PDF render error:", err);
+                }
+                return;
+            }
+
+            // If newer request superseded this one, bail
+            if (seqRef.current !== seq) return;
+
+            // Commit to onscreen canvas (copy from offscreen)
+            // Keep backing buffer sized to offscreen; CSS size stays stable.
+            if (canvas.width !== offscreen.width) canvas.width = offscreen.width;
+            if (canvas.height !== offscreen.height) canvas.height = offscreen.height;
+
+            const ctx = canvas.getContext("2d", { alpha: false });
+            ctx.setTransform(1, 0, 0, 1, 0, 0);
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(offscreen, 0, 0);
+
+            // Commit text layer without blinking
+            if (tmpTextDiv) {
+                textLayerDiv.innerHTML = "";
+                textLayerDiv.style.width = `${Math.floor(width)}px`;
+                textLayerDiv.style.height = `${Math.floor(height)}px`;
+                textLayerDiv.style.setProperty("--scale-factor", String(safeRenderScale));
+                textLayerDiv.append(...tmpTextDiv.childNodes);
+            } else {
+                textLayerDiv.innerHTML = "";
+            }
         });
 
         return () => {
+            // Cancel pending
+            if (idleRef.current) cancelIdle(idleRef.current);
+            idleRef.current = 0;
+
+            // Cancel render
             try {
                 renderTaskRef.current?.cancel?.();
             } catch { }
             renderTaskRef.current = null;
         };
-    }, [page, scale, renderScale, isInteracting, width, height, rotation]);
+    }, [page, scale, renderScale, isInteracting, width, height, effectiveRotation]);
 
     return (
         <div className="relative leading-[0]" style={{ width, height }}>
-            <canvas ref={canvasRef} className="block" style={{ width: '100%', height: '100%' }} />
+            <canvas ref={canvasRef} className="block" />
             <div
                 ref={textLayerRef}
                 className="absolute inset-0 overflow-hidden leading-[1.0] pointer-events-none [&>span]:text-transparent [&>span]:absolute [&>span]:whitespace-pre [&>span]:cursor-text [&>span]:origin-[0%_0%] [&>span]:pointer-events-auto"
             />
             {width > 0 && (
-                <OverlayLayer page={page} width={width} height={height} viewScale={scale} renderScale={renderScale} />
+                <OverlayLayer
+                    page={page}
+                    width={width}
+                    height={height}
+                    viewScale={scale}
+                    renderScale={renderScale}
+                    rotation={effectiveRotation}
+                />
             )}
         </div>
     );

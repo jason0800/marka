@@ -4,7 +4,7 @@ import { calculateDistance, calculatePolygonArea } from "../geometry/transforms"
 import { findShapeAtPoint } from "../geometry/hitTest";
 import OverlayCanvasLayer from "./OverlayCanvasLayer";
 
-const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0 }) => {
+const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0, rotation = 0 }) => {
     const {
         activeTool,
         setActiveTool,
@@ -34,7 +34,7 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0 
     const unit = pageUnits[pageIndex] || "px";
 
     // Keep viewport + viewBox stable (avoid calling getViewport every render)
-    const unscaledViewport = useMemo(() => page.getViewport({ scale: 1.0 }), [page]);
+    const unscaledViewport = useMemo(() => page.getViewport({ scale: 1.0, rotation }), [page, rotation]);
     const viewBox = useMemo(
         () => `0 0 ${unscaledViewport.width} ${unscaledViewport.height}`,
         [unscaledViewport.width, unscaledViewport.height]
