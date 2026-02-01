@@ -1111,7 +1111,6 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
                                     padding: "4px",
                                     fontSize: `${fontSize}px`,
                                     fontFamily: 'sans-serif',
-                                    fontFamily: 'sans-serif',
                                     overflow: "visible",
                                     whiteSpace: "pre-wrap",
                                     cursor: isSelected ? "move" : "pointer",
@@ -1124,7 +1123,7 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
                                     setEditingId(m.id);
                                 }}
                             >
-                                {m.text || "Type..."}
+                                {m.text || ""}
                             </div>
                         )}
                     </foreignObject>
