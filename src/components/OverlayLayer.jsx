@@ -58,6 +58,7 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
 
     // ---- Interaction state ----
     const [isDrawing, setIsDrawingState] = useState(false);
+    const [dragDelta, setDragDelta] = useState({ x: 0, y: 0 });
     // Use a ref to track drawing state synchronously to prevent race conditions/double-fires
     const isDrawingRef = useRef(false);
 
@@ -465,32 +466,7 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
         if (activeTool === "select" && isDraggingItems && dragStart && selectedIds.length > 0) {
             const dx = point.x - dragStart.x;
             const dy = point.y - dragStart.y;
-
-            selectedIds.forEach((id) => {
-                const shape = pageShapes.find((s) => s.id === id);
-                if (shape) {
-                    if (shape.type === "line" || shape.type === "arrow") {
-                        updateShape(id, {
-                            start: { x: shape.start.x + dx, y: shape.start.y + dy },
-                            end: { x: shape.end.x + dx, y: shape.end.y + dy },
-                        });
-                    } else {
-                        updateShape(id, { x: shape.x + dx, y: shape.y + dy });
-                    }
-                } else {
-                    const meas = pageMeasurements.find(m => m.id === id);
-                    if (meas && meas.box) {
-                        const newBox = { ...meas.box, x: meas.box.x + dx, y: meas.box.y + dy };
-                        let patch = { box: newBox };
-                        if (meas.type === 'callout' && meas.tip) {
-                            patch.tip = { x: meas.tip.x + dx, y: meas.tip.y + dy };
-                        }
-                        updateMeasurement(id, patch);
-                    }
-                }
-            });
-
-            setDragStart({ x: point.x, y: point.y });
+            setDragDelta({ x: dx, y: dy });
         }
     };
 
@@ -542,8 +518,38 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
                 setSelectionStart(null);
             }
 
+            // Apply Drag
+            if (isDraggingItems && dragStart && (dragDelta.x !== 0 || dragDelta.y !== 0)) {
+                const { x: dx, y: dy } = dragDelta;
+
+                selectedIds.forEach((id) => {
+                    const shape = pageShapes.find((s) => s.id === id);
+                    if (shape) {
+                        if (shape.type === "line" || shape.type === "arrow") {
+                            updateShape(id, {
+                                start: { x: shape.start.x + dx, y: shape.start.y + dy },
+                                end: { x: shape.end.x + dx, y: shape.end.y + dy },
+                            });
+                        } else {
+                            updateShape(id, { x: shape.x + dx, y: shape.y + dy });
+                        }
+                    } else {
+                        const meas = pageMeasurements.find(m => m.id === id);
+                        if (meas && meas.box) {
+                            const newBox = { ...meas.box, x: meas.box.x + dx, y: meas.box.y + dy };
+                            let patch = { box: newBox };
+                            if (meas.type === 'callout' && meas.tip) {
+                                patch.tip = { x: meas.tip.x + dx, y: meas.tip.y + dy };
+                            }
+                            updateMeasurement(id, patch);
+                        }
+                    }
+                });
+            }
+
             setIsDraggingItems(false);
             setDragStart(null);
+            setDragDelta({ x: 0, y: 0 });
             return;
         }
 
@@ -1345,7 +1351,23 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
                     m.type === "text" ||
                     m.type === "callout" ||
                     isOutOfBounds(m)
-                ).map(m => renderMeasurement(m))}
+                ).map(m => {
+                    let measToRender = m;
+                    if (dragDelta.x !== 0 || dragDelta.y !== 0) {
+                        if (selectedIds.includes(m.id)) {
+                            const dx = dragDelta.x;
+                            const dy = dragDelta.y;
+                            const newBox = { ...m.box, x: m.box.x + dx, y: m.box.y + dy };
+                            measToRender = { ...m, box: newBox };
+
+                            if (m.type === 'callout' && m.tip) {
+                                measToRender.tip = { x: m.tip.x + dx, y: m.tip.y + dy };
+                            }
+                            // TODO: Handle other measurement point types if dragging them is supported
+                        }
+                    }
+                    return renderMeasurement(measToRender);
+                })}
 
                 {/* Drawing feedback for measurements */}
                 {isDrawingRef.current && activeTool === "choice" ? null : null}

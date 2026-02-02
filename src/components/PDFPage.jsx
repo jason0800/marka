@@ -11,7 +11,7 @@ import OverlayLayer from "./OverlayLayer";
  */
 
 // Tweak these
-const MAX_CANVAS_PIXELS = 20_000_000; // try 12–24MP for heavy drawings
+const MAX_CANVAS_PIXELS = 5_000_000; // ~5MP Cap (Aggressive Memory Optimization)
 const MAX_SIDE = 8192;               // many GPUs hate >8192 textures
 const MAX_DPR = 2;                   // cap to reduce spikes on 3x/4x displays
 

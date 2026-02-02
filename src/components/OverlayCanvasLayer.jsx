@@ -1,6 +1,9 @@
 import React, { useRef, useEffect, memo } from "react";
 import { calculateDistance, calculatePolygonArea } from "../geometry/transforms";
 
+const MAX_CANVAS_PIXELS = 5_000_000; // ~5MP Cap (Aggressive Memory Optimization)
+const MAX_SIDE = 8192;               // GPU Texture Limit
+
 const OverlayCanvasLayer = ({
     width,
     height,
@@ -31,8 +34,23 @@ const OverlayCanvasLayer = ({
         const effectiveDpr = dpr * renderScale;
 
         // Resize canvas if needed
-        const targetW = Math.floor(width * effectiveDpr);
-        const targetH = Math.floor(height * effectiveDpr);
+        let targetW = Math.floor(width * effectiveDpr);
+        let targetH = Math.floor(height * effectiveDpr);
+
+        // Safety Cap: Downscale if exceeding limits
+        let reductionScale = 1.0;
+        const totalPixels = targetW * targetH;
+
+        if (totalPixels > MAX_CANVAS_PIXELS) {
+            reductionScale = Math.sqrt(MAX_CANVAS_PIXELS / totalPixels);
+        } else if (targetW > MAX_SIDE || targetH > MAX_SIDE) {
+            reductionScale = Math.min(MAX_SIDE / targetW, MAX_SIDE / targetH);
+        }
+
+        if (reductionScale < 1.0) {
+            targetW = Math.floor(targetW * reductionScale);
+            targetH = Math.floor(targetH * reductionScale);
+        }
 
         if (canvas.width !== targetW || canvas.height !== targetH) {
             canvas.width = targetW;
@@ -41,7 +59,11 @@ const OverlayCanvasLayer = ({
 
         const ctx = canvas.getContext("2d", { alpha: true });
         ctx.setTransform(1, 0, 0, 1, 0, 0); // Reset
-        ctx.scale(effectiveDpr, effectiveDpr);
+
+        // effectiveDpr * reductionScale gives the correct scale factor
+        const finalScale = effectiveDpr * reductionScale;
+        ctx.scale(finalScale, finalScale);
+
         ctx.clearRect(0, 0, width, height);
 
         // Global Scaling: Map PDF coordinates to Screen pixels

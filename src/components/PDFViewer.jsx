@@ -583,7 +583,27 @@ const PDFViewer = ({ document }) => {
         if (viewMode !== "continuous") return;
         const { start, end } = visibleRange;
         if (end < start) return;
+
+        // 1. Ensure visible pages are loaded
         for (let i = start; i <= end; i++) ensurePageLoaded(i + 1);
+
+        // 2. Prune invisible pages (Garbage Collection)
+        const CACHE_BUFFER = 5;
+        const minKeep = start - CACHE_BUFFER;
+        const maxKeep = end + CACHE_BUFFER;
+
+        for (const [pageNum, pageProxy] of pageCacheRef.current.entries()) {
+            const pageIdx = pageNum - 1;
+            if (pageIdx < minKeep || pageIdx > maxKeep) {
+                // Release memory
+                try {
+                    pageProxy.cleanup();
+                } catch (e) {
+                    console.warn(`Failed to cleanup page ${pageNum}`, e);
+                }
+                pageCacheRef.current.delete(pageNum);
+            }
+        }
     }, [ensurePageLoaded, visibleRange, viewMode]);
 
     // ---- scrollbar ----
