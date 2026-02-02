@@ -99,15 +99,9 @@ function CalloutIcon({ size, ...props }) {
             strokeLinejoin="round"
             {...props}
         >
-            {/* Box */}
-            <rect x="2" y="6" width="14" height="10" rx="2" />
-            {/* Arrow/Line: Knee at (16, 11) -> (20, 8) -> Tip (22, 6) or similar? 
-                User wants explicit arrow.
-                Let's do: Start from right side of box (16, 11) -> knee (19, 11) -> tip (22, 5) with arrowhead 
-            */}
-            <path d="M16 11h3l3 -6" />
-            {/* Arrowhead at top right */}
-            <path d="M19 5l3 0l0 3" />
+            <rect x="3" y="8" width="12" height="10" rx="2" />
+            <path d="M15 13h3l3-5" />
+            <path d="M18 8h3v3" />
         </svg>
     );
 }

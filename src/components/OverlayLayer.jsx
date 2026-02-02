@@ -611,12 +611,18 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
                     };
                 }
             } else if (activeTool === "callout") {
+                // For a smoother drag, dragging defines the Tip -> Box relationship?
+                // Or dragging defines the Box size? 
+                // Let's say: Drag Start = Tip. Drag End = Center of Box (or closest corner).
+                // Let's assume Drag End = Box Center for simplicity and "feeling".
+                const w = 150;
+                const h = 50;
                 newMeas = {
                     id,
                     type: "callout",
                     pageIndex,
                     tip: shapeStart,
-                    box: { x: point.x, y: point.y - 25, w: 150, h: 50 }, // Center-ish relative to drag end? Or treat drag end as box position.
+                    box: { x: point.x - w / 2, y: point.y - h / 2, w, h },
                     text: "Callout",
                     ...defaultShapeStyle
                 };
@@ -1006,34 +1012,71 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
                     );
                 }
                 if (m.type === "callout" && m.tip) {
-                    // Dog-leg connector: Box Side -> Knee -> Tip
-                    const boxCx = m.box.x + m.box.w / 2;
-                    const boxCy = m.box.y + m.box.h / 2;
-
-                    // Determine start point on box (closest to tip)
-                    // Actually, simplified dog-leg:
-                    // Horizontal line from box center-y (at nearest side) -> Knee -> Tip
-
-                    const isRight = m.tip.x > boxCx;
-                    const startX = isRight ? m.box.x + m.box.w : m.box.x;
-                    const startY = boxCy;
-
-                    // Knee distance from box (e.g. 20px or mid-way)
-                    // Let's use a fixed stub or dynamic? User image shows quite a long horizontal run.
-                    // Mid-point x seems safe?
-                    // const kneeX = (startX + m.tip.x) / 2;
-
-                    // Actually user image: Box -> Horizontal -> Tip. 
-                    // This implies the diagonal part connects to the tip. 
-                    // Knee is at (Tip.x - delta, StartY)? No.
-                    // Knee is at (KneeX, StartY).
-                    // Let's guess KneeX is mid-way.
-                    const kneeX = (startX + m.tip.x) / 2;
-
                     const arrowId = `callout-arrow-${m.id}`;
 
-                    // Points: Start -> Knee -> Tip
-                    const points = `${startX},${startY} ${kneeX},${startY} ${m.tip.x},${m.tip.y}`;
+                    // Box bounds
+                    const bx = m.box.x;
+                    const by = m.box.y;
+                    const bw = m.box.w;
+                    const bh = m.box.h;
+                    const boxCx = bx + bw / 2;
+                    const boxCy = by + bh / 2;
+
+                    // Tip point
+                    const tx = m.tip.x;
+                    const ty = m.tip.y;
+
+                    // Determine relative position: Left/Right or Top/Bottom?
+                    // "leader goes under the callout text box" -> Tip is BELOW box.
+                    // "leader goes above the callout" -> Tip is ABOVE box.
+
+                    // Check vertical overlap
+                    const isVerticallyOutside = ty < by || ty > by + bh;
+                    const isHorizontallyOutside = tx < bx || tx > bx + bw;
+
+                    // Heuristics:
+                    // If tip is clearly above or below (beyond some margin?), use vertical leader.
+                    // If tip is to the side, use horizontal leader.
+
+                    // Let's use 4 zones based on center angle? Or just simple projection.
+                    // User request: "when the leader goes under the callout text box... first extend straight down... then bend"
+
+                    let startX, startY, kneeX, kneeY;
+
+                    // Simple logic:
+                    // If tip.y > box.bottom -> Bottom placement
+                    // If tip.y < box.top -> Top placement
+                    // Else -> Side placement
+
+                    if (ty > by + bh && !isHorizontallyOutside) {
+                        // BOTTOM (Strict: Must be horizontally within box)
+                        startX = boxCx;
+                        startY = by + bh;
+
+                        const ky = (startY + ty) / 2;
+                        kneeX = startX;
+                        kneeY = ky;
+                    } else if (ty < by && !isHorizontallyOutside) {
+                        // TOP (Strict: Must be horizontally within box)
+                        startX = boxCx;
+                        startY = by;
+
+                        const ky = (startY + ty) / 2;
+                        kneeX = startX;
+                        kneeY = ky;
+                    } else {
+                        // SIDES (Left/Right) - Default for corners too
+                        const isRight = tx > boxCx;
+                        startX = isRight ? bx + bw : bx;
+                        startY = boxCy;
+
+                        // Knee is horizontal out
+                        const kx = (startX + tx) / 2;
+                        kneeX = kx;
+                        kneeY = startY;
+                    }
+
+                    const points = `${startX},${startY} ${kneeX},${kneeY} ${tx},${ty}`;
 
                     return (
                         <>
@@ -1066,96 +1109,120 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
             return (
                 <g key={m.id} {...measCommon}>
                     {renderConnector()}
-                    <foreignObject
-                        x={m.box.x}
-                        y={m.box.y}
-                        width={m.box.w}
-                        height={m.box.h}
-                        className="foreignObject"
-                        style={{ overflow: 'visible', pointerEvents: 'none' }} // Let clicks pass through container
-                    >
-                        {isEditing ? (
-                            <textarea
-                                autoFocus
-                                style={{
-                                    width: "100%",
-                                    height: "100%",
-                                    resize: "both",
-                                    border: `1px solid ${borderColor}`,
-                                    padding: "4px",
-                                    fontSize: `${fontSize}px`,
-                                    background: bgColor,
-                                    color: textColor,
-                                    outline: "none",
-                                    fontFamily: 'sans-serif',
-                                    pointerEvents: 'auto'
-                                }}
-                                defaultValue={m.text}
-                                onBlur={(ev) => {
-                                    updateMeasurement(m.id, { text: ev.target.value });
-                                    setEditingId(null);
-                                }}
-                                onKeyDown={(ev) => {
-                                    if (ev.key === "Escape") setEditingId(null);
-                                    ev.stopPropagation(); // Prevent shortcuts
-                                }}
-                            />
-                        ) : (
-                            <div
-                                style={{
-                                    width: "100%",
-                                    height: "100%",
-                                    border: m.type === "text" ? `1px dashed ${activeTool === 'select' ? '#ccc' : 'transparent'}` : `1px solid ${borderColor}`,
-                                    background: bgColor,
-                                    color: textColor,
-                                    padding: "4px",
-                                    fontSize: `${fontSize}px`,
-                                    fontFamily: 'sans-serif',
-                                    overflow: "visible",
-                                    whiteSpace: "pre-wrap",
-                                    cursor: isSelected ? "move" : "pointer",
-                                    pointerEvents: 'auto', // Catch clicks
-                                    userSelect: 'none',
-                                    lineHeight: 1.2
-                                }}
-                                onDoubleClick={(ev) => {
-                                    ev.stopPropagation();
-                                    setEditingId(m.id);
-                                }}
-                            >
-                                {m.text || ""}
-                            </div>
-                        )}
-                    </foreignObject>
-
-                    {isSelected && (
-                        <g transform={`translate(${m.box.x}, ${m.box.y})`}>
-                            {renderSelectionFrame({
-                                id: m.id,
-                                x: 0,
-                                y: 0,
-                                width: m.box.w,
-                                height: m.box.h,
-                                rotation: m.rotation || 0,
-                                type: "rectangle" // Proxy
-                            })}
-                        </g>
-                    )}
-
-                    {isSelected && m.type === 'callout' && m.tip && (
-                        <circle
-                            cx={m.tip.x}
-                            cy={m.tip.y}
-                            r={6 / Math.max(1e-6, viewScale)}
-                            fill="#b4e6a0"
-                            stroke="#3a6b24"
-                            strokeWidth={1 / Math.max(1e-6, viewScale)}
-                            data-resize-id={m.id}
-                            data-resize-handle="callout-tip"
-                            cursor="crosshair"
+                    <g>
+                        {/* Background Rect for Styling */}
+                        <rect
+                            x={m.box.x}
+                            y={m.box.y}
+                            width={m.box.w}
+                            height={m.box.h}
+                            fill={bgColor}
+                            stroke={borderColor}
+                            strokeWidth={m.strokeWidth || 1}
+                            strokeDasharray={m.strokeDasharray === 'none' ? undefined : m.strokeDasharray}
+                            vectorEffect="non-scaling-stroke"
+                            rx={0} ry={0}
                         />
-                    )}
-                </g>
+
+                        <foreignObject
+                            x={m.box.x}
+                            y={m.box.y}
+                            width={m.box.w}
+                            height={m.box.h}
+                            className="foreignObject"
+                            style={{ overflow: 'visible', pointerEvents: 'none' }}
+                        >
+                            {isEditing ? (
+                                <textarea
+                                    autoFocus
+                                    style={{
+                                        width: "100%",
+                                        height: "100%",
+                                        resize: "none", // Remove handle
+                                        border: "none", // Handled by rect
+                                        padding: "4px",
+                                        margin: 0,
+                                        fontSize: `${fontSize}px`,
+                                        background: "transparent",
+                                        color: textColor,
+                                        outline: "none",
+                                        fontFamily: 'sans-serif',
+                                        pointerEvents: 'auto',
+                                        lineHeight: "1.2",
+                                        overflow: "hidden"
+                                    }}
+                                    defaultValue={m.text}
+                                    onBlur={(ev) => {
+                                        updateMeasurement(m.id, { text: ev.target.value });
+                                        setEditingId(null);
+                                    }}
+                                    onKeyDown={(ev) => {
+                                        if (ev.key === "Escape") setEditingId(null);
+                                        ev.stopPropagation();
+                                    }}
+                                />
+                            ) : (
+                                <div
+                                    style={{
+                                        width: "100%",
+                                        height: "100%",
+                                        border: m.type === "text" ? `1px dashed ${activeTool === 'select' ? '#ccc' : 'transparent'}` : "none",
+                                        background: "transparent",
+                                        color: textColor,
+                                        padding: "4px",
+                                        margin: 0,
+                                        fontSize: `${fontSize}px`,
+                                        fontFamily: 'sans-serif',
+                                        overflow: "visible",
+                                        whiteSpace: "pre-wrap",
+                                        cursor: isSelected ? "move" : "pointer",
+                                        pointerEvents: 'auto',
+                                        userSelect: 'none',
+                                        lineHeight: "1.2"
+                                    }}
+                                    onDoubleClick={(ev) => {
+                                        ev.stopPropagation();
+                                        setEditingId(m.id);
+                                    }}
+                                >
+                                    {m.text || ""}
+                                </div>
+                            )}
+                        </foreignObject>
+                    </g>
+
+                    {
+                        isSelected && (
+                            <g transform={`translate(${m.box.x}, ${m.box.y})`}>
+                                {renderSelectionFrame({
+                                    id: m.id,
+                                    x: 0,
+                                    y: 0,
+                                    width: m.box.w,
+                                    height: m.box.h,
+                                    rotation: m.rotation || 0,
+                                    type: "rectangle" // Proxy
+                                })}
+                            </g>
+                        )
+                    }
+
+                    {
+                        isSelected && m.type === 'callout' && m.tip && (
+                            <circle
+                                cx={m.tip.x}
+                                cy={m.tip.y}
+                                r={6 / Math.max(1e-6, viewScale)}
+                                fill="#b4e6a0"
+                                stroke="#3a6b24"
+                                strokeWidth={1 / Math.max(1e-6, viewScale)}
+                                data-resize-id={m.id}
+                                data-resize-handle="callout-tip"
+                                cursor="crosshair"
+                            />
+                        )
+                    }
+                </g >
             );
         }
 
@@ -1226,6 +1293,33 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
                     (() => {
                         // Temporary shape for preview
                         const tempId = "temp-draw";
+
+                        if (activeTool === "callout") {
+                            // Preview Callout
+                            const w = 150;
+                            const h = 50;
+                            // Box centered on cursor (matches creation logic)
+                            const box = {
+                                x: cursor.x - w / 2,
+                                y: cursor.y - h / 2,
+                                w,
+                                h
+                            };
+                            const m = {
+                                id: tempId,
+                                type: "callout",
+                                box,
+                                tip: shapeStart,
+                                text: "Callout",
+                                ...defaultShapeStyle,
+                                // Add styling that matches current properties if possible
+                                stroke: defaultShapeStyle.stroke || '#000000',
+                                strokeWidth: defaultShapeStyle.strokeWidth || 1,
+                                fill: defaultShapeStyle.fill || '#ffffff'
+                            };
+                            return renderMeasurement(m);
+                        }
+
                         let s = { id: tempId, type: activeTool, ...defaultShapeStyle, stroke: defaultShapeStyle.stroke, start: shapeStart, end: cursor, x: 0, y: 0, width: 0, height: 0, rotation: 0 };
 
                         if (activeTool === "line" || activeTool === "arrow") {
