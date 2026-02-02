@@ -139,7 +139,7 @@ const OverlayCanvasLayer = ({
             ctx.globalAlpha = opacity;
             ctx.strokeStyle = stroke;
             ctx.lineWidth = strokeWidth;
-            ctx.lineCap = "round";
+            ctx.lineCap = shape.type === "arrow" ? "butt" : "round";
             ctx.lineJoin = "round";
 
             if (dash && dash !== "none") {
@@ -356,22 +356,46 @@ function drawArrowHead(ctx, shape, color) {
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
 
+    const sw = ctx.lineWidth; // Match SVG markerUnits="strokeWidth"
+
     const dx = shape.end.x - shape.start.x;
     const dy = shape.end.y - shape.start.y;
     const angle = Math.atan2(dy, dx);
-    const headLen = 10;
-    const headAngle = Math.PI / 6;
+    const cos = Math.cos(angle);
+    const sin = Math.sin(angle);
+
+    // SVG Marker Geometry:
+    // Viewport: 0,0 to 6,4 (Wait, polygon 0,0 6,2 0,4 means height 4)
+    // RefX=2, RefY=2. 
+    // Tip (6,2) is +4 units from Anchor (2,2).
+    // Base (0,0 to 0,4) is -2 units from Anchor (2,2).
+    // Half Width is 2 units.
+
+    // Scale all by strokeWidth (sw)
+    const tipOffset = 4 * sw;
+    const baseOffset = -2 * sw;
+    const halfWidth = 2 * sw;
+
+    // Tip Point
+    const tX = shape.end.x + tipOffset * cos;
+    const tY = shape.end.y + tipOffset * sin;
+
+    // Base Center
+    const bX = shape.end.x + baseOffset * cos;
+    const bY = shape.end.y + baseOffset * sin;
+
+    // Base Corners (perpendicular)
+    // Normal is (-sin, cos)
+    const c1X = bX - halfWidth * sin;
+    const c1Y = bY + halfWidth * cos;
+
+    const c2X = bX + halfWidth * sin;
+    const c2Y = bY - halfWidth * cos;
 
     ctx.beginPath();
-    ctx.moveTo(shape.end.x, shape.end.y);
-    ctx.lineTo(
-        shape.end.x - headLen * Math.cos(angle - headAngle),
-        shape.end.y - headLen * Math.sin(angle - headAngle)
-    );
-    ctx.lineTo(
-        shape.end.x - headLen * Math.cos(angle + headAngle),
-        shape.end.y - headLen * Math.sin(angle + headAngle)
-    );
+    ctx.moveTo(tX, tY); // Tip
+    ctx.lineTo(c1X, c1Y); // Top Corner
+    ctx.lineTo(c2X, c2Y); // Bottom Corner
     ctx.closePath();
     ctx.fillStyle = color;
     ctx.fill();

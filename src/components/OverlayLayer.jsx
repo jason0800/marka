@@ -821,7 +821,7 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
             return (
                 <g key={s.id} data-shape-id={s.id}>
                     <defs>
-                        <marker id={`arrow-${s.id}`} markerWidth="6" markerHeight="4" refX="5" refY="2" orient="auto">
+                        <marker id={`arrow-${s.id}-v2`} markerWidth="6" markerHeight="4" refX="2" refY="2" orient="auto">
                             <polygon points="0 0, 6 2, 0 4" fill={s.stroke} />
                         </marker>
                     </defs>
@@ -832,8 +832,8 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
                         x2={s.end.x}
                         y2={s.end.y}
                         {...commonProps}
-                        markerEnd={`url(#arrow-${s.id})`}
-                        strokeLinecap="round"
+                        markerEnd={`url(#arrow-${s.id}-v2)`}
+                        strokeLinecap="butt"
                     />
 
                     {/* fat hit-area */}
@@ -1081,7 +1081,7 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
                     return (
                         <>
                             <defs>
-                                <marker id={arrowId} markerWidth="6" markerHeight="4" refX="6" refY="2" orient="auto-start-reverse">
+                                <marker id={arrowId} markerWidth="6" markerHeight="4" refX="2" refY="2" orient="auto-start-reverse">
                                     <polygon points="0 0, 6 2, 0 4" fill={m.stroke || "#333"} />
                                 </marker>
                             </defs>
@@ -1092,7 +1092,7 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
                                 strokeWidth={2 / Math.max(1e-6, viewScale)}
                                 markerEnd={`url(#${arrowId})`}
                                 vectorEffect="non-scaling-stroke"
-                                strokeLinecap="round"
+                                strokeLinecap="butt"
                                 strokeLinejoin="round"
                             />
                         </>
@@ -1166,7 +1166,7 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
                                     style={{
                                         width: "100%",
                                         height: "100%",
-                                        border: m.type === "text" ? `1px dashed ${activeTool === 'select' ? '#ccc' : 'transparent'}` : "none",
+                                        border: "none",
                                         background: "transparent",
                                         color: textColor,
                                         padding: "4px",
