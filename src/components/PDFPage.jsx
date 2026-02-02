@@ -182,7 +182,7 @@ const PDFPage = memo(function PDFPage({
 
             // Text layer: for heavy drawings, it can be expensive.
             // Suggest: keep it OFF or only enable at modest scales.
-            const ENABLE_TEXT_LAYER = safeRenderScale <= 2.5; // tune
+            const ENABLE_TEXT_LAYER = safeRenderScale <= 1.5; // Reduced from 2.5 for Memory Optimization
             const textPromise = ENABLE_TEXT_LAYER
                 ? (async () => {
                     try {

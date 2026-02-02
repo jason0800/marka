@@ -588,7 +588,7 @@ const PDFViewer = ({ document }) => {
         for (let i = start; i <= end; i++) ensurePageLoaded(i + 1);
 
         // 2. Prune invisible pages (Garbage Collection)
-        const CACHE_BUFFER = 5;
+        const CACHE_BUFFER = 2; // Reduced from 5 to 2 for Extreme Memory Optimization
         const minKeep = start - CACHE_BUFFER;
         const maxKeep = end + CACHE_BUFFER;
 

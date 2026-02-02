@@ -412,6 +412,16 @@ const useAppStore = create((set, get) => ({
     }),
 
     closeTab: (tabId) => set((state) => {
+        // Find the tab and destroy its resources
+        const tabToClose = state.tabs.find(t => t.id === tabId);
+        if (tabToClose && tabToClose.pdfDocument) {
+            try {
+                tabToClose.pdfDocument.destroy();
+            } catch (e) {
+                console.warn("Failed to destroy PDF document", e);
+            }
+        }
+
         const newTabs = state.tabs.filter(t => t.id !== tabId);
 
         // If closing active tab, switch to another
