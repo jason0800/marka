@@ -536,12 +536,24 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
                     } else {
                         const meas = pageMeasurements.find(m => m.id === id);
                         if (meas && meas.box) {
-                            const newBox = { ...meas.box, x: meas.box.x + dx, y: meas.box.y + dy };
-                            let patch = { box: newBox };
-                            if (meas.type === 'callout' && meas.tip) {
-                                patch.tip = { x: meas.tip.x + dx, y: meas.tip.y + dy };
+                            // If dragging a callout, we want to move ONLY the box, keeping the tip stationary.
+                            // UNLESS we selected the whole shape/tip via selection box? 
+                            // The user request: "moving the textbox should only move the textbox".
+                            // If we selected it via click on box -> move box.
+                            // If we selected via selection rect covering tip -> move both?
+                            // Currently 'selectedIds' doesn't distinguish *what* part was clicked.
+                            // BUT: If the user just drags the "selected item", we assume whole-shape drag usually.
+                            // However, strictly complying with the request for Callouts:
+
+                            if (meas.type === 'callout') {
+                                // Only move the BOX. Tip stays.
+                                const newBox = { ...meas.box, x: meas.box.x + dx, y: meas.box.y + dy };
+                                updateMeasurement(id, { box: newBox });
+                            } else {
+                                // Other measurements (text, etc) - move whole thing or box
+                                const newBox = { ...meas.box, x: meas.box.x + dx, y: meas.box.y + dy };
+                                updateMeasurement(id, { box: newBox });
                             }
-                            updateMeasurement(id, patch);
                         }
                     }
                 });
@@ -625,9 +637,10 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
                 const dy = point.y - shapeStart.y;
 
                 // Hybrid Logic:
-                // If sufficient vertical separation, standard "Vertical Mode" (Center X).
-                // If mostly horizontal, "Side Mode" (Offset X).
-                const isVertical = Math.abs(dy) > 40;
+                // If sufficient vertical separation (>40px) AND small horizontal separation (<40px),
+                // use standard "Vertical Mode" (Center X).
+                // Otherwise, use "Side Mode" (Offset X).
+                const isVertical = Math.abs(dy) > 40 && Math.abs(dx) < 40;
 
                 let bx, by;
 
@@ -1377,8 +1390,9 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
                 height={height}
                 viewScale={viewScale}
                 renderScale={renderScale}
-                shapes={pageShapes}
-                measurements={pageMeasurements}
+                // If dragging, hide selected items from Canvas so they don't double-render
+                shapes={isDraggingItems ? pageShapes.filter(s => !selectedIds.includes(s.id)) : pageShapes}
+                measurements={isDraggingItems ? pageMeasurements.filter(m => !selectedIds.includes(m.id)) : pageMeasurements}
                 selectedIds={selectedIds}
                 pageIndex={pageIndex}
                 pageUnits={pageUnits}
@@ -1405,27 +1419,63 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
                              We only render selected shapes here. */}
                 </defs>
 
-                {/* RENDER ONLY SELECTED SHAPES in SVG OR Out-Of-Bounds */}
-                {pageShapes.filter(s => selectedIds.includes(s.id) || isOutOfBounds(s)).map(s => {
-                    let shapeToRender = s;
-                    // Apply transient drag delta
-                    if (dragDelta.x !== 0 || dragDelta.y !== 0) {
-                        if (selectedIds.includes(s.id)) {
-                            const dx = dragDelta.x;
-                            const dy = dragDelta.y;
-                            if (s.type === 'line' || s.type === 'arrow') {
-                                shapeToRender = {
-                                    ...s,
-                                    start: { x: s.start.x + dx, y: s.start.y + dy },
-                                    end: { x: s.end.x + dx, y: s.end.y + dy }
-                                };
-                            } else {
-                                shapeToRender = { ...s, x: s.x + dx, y: s.y + dy };
+                {/* Selected / OOB Shapes */}
+                {pageShapes
+                    .filter(s => selectedIds.includes(s.id) || isOutOfBounds(s))
+                    .map(s => {
+                        let shapeToRender = s;
+
+                        if (dragDelta.x !== 0 || dragDelta.y !== 0) {
+                            if (selectedIds.includes(s.id)) {
+                                const dx = dragDelta.x, dy = dragDelta.y;
+                                if (s.type === "line" || s.type === "arrow") {
+                                    shapeToRender = {
+                                        ...s,
+                                        start: { x: s.start.x + dx, y: s.start.y + dy },
+                                        end: { x: s.end.x + dx, y: s.end.y + dy },
+                                    };
+                                } else {
+                                    shapeToRender = { ...s, x: s.x + dx, y: s.y + dy };
+                                }
                             }
                         }
-                    }
-                    return renderShape(shapeToRender);
-                })}
+
+                        return renderShape(shapeToRender);
+                    })
+                }
+
+                {/* Selected / OOB Measurements */}
+                {pageMeasurements
+                    .filter(m =>
+                        selectedIds.includes(m.id) ||
+                        m.type === "comment" ||
+                        m.type === "text" ||
+                        m.type === "callout" ||
+                        isOutOfBounds(m)
+                    )
+                    .map(m => {
+                        let measToRender = m;
+
+                        if (dragDelta.x !== 0 || dragDelta.y !== 0) {
+                            if (selectedIds.includes(m.id)) {
+                                const dx = dragDelta.x, dy = dragDelta.y;
+
+                                // IMPORTANT: when dragging callout, only box moves
+                                if (m.type === "callout") {
+                                    measToRender = {
+                                        ...m,
+                                        box: { ...m.box, x: m.box.x + dx, y: m.box.y + dy },
+                                        // tip stays
+                                    };
+                                } else if (m.box) {
+                                    measToRender = { ...m, box: { ...m.box, x: m.box.x + dx, y: m.box.y + dy } };
+                                }
+                            }
+                        }
+
+                        return renderMeasurement(measToRender);
+                    })
+                }
 
                 {/* Render active drawing shape */}
                 {isDrawingRef.current && shapeStart && cursor && (
@@ -1488,34 +1538,6 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
                         return renderShape(s);
                     })()
                 )}
-
-                {/* Measurements - Render ONLY selected or 'comment' box if needed? 
-                    Canvas renders unselected measurements.
-                */}
-                {/* Measurements - Render Only Selected or complex types (comment/text/callout) or Out-Of-Bounds in SVG */}
-                {pageMeasurements.filter(m =>
-                    selectedIds.includes(m.id) ||
-                    m.type === "comment" ||
-                    m.type === "text" ||
-                    m.type === "callout" ||
-                    isOutOfBounds(m)
-                ).map(m => {
-                    let measToRender = m;
-                    if (dragDelta.x !== 0 || dragDelta.y !== 0) {
-                        if (selectedIds.includes(m.id)) {
-                            const dx = dragDelta.x;
-                            const dy = dragDelta.y;
-                            const newBox = { ...m.box, x: m.box.x + dx, y: m.box.y + dy };
-                            measToRender = { ...m, box: newBox };
-
-                            if (m.type === 'callout' && m.tip) {
-                                measToRender.tip = { x: m.tip.x + dx, y: m.tip.y + dy };
-                            }
-                            // TODO: Handle other measurement point types if dragging them is supported
-                        }
-                    }
-                    return renderMeasurement(measToRender);
-                })}
 
                 {/* Drawing feedback for measurements */}
                 {isDrawingRef.current && activeTool === "choice" ? null : null}
