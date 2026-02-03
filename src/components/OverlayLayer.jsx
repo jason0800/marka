@@ -617,18 +617,23 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
                     };
                 }
             } else if (activeTool === "callout") {
-                // For a smoother drag, dragging defines the Tip -> Box relationship?
-                // Or dragging defines the Box size? 
-                // Let's say: Drag Start = Tip. Drag End = Center of Box (or closest corner).
-                // Let's assume Drag End = Box Center for simplicity and "feeling".
+                // Drag Start = Tip. Drag End = Connection Point (Knee/Side).
+                // Position Box so Connection Point is on the appropriate side.
                 const w = 150;
                 const h = 50;
+
+                // If dragging right, box is to right of cursor.
+                // If dragging left, box is to left of cursor.
+                const isRight = point.x >= shapeStart.x;
+                const bx = isRight ? point.x : point.x - w;
+                const by = point.y - h / 2;
+
                 newMeas = {
                     id,
                     type: "callout",
                     pageIndex,
                     tip: shapeStart,
-                    box: { x: point.x - w / 2, y: point.y - h / 2, w, h },
+                    box: { x: bx, y: by, w, h },
                     text: "Callout",
                     ...defaultShapeStyle
                 };
@@ -638,7 +643,9 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
                 addMeasurement(newMeas);
                 pushHistory();
                 setActiveTool("select");
-                setEditingId(id); // Auto-edit
+                if (activeTool !== "callout") {
+                    setEditingId(id); // Auto-edit (except callout)
+                }
             }
 
             setIsDrawing(false);
@@ -1076,6 +1083,9 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
                 if (m.type === "callout" && m.tip) {
                     const arrowId = `callout-arrow-${m.id}`;
 
+                    // Determine relative position: Left/Right or Top/Bottom?
+                    // User Request: "leader should also be able to attach to the middle top part and middle bottom part"
+
                     // Box bounds
                     const bx = m.box.x;
                     const by = m.box.y;
@@ -1088,61 +1098,63 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
                     const tx = m.tip.x;
                     const ty = m.tip.y;
 
-                    // Determine relative position: Left/Right or Top/Bottom?
-                    // "leader goes under the callout text box" -> Tip is BELOW box.
-                    // "leader goes above the callout" -> Tip is ABOVE box.
+                    // Calculate relative vector from box center to tip
+                    const dx = tx - boxCx;
+                    const dy = ty - boxCy;
 
-                    // Check vertical overlap
-                    const isVerticallyOutside = ty < by || ty > by + bh;
-                    const isHorizontallyOutside = tx < bx || tx > bx + bw;
+                    // Determine dominant direction
+                    // Normalize by width/height to handle rectangular aspect ratios properly?
+                    // Or just simple angle? Let's treat box as "square" for direction to feel natural.
+                    // If |dy| > |dx|, we are more Top/Bottom than Left/Right.
 
-                    // Heuristics:
-                    // If tip is clearly above or below (beyond some margin?), use vertical leader.
-                    // If tip is to the side, use horizontal leader.
+                    // We can add a bias if the box is very wide, but standard angle check is usually best.
+                    // Actually, for wide boxes, people expect side attachment unless clearly above/below.
+                    // Aspect ratio scaling:
+                    const aspect = bw / bh; // e.g. 150/50 = 3
+                    // If we normalize dy by aspect, we bias towards sides.
+                    // Let's stick to simple "is it more vertical than horizontal?" distance for now,
+                    // or check projection against the diagonal.
 
-                    // Let's use 4 zones based on center angle? Or just simple projection.
-                    // User request: "when the leader goes under the callout text box... first extend straight down... then bend"
+                    // Simple angle check (4 quadrants)
+                    const isVertical = Math.abs(dy) * aspect > Math.abs(dx);
 
                     let startX, startY, kneeX, kneeY;
 
-                    // Simple logic:
-                    // If tip.y > box.bottom -> Bottom placement
-                    // If tip.y < box.top -> Top placement
-                    // Else -> Side placement
-
-                    if (ty > by + bh && !isHorizontallyOutside) {
-                        // BOTTOM (Strict: Must be horizontally within box)
+                    if (isVertical) {
+                        // TOP or BOTTOM
                         startX = boxCx;
-                        startY = by + bh;
-
-                        const ky = (startY + ty) / 2;
-                        kneeX = startX;
-                        kneeY = ky;
-                    } else if (ty < by && !isHorizontallyOutside) {
-                        // TOP (Strict: Must be horizontally within box)
-                        startX = boxCx;
-                        startY = by;
-
-                        const ky = (startY + ty) / 2;
-                        kneeX = startX;
-                        kneeY = ky;
+                        if (dy > 0) { // Bottom
+                            startY = by + bh;
+                            const ky = (startY + ty) / 2;
+                            kneeX = startX;
+                            kneeY = ky;
+                        } else { // Top
+                            startY = by;
+                            const ky = (startY + ty) / 2;
+                            kneeX = startX;
+                            kneeY = ky;
+                        }
                     } else {
-                        // SIDES (Left/Right) - Default for corners too
-                        const isRight = tx > boxCx;
-                        startX = isRight ? bx + bw : bx;
+                        // LEFT or RIGHT
                         startY = boxCy;
-
-                        // Knee is horizontal out
-                        const kx = (startX + tx) / 2;
-                        kneeX = kx;
-                        kneeY = startY;
+                        if (dx > 0) { // Right
+                            startX = bx + bw;
+                            const kx = (startX + tx) / 2;
+                            kneeX = kx;
+                            kneeY = startY;
+                        } else { // Left
+                            startX = bx;
+                            const kx = (startX + tx) / 2;
+                            kneeX = kx;
+                            kneeY = startY;
+                        }
                     }
 
                     // Shorten the last segment for callout
                     // Vector from knee to tip
-                    const dx = tx - kneeX;
-                    const dy = ty - kneeY;
-                    const len = Math.hypot(dx, dy);
+                    const tipDx = tx - kneeX;
+                    const tipDy = ty - kneeY;
+                    const len = Math.hypot(tipDx, tipDy);
                     const rawSw = m.strokeWidth || 2;
                     const sw = rawSw / Math.max(1e-6, viewScale);
                     const offset = 4 * sw; // refX=2, tip=6 => diff=4
@@ -1152,8 +1164,8 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
 
                     if (len > offset) {
                         const t = (len - offset) / len;
-                        drawTx = kneeX + dx * t;
-                        drawTy = kneeY + dy * t;
+                        drawTx = kneeX + tipDx * t;
+                        drawTy = kneeY + tipDy * t;
                     } else {
                         drawTx = kneeX;
                         drawTy = kneeY;
@@ -1404,10 +1416,15 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
                             // Preview Callout
                             const w = 150;
                             const h = 50;
-                            // Box centered on cursor (matches creation logic)
+                            // Box creation logic: Offset from cursor so cursor is the "knee"
+                            // If dragging right (cursor > start), box is to the right of cursor
+                            const isRight = cursor.x >= shapeStart.x;
+                            const bx = isRight ? cursor.x : cursor.x - w;
+                            const by = cursor.y - h / 2;
+
                             const box = {
-                                x: cursor.x - w / 2,
-                                y: cursor.y - h / 2,
+                                x: bx,
+                                y: by,
                                 w,
                                 h
                             };
