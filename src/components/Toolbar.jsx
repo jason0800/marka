@@ -17,12 +17,12 @@ const TOOLS = [
     { id: 'count', icon: Hash, label: 'Count (N)', key: 'n' },
     { type: 'separator' },
     { id: 'rectangle', icon: RectangleHorizontal, label: 'Rectangle (R)', key: 'r' },
-    { id: 'circle', icon: Circle, label: 'Circle (O)', key: 'o' },
-    { id: 'line', icon: Minus, label: 'Line (I)', key: 'i' },
+    { id: 'circle', icon: Circle, label: 'Circle (C)', key: 'c' },
+    { id: 'line', icon: Minus, label: 'Line (L)', key: 'l' },
     { id: 'arrow', icon: ArrowRight, label: 'Arrow (A)', key: 'a' },
     { type: 'separator' },
     { id: 'text', icon: Type, label: 'Text Box (T)', key: 't' },
-    { id: 'callout', icon: CalloutIcon, label: 'Callout (K)', key: 'k' },
+    { id: 'callout', icon: CalloutIcon, label: 'Callout (Q)', key: 'q' },
 ];
 
 const Toolbar = () => {

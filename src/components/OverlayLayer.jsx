@@ -748,11 +748,24 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
             />
         );
 
+        const renderCircleHandle = (x, y, cursorCss, hName) => (
+            <circle
+                key={hName}
+                cx={x}
+                cy={y}
+                r={handleSize / 2}
+                cursor={cursorCss}
+                data-resize-id={s.id}
+                data-resize-handle={hName}
+                {...handleStyle}
+            />
+        );
+
         if (isLine) {
             return (
                 <g>
-                    {renderHandle(s.start.x, s.start.y, "move", "start")}
-                    {renderHandle(s.end.x, s.end.y, "move", "end")}
+                    {renderCircleHandle(s.start.x, s.start.y, "move", "start")}
+                    {renderCircleHandle(s.end.x, s.end.y, "move", "end")}
                 </g>
             );
         }
@@ -817,6 +830,19 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
         if (s.type === "line") {
             return (
                 <g key={s.id}>
+                    {/* fat hit-area */}
+                    <line
+                        x1={s.start.x}
+                        y1={s.start.y}
+                        x2={s.end.x}
+                        y2={s.end.y}
+                        stroke="transparent"
+                        strokeWidth={15 / Math.max(1e-6, viewScale)}
+                        vectorEffect="non-scaling-stroke"
+                        pointerEvents="all"
+                        data-shape-id={s.id}
+                        style={{ cursor: activeTool === "select" ? "move" : "default" }}
+                    />
                     <line x1={s.start.x} y1={s.start.y} x2={s.end.x} y2={s.end.y} {...commonProps} strokeLinecap="round" />
                     {isSelected && renderSelectionFrame(s)}
                 </g>
@@ -827,7 +853,7 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
             return (
                 <g key={s.id} data-shape-id={s.id}>
                     <defs>
-                        <marker id={`arrow-${s.id}-v2`} markerWidth="6" markerHeight="4" refX="2" refY="2" orient="auto">
+                        <marker id={`arrow-${s.id}-v2`} markerWidth="6" markerHeight="4" refX="1" refY="2" orient="auto">
                             <polygon points="0 0, 6 2, 0 4" fill={s.stroke} />
                         </marker>
                     </defs>
@@ -840,6 +866,20 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
                         {...commonProps}
                         markerEnd={`url(#arrow-${s.id}-v2)`}
                         strokeLinecap="butt"
+                    />
+
+                    {/* fat hit-area */}
+                    <line
+                        x1={s.start.x}
+                        y1={s.start.y}
+                        x2={s.end.x}
+                        y2={s.end.y}
+                        stroke="transparent"
+                        strokeWidth={15 / Math.max(1e-6, viewScale)}
+                        vectorEffect="non-scaling-stroke"
+                        pointerEvents="all"
+                        data-shape-id={s.id}
+                        style={{ cursor: activeTool === "select" ? "move" : "default" }}
                     />
 
                     {/* fat hit-area */}
@@ -1087,7 +1127,7 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
                     return (
                         <>
                             <defs>
-                                <marker id={arrowId} markerWidth="6" markerHeight="4" refX="2" refY="2" orient="auto-start-reverse">
+                                <marker id={arrowId} markerWidth="6" markerHeight="4" refX="1" refY="2" orient="auto-start-reverse">
                                     <polygon points="0 0, 6 2, 0 4" fill={m.stroke || "#333"} />
                                 </marker>
                             </defs>
@@ -1136,7 +1176,11 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
                             width={m.box.w}
                             height={m.box.h}
                             className="foreignObject"
-                            style={{ overflow: 'visible', pointerEvents: 'none' }}
+                            style={{
+                                overflow: 'visible',
+                                pointerEvents: 'all',
+                                cursor: activeTool === "select" ? "move" : "default"
+                            }}
                         >
                             {isEditing ? (
                                 <textarea
@@ -1181,7 +1225,7 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
                                         fontFamily: 'sans-serif',
                                         overflow: "visible",
                                         whiteSpace: "pre-wrap",
-                                        cursor: isSelected ? "move" : "pointer",
+                                        cursor: activeTool === "select" ? "move" : "pointer",
                                         pointerEvents: 'auto',
                                         userSelect: 'none',
                                         lineHeight: "1.2"
@@ -1218,7 +1262,7 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
                             <circle
                                 cx={m.tip.x}
                                 cy={m.tip.y}
-                                r={6 / Math.max(1e-6, viewScale)}
+                                r={3.5 / Math.max(1e-6, viewScale)}
                                 fill="#b4e6a0"
                                 stroke="#3a6b24"
                                 strokeWidth={1 / Math.max(1e-6, viewScale)}
@@ -1292,7 +1336,26 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
                 </defs>
 
                 {/* RENDER ONLY SELECTED SHAPES in SVG OR Out-Of-Bounds */}
-                {pageShapes.filter(s => selectedIds.includes(s.id) || isOutOfBounds(s)).map(s => renderShape(s))}
+                {pageShapes.filter(s => selectedIds.includes(s.id) || isOutOfBounds(s)).map(s => {
+                    let shapeToRender = s;
+                    // Apply transient drag delta
+                    if (dragDelta.x !== 0 || dragDelta.y !== 0) {
+                        if (selectedIds.includes(s.id)) {
+                            const dx = dragDelta.x;
+                            const dy = dragDelta.y;
+                            if (s.type === 'line' || s.type === 'arrow') {
+                                shapeToRender = {
+                                    ...s,
+                                    start: { x: s.start.x + dx, y: s.start.y + dy },
+                                    end: { x: s.end.x + dx, y: s.end.y + dy }
+                                };
+                            } else {
+                                shapeToRender = { ...s, x: s.x + dx, y: s.y + dy };
+                            }
+                        }
+                    }
+                    return renderShape(shapeToRender);
+                })}
 
                 {/* Render active drawing shape */}
                 {isDrawingRef.current && shapeStart && cursor && (
