@@ -619,8 +619,8 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
             } else if (activeTool === "callout") {
                 // Drag Start = Tip. Drag End = Connection Point (Knee/Side).
                 // Drag Start = Tip. Drag End = Connection Point (Knee/Side).
-                const w = 150;
-                const h = 50;
+                const w = 125;
+                const h = 25;
                 const dx = point.x - shapeStart.x;
                 const dy = point.y - shapeStart.y;
 
@@ -1435,12 +1435,12 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
 
                         if (activeTool === "callout") {
                             // Preview Callout
-                            const w = 150;
-                            const h = 50;
+                            const w = 125;
+                            const h = 25;
                             const dx = cursor.x - shapeStart.x;
                             const dy = cursor.y - shapeStart.y;
 
-                            const isVertical = Math.abs(dy) > 40;
+                            const isVertical = Math.abs(dy) > 40 && Math.abs(dx) < 40;
                             let bx, by;
 
                             if (isVertical) {
