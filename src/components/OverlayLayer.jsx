@@ -636,30 +636,18 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
                 const dx = point.x - shapeStart.x;
                 const dy = point.y - shapeStart.y;
 
-                // Hybrid Logic:
-                // If sufficient vertical separation (>40px) AND small horizontal separation (<40px),
-                // use standard "Vertical Mode" (Center X).
-                // Otherwise, use "Side Mode" (Offset X).
-                const isVertical = Math.abs(dy) > 40 && Math.abs(dx) < 40;
+                // SMOOTH LOGIC:
+                // Always keep box Centered X on cursor to prevent horizontal jumping.
+                // Just flip Y to keep box away from cursor/leader.
+                const bx = point.x - w / 2;
+                let by;
 
-                let bx, by;
-
-                if (isVertical) {
-                    // Vertical Mode: Center X. Cursor becomes Top/Bottom anchor.
-                    bx = point.x - w / 2;
-                    if (dy > 0) {
-                        // Dragging Down: Cursor is at Top-Center of box
-                        by = point.y;
-                    } else {
-                        // Dragging Up: Cursor is at Bottom-Center of box
-                        by = point.y - h;
-                    }
+                if (dy >= 0) {
+                    // Dragging Down: Box Below Cursor
+                    by = point.y;
                 } else {
-                    // Horizontal Mode: Side Flip Logic.
-                    // Cursor is Side-Center anchor.
-                    const isRight = dx >= 0;
-                    bx = isRight ? point.x : point.x - w;
-                    by = point.y - h / 2;
+                    // Dragging Up: Box Above Cursor
+                    by = point.y - h;
                 }
 
                 newMeas = {
@@ -1490,18 +1478,11 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
                             const dx = cursor.x - shapeStart.x;
                             const dy = cursor.y - shapeStart.y;
 
-                            const isVertical = Math.abs(dy) > 40 && Math.abs(dx) < 40;
-                            let bx, by;
-
-                            if (isVertical) {
-                                bx = cursor.x - w / 2;
-                                if (dy > 0) by = cursor.y;
-                                else by = cursor.y - h;
-                            } else {
-                                const isRight = dx >= 0;
-                                bx = isRight ? cursor.x : cursor.x - w;
-                                by = cursor.y - h / 2;
-                            }
+                            // Smooth Preview Logic (Match Creation)
+                            const bx = cursor.x - w / 2;
+                            let by;
+                            if (dy >= 0) by = cursor.y;
+                            else by = cursor.y - h;
 
                             const box = {
                                 x: bx,
