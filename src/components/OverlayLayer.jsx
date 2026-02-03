@@ -618,15 +618,36 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
                 }
             } else if (activeTool === "callout") {
                 // Drag Start = Tip. Drag End = Connection Point (Knee/Side).
-                // Position Box so Connection Point is on the appropriate side.
+                // Drag Start = Tip. Drag End = Connection Point (Knee/Side).
                 const w = 150;
                 const h = 50;
+                const dx = point.x - shapeStart.x;
+                const dy = point.y - shapeStart.y;
 
-                // If dragging right, box is to right of cursor.
-                // If dragging left, box is to left of cursor.
-                const isRight = point.x >= shapeStart.x;
-                const bx = isRight ? point.x : point.x - w;
-                const by = point.y - h / 2;
+                // Hybrid Logic:
+                // If sufficient vertical separation, standard "Vertical Mode" (Center X).
+                // If mostly horizontal, "Side Mode" (Offset X).
+                const isVertical = Math.abs(dy) > 40;
+
+                let bx, by;
+
+                if (isVertical) {
+                    // Vertical Mode: Center X. Cursor becomes Top/Bottom anchor.
+                    bx = point.x - w / 2;
+                    if (dy > 0) {
+                        // Dragging Down: Cursor is at Top-Center of box
+                        by = point.y;
+                    } else {
+                        // Dragging Up: Cursor is at Bottom-Center of box
+                        by = point.y - h;
+                    }
+                } else {
+                    // Horizontal Mode: Side Flip Logic.
+                    // Cursor is Side-Center anchor.
+                    const isRight = dx >= 0;
+                    bx = isRight ? point.x : point.x - w;
+                    by = point.y - h / 2;
+                }
 
                 newMeas = {
                     id,
@@ -1416,11 +1437,21 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
                             // Preview Callout
                             const w = 150;
                             const h = 50;
-                            // Box creation logic: Offset from cursor so cursor is the "knee"
-                            // If dragging right (cursor > start), box is to the right of cursor
-                            const isRight = cursor.x >= shapeStart.x;
-                            const bx = isRight ? cursor.x : cursor.x - w;
-                            const by = cursor.y - h / 2;
+                            const dx = cursor.x - shapeStart.x;
+                            const dy = cursor.y - shapeStart.y;
+
+                            const isVertical = Math.abs(dy) > 40;
+                            let bx, by;
+
+                            if (isVertical) {
+                                bx = cursor.x - w / 2;
+                                if (dy > 0) by = cursor.y;
+                                else by = cursor.y - h;
+                            } else {
+                                const isRight = dx >= 0;
+                                bx = isRight ? cursor.x : cursor.x - w;
+                                by = cursor.y - h / 2;
+                            }
 
                             const box = {
                                 x: bx,
