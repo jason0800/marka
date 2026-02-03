@@ -185,9 +185,33 @@ const OverlayCanvasLayer = ({
                     const ry = shape.height / 2;
                     ctx.ellipse(cx, cy, rx, ry, 0, 0, 2 * Math.PI);
                 }
-            } else if (shape.type === "line" || shape.type === "arrow") {
+            } else if (shape.type === "line") {
                 ctx.moveTo(shape.start.x, shape.start.y);
                 ctx.lineTo(shape.end.x, shape.end.y);
+            } else if (shape.type === "arrow") {
+                // Shorten line to stop inside arrow head (Tip - 4units)
+                // Tip is shape.end
+                const dx = shape.end.x - shape.start.x;
+                const dy = shape.end.y - shape.start.y;
+                const len = Math.hypot(dx, dy);
+                const sw = ctx.lineWidth;
+                // SVG logic: refX=2, Tip=6. Diff=4.
+                const offset = 4 * sw;
+
+                let ex = shape.end.x;
+                let ey = shape.end.y;
+
+                if (len > offset) {
+                    const t = (len - offset) / len;
+                    ex = shape.start.x + dx * t;
+                    ey = shape.start.y + dy * t;
+                } else {
+                    ex = shape.start.x;
+                    ey = shape.start.y;
+                }
+
+                ctx.moveTo(shape.start.x, shape.start.y);
+                ctx.lineTo(ex, ey);
             }
 
             if (hasFill) {
@@ -386,17 +410,18 @@ function drawArrowHead(ctx, shape, color) {
     const cos = Math.cos(angle);
     const sin = Math.sin(angle);
 
-    // SVG Marker Geometry:
-    // Viewport: 0,0 to 6,4 (Wait, polygon 0,0 6,2 0,4 means height 4)
-    // RefX=2, RefY=2. 
-    // Tip (6,2) is +4 units from Anchor (2,2).
-    // Base (0,0 to 0,4) is -2 units from Anchor (2,2).
-    // Half Width is 2 units.
+    // SVG Marker Geometry (0,0, 6,2, 0,4)
+    // Tip at (6,2)
+    // Base at (0x)
+    // Total Length = 6 units
 
-    // Scale all by strokeWidth (sw)
-    const tipOffset = 4 * sw;
-    const baseOffset = -2 * sw;
-    const halfWidth = 2 * sw;
+    // We want Tip to be at shape.end
+    // So TipOffset = 0
+    // BaseOffset = -6 * sw
+
+    const tipOffset = 0;
+    const baseOffset = -6 * sw;
+    const halfWidth = 2 * sw; // Width 4 total
 
     // Tip Point
     const tX = shape.end.x + tipOffset * cos;

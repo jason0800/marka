@@ -853,20 +853,36 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
             return (
                 <g key={s.id} data-shape-id={s.id}>
                     <defs>
-                        <marker id={`arrow-${s.id}-v2`} markerWidth="6" markerHeight="4" refX="1" refY="2" orient="auto">
+                        <marker id={`arrow-${s.id}-v2`} markerWidth="6" markerHeight="4" refX="2" refY="2" orient="auto">
                             <polygon points="0 0, 6 2, 0 4" fill={s.stroke} />
                         </marker>
                     </defs>
 
-                    <line
-                        x1={s.start.x}
-                        y1={s.start.y}
-                        x2={s.end.x}
-                        y2={s.end.y}
-                        {...commonProps}
-                        markerEnd={`url(#arrow-${s.id}-v2)`}
-                        strokeLinecap="butt"
-                    />
+                    {(() => {
+                        // Shorten line so visual tip matches s.end
+                        const rawSw = s.strokeWidth || 2;
+                        const sw = rawSw / Math.max(1e-6, viewScale);
+                        const dist = Math.hypot(s.end.x - s.start.x, s.end.y - s.start.y);
+                        // refX=2, tip=6. Offset needed = (6-2)*sw = 4*sw.
+                        // Ensure we don't shorten past start (dist > offset)
+                        const offset = 4 * sw;
+                        const t = dist > offset ? (dist - offset) / dist : 0;
+
+                        const endX = s.start.x + (s.end.x - s.start.x) * t;
+                        const endY = s.start.y + (s.end.y - s.start.y) * t;
+
+                        return (
+                            <line
+                                x1={s.start.x}
+                                y1={s.start.y}
+                                x2={endX}
+                                y2={endY}
+                                {...commonProps}
+                                markerEnd={`url(#arrow-${s.id}-v2)`}
+                                strokeLinecap="butt"
+                            />
+                        );
+                    })()}
 
                     {/* fat hit-area */}
                     <line
@@ -1122,12 +1138,33 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
                         kneeY = startY;
                     }
 
-                    const points = `${startX},${startY} ${kneeX},${kneeY} ${tx},${ty}`;
+                    // Shorten the last segment for callout
+                    // Vector from knee to tip
+                    const dx = tx - kneeX;
+                    const dy = ty - kneeY;
+                    const len = Math.hypot(dx, dy);
+                    const rawSw = m.strokeWidth || 2;
+                    const sw = rawSw / Math.max(1e-6, viewScale);
+                    const offset = 4 * sw; // refX=2, tip=6 => diff=4
+
+                    let drawTx = tx;
+                    let drawTy = ty;
+
+                    if (len > offset) {
+                        const t = (len - offset) / len;
+                        drawTx = kneeX + dx * t;
+                        drawTy = kneeY + dy * t;
+                    } else {
+                        drawTx = kneeX;
+                        drawTy = kneeY;
+                    }
+
+                    const points = `${startX},${startY} ${kneeX},${kneeY} ${drawTx},${drawTy}`;
 
                     return (
                         <>
                             <defs>
-                                <marker id={arrowId} markerWidth="6" markerHeight="4" refX="1" refY="2" orient="auto-start-reverse">
+                                <marker id={arrowId} markerWidth="6" markerHeight="4" refX="2" refY="2" orient="auto-start-reverse">
                                     <polygon points="0 0, 6 2, 0 4" fill={m.stroke || "#333"} />
                                 </marker>
                             </defs>
@@ -1268,7 +1305,7 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
                                 strokeWidth={1 / Math.max(1e-6, viewScale)}
                                 data-resize-id={m.id}
                                 data-resize-handle="callout-tip"
-                                cursor="crosshair"
+                                cursor="move"
                             />
                         )
                     }
