@@ -22,7 +22,20 @@ const getCalloutKnee = (box, tip, knee = null) => {
     const dx = tx - boxCx;
     const dy = ty - boxCy;
     const aspect = bw / bh;
-    const isVertical = Math.abs(dy) * aspect > Math.abs(dx);
+
+    // Bias towards horizontal attachment (side)
+    // "verticalBias" factor: > 1 means we need to be MORE vertical to switch to top/bottom
+    // We want to drag up/down more before snapping to vertical.
+    // Condition for vertical was: |dy|*aspect > |dx|
+    // New condition: |dy| > |dx| * (aspect / bias) ? No.
+    // Let's explicitly define a threshold multiplier for the aspect check.
+    // If we make aspect "smaller", vertical becomes harder.
+    // multiplier = 1.3 (30% bias to horizontal)
+    const hBias = 1.3;
+
+    // Original: abs(dy) * aspect > abs(dx)
+    // With bias: abs(dy) * (aspect / hBias) > abs(dx)  => vertical is "harder"
+    const isVertical = Math.abs(dy) * aspect > Math.abs(dx) * hBias;
 
     let kx, ky;
     if (isVertical) {
@@ -39,7 +52,7 @@ const getCalloutKnee = (box, tip, knee = null) => {
 
 // Helper: Get connection points for callout line
 // Returns { start: {x,y}, knee: {x,y}, end: {x,y} }
-const getCalloutPoints = (box, tip, knee) => {
+const getCalloutPoints = (box, tip, knee, rotation = 0) => {
     const bx = box.x;
     const by = box.y;
     const bw = box.w;
@@ -53,37 +66,62 @@ const getCalloutPoints = (box, tip, knee) => {
     const kx = k.x;
     const ky = k.y;
 
-    // Calculate Start (Intersection on box)
-    // Ray from BoxCenter -> Knee
-    const kvx = kx - boxCx;
-    const kvy = ky - boxCy;
+    // Rotate knee BACK to local aligned space to find intersection
+    const rotRad = (rotation * Math.PI) / 180;
+    const cos = Math.cos(-rotRad);
+    const sin = Math.sin(-rotRad);
 
-    let startX, startY;
+    const kvxGlobal = kx - boxCx;
+    const kvyGlobal = ky - boxCy;
 
-    // Simple Intersection Logic
-    if (Math.abs(kx - boxCx) < 1) { // Vertical
-        startX = boxCx;
-        startY = kvy > 0 ? by + bh : by;
-    } else if (Math.abs(ky - boxCy) < 1) { // Horizontal
-        startY = boxCy;
-        startX = kvx > 0 ? bx + bw : bx;
+    const localKneeX = boxCx + (kvxGlobal * cos - kvyGlobal * sin);
+    const localKneeY = boxCy + (kvxGlobal * sin + kvyGlobal * cos);
+
+    // Now calculate local intersection on AABB
+    const lkvx = localKneeX - boxCx;
+    const lkvy = localKneeY - boxCy;
+
+    let localStartX, localStartY;
+
+    // Simple Intersection Logic (Local)
+    if (Math.abs(localKneeX - boxCx) < 1) { // Vertical
+        localStartX = boxCx;
+        localStartY = lkvy > 0 ? by + bh : by;
+    } else if (Math.abs(localKneeY - boxCy) < 1) { // Horizontal
+        localStartY = boxCy;
+        localStartX = lkvx > 0 ? bx + bw : bx;
     } else {
         // Off-axis: project to box bounds
         const boxHalfW = bw / 2;
         const boxHalfH = bh / 2;
-        const scaleX = Math.abs(kvx) > 1e-6 ? boxHalfW / Math.abs(kvx) : 99999;
-        const scaleY = Math.abs(kvy) > 1e-6 ? boxHalfH / Math.abs(kvy) : 99999;
+        const scaleX = Math.abs(lkvx) > 1e-6 ? boxHalfW / Math.abs(lkvx) : 99999;
+        const scaleY = Math.abs(lkvy) > 1e-6 ? boxHalfH / Math.abs(lkvy) : 99999;
         const s = Math.min(scaleX, scaleY);
-        startX = boxCx + kvx * s;
-        startY = boxCy + kvy * s;
+        localStartX = boxCx + lkvx * s;
+        localStartY = boxCy + lkvy * s;
     }
 
+    // Determine final knee in Local Space? 
+    // Nope, Knee is GLOBAL. But Start is on the box edge.
+    // We found Start in LOCAL space. Now rotate Start back to GLOBAL.
+
+    const posCos = Math.cos(rotRad);
+    const posSin = Math.sin(rotRad);
+
+    const slvx = localStartX - boxCx;
+    const slvy = localStartY - boxCy;
+
+    const globalStartX = boxCx + (slvx * posCos - slvy * posSin);
+    const globalStartY = boxCy + (slvx * posSin + slvy * posCos);
+
     return {
-        start: { x: startX, y: startY },
+        start: { x: globalStartX, y: globalStartY },
         knee: { x: kx, y: ky },
         end: { x: tx, y: ty }
     };
 };
+
+
 
 const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0, rotation = 0 }) => {
     const {
@@ -869,8 +907,8 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
         if (isLine) {
             return (
                 <g>
-                    {renderCircleHandle(s.start.x, s.start.y, "move", "start")}
-                    {renderCircleHandle(s.end.x, s.end.y, "move", "end")}
+                    {renderCircleHandle(s.start.x, s.start.y, "default", "start")}
+                    {renderCircleHandle(s.end.x, s.end.y, "default", "end")}
                 </g>
             );
         }
@@ -917,6 +955,66 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
         );
     };
 
+    const renderShapeHitTarget = (s) => {
+        // selected shapes already render in SVG (with real geometry + handles)
+        if (selectedIds.includes(s.id)) return null;
+
+        const cursorStyle = { cursor: "move" };
+        const sw = 15 / Math.max(1e-6, viewScale);
+
+        if (s.type === "line" || s.type === "arrow") {
+            return (
+                <line
+                    key={`hit-${s.id}`}
+                    data-shape-id={s.id}
+                    x1={s.start.x}
+                    y1={s.start.y}
+                    x2={s.end.x}
+                    y2={s.end.y}
+                    stroke="transparent"
+                    strokeWidth={sw}
+                    vectorEffect="non-scaling-stroke"
+                    pointerEvents="all"
+                    style={cursorStyle}
+                />
+            );
+        }
+
+        const rot = s.rotation || 0;
+
+        return (
+            <g
+                key={`hit-${s.id}`}
+                data-shape-id={s.id}
+                pointerEvents="all"
+                style={cursorStyle}
+                transform={`translate(${s.x}, ${s.y}) rotate(${rot}, ${s.width / 2}, ${s.height / 2})`}
+            >
+                {s.type === "rectangle" ? (
+                    <rect
+                        x={0}
+                        y={0}
+                        width={s.width}
+                        height={s.height}
+                        fill="transparent"
+                        stroke="transparent"
+                        pointerEvents="all"
+                    />
+                ) : (
+                    <ellipse
+                        cx={s.width / 2}
+                        cy={s.height / 2}
+                        rx={s.width / 2}
+                        ry={s.height / 2}
+                        fill="transparent"
+                        stroke="transparent"
+                        pointerEvents="all"
+                    />
+                )}
+            </g>
+        );
+    };
+
     const renderShape = (s) => {
         const isSelected = selectedIds.includes(s.id);
         const commonProps = {
@@ -926,8 +1024,10 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
             strokeDasharray: s.strokeDasharray === 'none' ? undefined : s.strokeDasharray,
             fill: s.fill,
             opacity: s.opacity,
-            cursor: activeTool === "select" ? "move" : "default",
-            pointerEvents: "all",
+            style: {
+                cursor: "move",
+                pointerEvents: "all"
+            },
             strokeLinecap: "round",
             strokeLinejoin: "round",
         };
@@ -946,7 +1046,7 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
                         vectorEffect="non-scaling-stroke"
                         pointerEvents="all"
                         data-shape-id={s.id}
-                        style={{ cursor: activeTool === "select" ? "move" : "default" }}
+                        style={{ cursor: "move", pointerEvents: "all" }}
                     />
                     <line x1={s.start.x} y1={s.start.y} x2={s.end.x} y2={s.end.y} {...commonProps} strokeLinecap="round" />
                     {isSelected && renderSelectionFrame(s)}
@@ -983,6 +1083,7 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
                                 x2={endX}
                                 y2={endY}
                                 {...commonProps}
+                                cursor="move"
                                 markerEnd={`url(#arrow-${s.id}-v2)`}
                                 strokeLinecap="butt"
                             />
@@ -1000,7 +1101,7 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
                         vectorEffect="non-scaling-stroke"
                         pointerEvents="all"
                         data-shape-id={s.id}
-                        style={{ cursor: activeTool === "select" ? "move" : "default" }}
+                        style={{ cursor: "move", pointerEvents: "all" }}
                     />
 
                     {isSelected && renderSelectionFrame(s)}
@@ -1167,7 +1268,7 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
                 if (m.type === "callout" && m.tip) {
                     const arrowId = `callout-arrow-${m.id}`;
 
-                    const { start, knee, end } = getCalloutPoints(m.box, m.tip, m.knee);
+                    const { start, knee, end } = getCalloutPoints(m.box, m.tip, m.knee, m.rotation || 0);
 
                     // Shorten the last segment for callout (knee -> tip)
                     // Vector from knee to tip
@@ -1209,6 +1310,16 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
                                 strokeLinecap="butt"
                                 strokeLinejoin="round"
                             />
+                            {/* Hit Target for Arrow Tip Marker */}
+                            <circle
+                                cx={drawTx}
+                                cy={drawTy}
+                                r={7.7 / Math.max(1e-6, viewScale)}
+                                fill="transparent"
+                                stroke="none"
+                                data-meas-id={m.id}
+                                style={{ pointerEvents: 'all', cursor: 'move' }}
+                            />
                         </>
                     );
                 }
@@ -1223,7 +1334,7 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
             return (
                 <g key={m.id} {...measCommon}>
                     {renderConnector()}
-                    <g>
+                    <g transform={m.rotation ? `rotate(${m.rotation}, ${m.box.x + m.box.w / 2}, ${m.box.y + m.box.h / 2})` : undefined}>
                         {/* Background Rect for Styling */}
                         <rect
                             x={m.box.x}
@@ -1339,7 +1450,7 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
                                         strokeWidth={1 / Math.max(1e-6, viewScale)}
                                         data-resize-id={m.id}
                                         data-resize-handle="callout-tip"
-                                        cursor="move"
+                                        cursor="default"
                                     />
                                 )}
 
@@ -1364,7 +1475,7 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
                                             strokeWidth={1 / Math.max(1e-6, viewScale)}
                                             data-resize-id={m.id}
                                             data-resize-handle="callout-knee"
-                                            cursor="move"
+                                            cursor="default"
                                         />
                                     );
                                 })()}
@@ -1399,37 +1510,38 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
     };
 
     return (
-        <div style={{ position: "absolute", top: 0, left: 0, width, height, pointerEvents: 'none' }}>
-            {/* 1. Canvas Layer (Static shapes) */}
-            <OverlayCanvasLayer
-                width={width}
-                height={height}
-                viewScale={viewScale}
-                renderScale={renderScale}
-                // If dragging, hide selected items from Canvas so they don't double-render
-                shapes={isDraggingItems ? pageShapes.filter(s => !selectedIds.includes(s.id)) : pageShapes}
-                measurements={isDraggingItems ? pageMeasurements.filter(m => !selectedIds.includes(m.id)) : pageMeasurements}
-                selectedIds={selectedIds}
-                pageIndex={pageIndex}
-                pageUnits={pageUnits}
-                calibrationScales={calibrationScales}
-            />
+        <div style={{ position: "absolute", top: 0, left: 0, width, height }}>
+            {/* 1) Canvas Layer should not intercept input */}
+            <div style={{ pointerEvents: "none" }}>
+                <OverlayCanvasLayer
+                    width={width}
+                    height={height}
+                    viewScale={viewScale}
+                    renderScale={renderScale}
+                    shapes={isDraggingItems ? pageShapes.filter(s => !selectedIds.includes(s.id)) : pageShapes}
+                    measurements={isDraggingItems ? pageMeasurements.filter(m => !selectedIds.includes(m.id)) : pageMeasurements}
+                    selectedIds={selectedIds}
+                    pageIndex={pageIndex}
+                    pageUnits={pageUnits}
+                    calibrationScales={calibrationScales}
+                />
+            </div>
 
-            {/* 2. SVG Layer (Interactive/Selected shapes + Tools) */}
+            {/* 2) SVG Layer should receive input */}
             <svg
                 ref={svgRef}
                 className="absolute top-0 left-0 w-full h-full select-none z-10"
                 width={width}
                 height={height}
                 viewBox={viewBox}
-                style={{ position: "absolute", top: 0, left: 0, pointerEvents: "all", overflow: "visible" }} // SVG must catch clicks for handles
+                style={{ position: "absolute", top: 0, left: 0, pointerEvents: "all", overflow: "visible" }}
                 onPointerDown={handlePointerDown}
                 onPointerMove={handlePointerMove}
                 onPointerUp={handlePointerUp}
                 onDoubleClick={() => finishDrawing()}
             >
-                <defs>
-                </defs>
+                {/* 1️⃣ INVISIBLE SHAPE HIT TARGETS */}
+                {activeTool === "select" && pageShapes.map(renderShapeHitTarget)}
 
                 {/* Selected / OOB Shapes */}
                 {pageShapes
