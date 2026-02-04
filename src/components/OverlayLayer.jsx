@@ -28,7 +28,7 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
 
     const svgRef = useRef(null);
 
-    // ---- Page meta (PDF points) ----
+    // Page meta (PDF points)
     const pageIndex = page.pageNumber;
     const calibrationScale = calibrationScales[pageIndex] || 1.0; // (pdfPoints per unit) OR (px per unit) - whatever you defined
     const unit = pageUnits[pageIndex] || "px";
@@ -40,7 +40,7 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
         [unscaledViewport.width, unscaledViewport.height]
     );
 
-    // ---- Helpers: unit conversion (assumes calibrationScale is "pdfPoints per unit") ----
+    // Helpers: unit conversion
     const toUnits = useCallback(
         (pdfPoints) => pdfPoints / Math.max(1e-9, calibrationScale),
         [calibrationScale]
@@ -50,13 +50,13 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
         [calibrationScale]
     );
 
-    // ---- Visual sizing that stays constant on screen ----
+    // Visual sizing (constant on screen)
     const nonScalingStroke = useMemo(() => 2 / Math.max(1e-6, viewScale), [viewScale]);
     const handleSize = useMemo(() => 8 / Math.max(1e-6, viewScale), [viewScale]);
     const handleHalf = handleSize / 2;
     const rotOffset = useMemo(() => 20 / Math.max(1e-6, viewScale), [viewScale]);
 
-    // ---- Interaction state ----
+    // Interaction state
     const [isDrawing, setIsDrawingState] = useState(false);
     const [dragDelta, setDragDelta] = useState({ x: 0, y: 0 });
     // Use a ref to track drawing state synchronously to prevent race conditions/double-fires
@@ -91,7 +91,7 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
         [shapes, pageIndex]
     );
 
-    // ---- Coordinate mapping: Screen -> SVG viewBox coords (PDF points) ----
+    // Coordinate mapping: Screen -> SVG viewBox coords (PDF points)
     const getPagePoint = useCallback((e) => {
         const svg = svgRef.current;
         if (!svg) return null;
@@ -169,7 +169,7 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
         return () => window.removeEventListener("keydown", onKeyDown);
     }, [editingId, finishDrawing, selectedIds, pageShapes, pageMeasurements, deleteShape, deleteMeasurement, setSelectedIds, pushHistory, undo, redo, setIsDrawing]);
 
-    // ---- Pointer handlers (was Mouse) ----
+    // Pointer handlers
     const handlePointerDown = (e) => {
         // Left click only
         if (e.button !== 0) {
@@ -349,7 +349,7 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
 
         setCursor({ x: point.x, y: point.y });
 
-        // ---- resizing ----
+        // Resizing
         if (resizingState) {
             const { id, handle, startShape, startPoint } = resizingState;
             const dx = point.x - startPoint.x;
@@ -462,7 +462,7 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
             return;
         }
 
-        // ---- dragging selected items ----
+        // Dragging selected items
         if (activeTool === "select" && isDraggingItems && dragStart && selectedIds.length > 0) {
             const dx = point.x - dragStart.x;
             const dy = point.y - dragStart.y;
@@ -630,7 +630,6 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
                 }
             } else if (activeTool === "callout") {
                 // Drag Start = Tip. Drag End = Connection Point (Knee/Side).
-                // Drag Start = Tip. Drag End = Connection Point (Knee/Side).
                 const w = 125;
                 const h = 25;
                 const dx = point.x - shapeStart.x;
@@ -640,15 +639,7 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
                 // Always keep box Centered X on cursor to prevent horizontal jumping.
                 // Just flip Y to keep box away from cursor/leader.
                 const bx = point.x - w / 2;
-                let by;
-
-                if (dy >= 0) {
-                    // Dragging Down: Box Below Cursor
-                    by = point.y;
-                } else {
-                    // Dragging Up: Box Above Cursor
-                    by = point.y - h;
-                }
+                const by = point.y - h / 2;
 
                 newMeas = {
                     id,
@@ -676,62 +667,6 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
             return;
         }
 
-        // finalize text/callout
-        if (["text", "callout"].includes(activeTool) && isDrawingRef.current && shapeStart && point) {
-            const id = crypto.randomUUID();
-            let newMeas = null;
-
-            if (activeTool === "text") {
-                const x = Math.min(shapeStart.x, point.x);
-                const y = Math.min(shapeStart.y, point.y);
-                const w = Math.abs(point.x - shapeStart.x);
-                const h = Math.abs(point.y - shapeStart.y);
-
-                // If distinct box dragged
-                if (w > 10 && h > 10) {
-                    newMeas = {
-                        id,
-                        type: "text",
-                        pageIndex,
-                        box: { x, y, w, h },
-                        text: "Text",
-                        ...defaultShapeStyle
-                    };
-                } else {
-                    // Default box click
-                    newMeas = {
-                        id,
-                        type: "text",
-                        pageIndex,
-                        box: { x: point.x, y: point.y, w: 200, h: 50 },
-                        text: "Text",
-                        ...defaultShapeStyle
-                    };
-                }
-            } else if (activeTool === "callout") {
-                newMeas = {
-                    id,
-                    type: "callout",
-                    pageIndex,
-                    tip: shapeStart,
-                    box: { x: point.x, y: point.y - 25, w: 150, h: 50 }, // Center-ish relative to drag end? Or treat drag end as box position.
-                    text: "Callout",
-                    ...defaultShapeStyle
-                };
-            }
-
-            if (newMeas) {
-                addMeasurement(newMeas);
-                pushHistory();
-                setActiveTool("select");
-                setEditingId(id); // Auto-edit
-            }
-
-            setIsDrawing(false);
-            setShapeStart(null);
-            // setCursor(null) // handled by mousemove?
-            return;
-        }
 
         // finalize comment (tip -> release defines box)
         if (activeTool === "comment" && isDrawingRef.current && drawingPoints.length > 0 && point) {
@@ -752,7 +687,7 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
         }
     };
 
-    // ---- rendering helpers ----
+    // Rendering helpers
     const renderSelectionFrame = (s) => {
         const isLine = s.type === "line" || s.type === "arrow";
 
@@ -912,20 +847,6 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
                             />
                         );
                     })()}
-
-                    {/* fat hit-area */}
-                    <line
-                        x1={s.start.x}
-                        y1={s.start.y}
-                        x2={s.end.x}
-                        y2={s.end.y}
-                        stroke="transparent"
-                        strokeWidth={15 / Math.max(1e-6, viewScale)}
-                        vectorEffect="non-scaling-stroke"
-                        pointerEvents="all"
-                        data-shape-id={s.id}
-                        style={{ cursor: activeTool === "select" ? "move" : "default" }}
-                    />
 
                     {/* fat hit-area */}
                     <line
@@ -1106,7 +1027,6 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
                     const arrowId = `callout-arrow-${m.id}`;
 
                     // Determine relative position: Left/Right or Top/Bottom?
-                    // User Request: "leader should also be able to attach to the middle top part and middle bottom part"
 
                     // Box bounds
                     const bx = m.box.x;
@@ -1401,10 +1321,6 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
                 onDoubleClick={() => finishDrawing()}
             >
                 <defs>
-                    {/* Markers could be large if we render all of them? No, define one generic? 
-                             Current code defines markers per-ID. 
-                             If shapes are on Canvas, we don't need markers here unless they are selected.
-                             We only render selected shapes here. */}
                 </defs>
 
                 {/* Selected / OOB Shapes */}
@@ -1480,9 +1396,7 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
 
                             // Smooth Preview Logic (Match Creation)
                             const bx = cursor.x - w / 2;
-                            let by;
-                            if (dy >= 0) by = cursor.y;
-                            else by = cursor.y - h;
+                            const by = cursor.y - h / 2;
 
                             const box = {
                                 x: bx,
