@@ -4,6 +4,87 @@ import { calculateDistance, calculatePolygonArea } from "../geometry/transforms"
 import { findShapeAtPoint, findItemAtPoint } from "../geometry/hitTest";
 import OverlayCanvasLayer from "./OverlayCanvasLayer";
 
+// Helper: Calculate knee position from standard rules
+// Returns { x, y }
+const getCalloutKnee = (box, tip, knee = null) => {
+    if (knee) return knee;
+
+    // Auto Logic matches render
+    const bx = box.x;
+    const by = box.y;
+    const bw = box.w;
+    const bh = box.h;
+    const boxCx = bx + bw / 2;
+    const boxCy = by + bh / 2;
+    const tx = tip ? tip.x : 0;
+    const ty = tip ? tip.y : 0;
+
+    const dx = tx - boxCx;
+    const dy = ty - boxCy;
+    const aspect = bw / bh;
+    const isVertical = Math.abs(dy) * aspect > Math.abs(dx);
+
+    let kx, ky;
+    if (isVertical) {
+        kx = boxCx;
+        const sy = dy > 0 ? by + bh : by;
+        ky = (sy + ty) / 2;
+    } else {
+        ky = boxCy;
+        const sx = dx > 0 ? bx + bw : bx;
+        kx = (sx + tx) / 2;
+    }
+    return { x: kx, y: ky };
+};
+
+// Helper: Get connection points for callout line
+// Returns { start: {x,y}, knee: {x,y}, end: {x,y} }
+const getCalloutPoints = (box, tip, knee) => {
+    const bx = box.x;
+    const by = box.y;
+    const bw = box.w;
+    const bh = box.h;
+    const boxCx = bx + bw / 2;
+    const boxCy = by + bh / 2;
+    const tx = tip ? tip.x : 0;
+    const ty = tip ? tip.y : 0;
+
+    const k = getCalloutKnee(box, tip, knee);
+    const kx = k.x;
+    const ky = k.y;
+
+    // Calculate Start (Intersection on box)
+    // Ray from BoxCenter -> Knee
+    const kvx = kx - boxCx;
+    const kvy = ky - boxCy;
+
+    let startX, startY;
+
+    // Simple Intersection Logic
+    if (Math.abs(kx - boxCx) < 1) { // Vertical
+        startX = boxCx;
+        startY = kvy > 0 ? by + bh : by;
+    } else if (Math.abs(ky - boxCy) < 1) { // Horizontal
+        startY = boxCy;
+        startX = kvx > 0 ? bx + bw : bx;
+    } else {
+        // Off-axis: project to box bounds
+        const boxHalfW = bw / 2;
+        const boxHalfH = bh / 2;
+        const scaleX = Math.abs(kvx) > 1e-6 ? boxHalfW / Math.abs(kvx) : 99999;
+        const scaleY = Math.abs(kvy) > 1e-6 ? boxHalfH / Math.abs(kvy) : 99999;
+        const s = Math.min(scaleX, scaleY);
+        startX = boxCx + kvx * s;
+        startY = boxCy + kvy * s;
+    }
+
+    return {
+        start: { x: startX, y: startY },
+        knee: { x: kx, y: ky },
+        end: { x: tx, y: ty }
+    };
+};
+
 const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0, rotation = 0 }) => {
     const {
         activeTool,
@@ -374,14 +455,64 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
             // Callout tip
             if (handle === 'callout-tip') {
                 // Just move the tip
-                // For callout, startShape is the measurement
-                // We stored it as normalized shape, but for tip we need original fields or jus update directly
-                // Actually startShape has 'tip' if we copied all props.
                 const newTip = {
                     x: startShape.tip.x + dx,
                     y: startShape.tip.y + dy
                 };
                 updateMeasurement(id, { tip: newTip });
+                return;
+            }
+
+            if (handle === 'callout-knee') {
+                // Moving the "knee" (bend point)
+                // We drag the knee freely but "snap" to either horizontal or vertical alignment relative to the box
+                // depending on where the user drags it.
+                // Or simpler: The user drags the knee point.
+                // We constrain the knee to be EITHER:
+                // 1) Vertical line from box key point (top/bottom center) -> knee -> tip
+                // 2) Horizontal line from box key point (left/right center) -> knee -> tip
+
+                // Let's implement the logic:
+                // Calculate current mouse pos vs box center
+                const cx = startShape.box.x + startShape.box.w / 2;
+                const cy = startShape.box.y + startShape.box.h / 2;
+                const aspect = startShape.box.w / startShape.box.h;
+
+                // Current vector from center
+                // Use point (current cursor) not startPoint+delta for absolute position control logic
+                const px = point.x;
+                const py = point.y;
+
+                const boxDx = px - cx;
+                const boxDy = py - cy;
+
+                // Determine dominant axis for "attachment"
+                // If dy is large -> Top/Bottom attachment -> Knee X is constrained to Box Center X
+                // If dx is large -> Left/Right attachment -> Knee Y is constrained to Box Center Y
+
+                const isVertical = Math.abs(boxDy) * aspect > Math.abs(boxDx);
+
+                let newKnee = { x: px, y: py };
+
+                if (isVertical) {
+                    // Vertical Mode: Knee is somewhere above/below. 
+                    // Constraint: Knee X = Box Center X (approx, or snapped).
+                    // But wait, the previous logic calculated Knee as (StartX, MidY) or (MidX, StartY).
+                    // If we allow "moving" the knee, we are effectively setting the "stub length".
+                    // Vertical: Knee X is fixed to Center X. Knee Y is standard valid, but user drags it?
+                    // Actually, for a standard orthogonal connector:
+                    // If attached Top/Bottom: Line goes BoxCenter -> (BoxCenter, KneeY) -> Tip.
+                    // So Knee X MUST be Box Center X. Knee Y is what the user controls (the height of the stub).
+                    newKnee.x = cx;
+                    newKnee.y = py;
+                } else {
+                    // Horizontal Mode: Line goes BoxCenter -> (KneeX, BoxCenter) -> Tip.
+                    // Knee Y MUST be Box Center Y. Knee X is what user controls (width of stub).
+                    newKnee.x = px;
+                    newKnee.y = cy;
+                }
+
+                updateMeasurement(id, { knee: newKnee });
                 return;
             }
 
@@ -548,7 +679,17 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
                             if (meas.type === 'callout') {
                                 // Only move the BOX. Tip stays.
                                 const newBox = { ...meas.box, x: meas.box.x + dx, y: meas.box.y + dy };
-                                updateMeasurement(id, { box: newBox });
+                                const changes = { box: newBox };
+
+                                // User: "knee should remain the same length away from the text box"
+                                // Crystallize Knee if not present, then move it.
+                                const currentKnee = meas.knee || getCalloutKnee(meas.box, meas.tip, null);
+                                changes.knee = {
+                                    x: currentKnee.x + dx,
+                                    y: currentKnee.y + dy
+                                };
+
+                                updateMeasurement(id, changes);
                             } else {
                                 // Other measurements (text, etc) - move whole thing or box
                                 const newBox = { ...meas.box, x: meas.box.x + dx, y: meas.box.y + dy };
@@ -1026,94 +1167,30 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
                 if (m.type === "callout" && m.tip) {
                     const arrowId = `callout-arrow-${m.id}`;
 
-                    // Determine relative position: Left/Right or Top/Bottom?
+                    const { start, knee, end } = getCalloutPoints(m.box, m.tip, m.knee);
 
-                    // Box bounds
-                    const bx = m.box.x;
-                    const by = m.box.y;
-                    const bw = m.box.w;
-                    const bh = m.box.h;
-                    const boxCx = bx + bw / 2;
-                    const boxCy = by + bh / 2;
-
-                    // Tip point
-                    const tx = m.tip.x;
-                    const ty = m.tip.y;
-
-                    // Calculate relative vector from box center to tip
-                    const dx = tx - boxCx;
-                    const dy = ty - boxCy;
-
-                    // Determine dominant direction
-                    // Normalize by width/height to handle rectangular aspect ratios properly?
-                    // Or just simple angle? Let's treat box as "square" for direction to feel natural.
-                    // If |dy| > |dx|, we are more Top/Bottom than Left/Right.
-
-                    // We can add a bias if the box is very wide, but standard angle check is usually best.
-                    // Actually, for wide boxes, people expect side attachment unless clearly above/below.
-                    // Aspect ratio scaling:
-                    const aspect = bw / bh; // e.g. 150/50 = 3
-                    // If we normalize dy by aspect, we bias towards sides.
-                    // Let's stick to simple "is it more vertical than horizontal?" distance for now,
-                    // or check projection against the diagonal.
-
-                    // Simple angle check (4 quadrants)
-                    const isVertical = Math.abs(dy) * aspect > Math.abs(dx);
-
-                    let startX, startY, kneeX, kneeY;
-
-                    if (isVertical) {
-                        // TOP or BOTTOM
-                        startX = boxCx;
-                        if (dy > 0) { // Bottom
-                            startY = by + bh;
-                            const ky = (startY + ty) / 2;
-                            kneeX = startX;
-                            kneeY = ky;
-                        } else { // Top
-                            startY = by;
-                            const ky = (startY + ty) / 2;
-                            kneeX = startX;
-                            kneeY = ky;
-                        }
-                    } else {
-                        // LEFT or RIGHT
-                        startY = boxCy;
-                        if (dx > 0) { // Right
-                            startX = bx + bw;
-                            const kx = (startX + tx) / 2;
-                            kneeX = kx;
-                            kneeY = startY;
-                        } else { // Left
-                            startX = bx;
-                            const kx = (startX + tx) / 2;
-                            kneeX = kx;
-                            kneeY = startY;
-                        }
-                    }
-
-                    // Shorten the last segment for callout
+                    // Shorten the last segment for callout (knee -> tip)
                     // Vector from knee to tip
-                    const tipDx = tx - kneeX;
-                    const tipDy = ty - kneeY;
+                    const tipDx = end.x - knee.x;
+                    const tipDy = end.y - knee.y;
                     const len = Math.hypot(tipDx, tipDy);
                     const rawSw = m.strokeWidth || 2;
                     const sw = rawSw / Math.max(1e-6, viewScale);
                     const offset = 4 * sw; // refX=2, tip=6 => diff=4
 
-                    let drawTx = tx;
-                    let drawTy = ty;
+                    let drawTx = end.x;
+                    let drawTy = end.y;
 
                     if (len > offset) {
                         const t = (len - offset) / len;
-                        drawTx = kneeX + tipDx * t;
-                        drawTy = kneeY + tipDy * t;
+                        drawTx = knee.x + tipDx * t;
+                        drawTy = knee.y + tipDy * t;
                     } else {
-                        drawTx = kneeX;
-                        drawTy = kneeY;
+                        drawTx = knee.x;
+                        drawTy = knee.y;
                     }
 
-                    const points = `${startX},${startY} ${kneeX},${kneeY} ${drawTx},${drawTy}`;
+                    const points = `${start.x},${start.y} ${knee.x},${knee.y} ${drawTx},${drawTy}`;
 
                     return (
                         <>
@@ -1249,18 +1326,49 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
                     }
 
                     {
-                        isSelected && m.type === 'callout' && m.tip && (
-                            <circle
-                                cx={m.tip.x}
-                                cy={m.tip.y}
-                                r={3.5 / Math.max(1e-6, viewScale)}
-                                fill="#b4e6a0"
-                                stroke="#3a6b24"
-                                strokeWidth={1 / Math.max(1e-6, viewScale)}
-                                data-resize-id={m.id}
-                                data-resize-handle="callout-tip"
-                                cursor="move"
-                            />
+                        isSelected && m.type === 'callout' && (
+                            <>
+                                {/* Tip Handle */}
+                                {m.tip && (
+                                    <circle
+                                        cx={m.tip.x}
+                                        cy={m.tip.y}
+                                        r={3.5 / Math.max(1e-6, viewScale)}
+                                        fill="#b4e6a0"
+                                        stroke="#3a6b24"
+                                        strokeWidth={1 / Math.max(1e-6, viewScale)}
+                                        data-resize-id={m.id}
+                                        data-resize-handle="callout-tip"
+                                        cursor="move"
+                                    />
+                                )}
+
+                                {/* Knee Handle */}
+                                {/* We need the *current* rendered knee position, calculated above inside renderConnector.
+                                    But renderConnector returns JSX. The knee coords are local variables there.
+                                    We need to recalculate them or refactor renderConnector to return data + jsx.
+                                    Let's just recalculate briefly or move logic up. 
+                                    Better: Move the logic up before the return. */}
+
+                                {(() => {
+                                    // Use helper to get current displayed knee
+                                    const k = getCalloutKnee(m.box, m.tip, m.knee);
+
+                                    return (
+                                        <circle
+                                            cx={k.x}
+                                            cy={k.y}
+                                            r={3.5 / Math.max(1e-6, viewScale)}
+                                            fill="#b4e6a0"
+                                            stroke="#3a6b24"
+                                            strokeWidth={1 / Math.max(1e-6, viewScale)}
+                                            data-resize-id={m.id}
+                                            data-resize-handle="callout-knee"
+                                            cursor="move"
+                                        />
+                                    );
+                                })()}
+                            </>
                         )
                     }
                 </g >
@@ -1365,11 +1473,20 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
                                 const dx = dragDelta.x, dy = dragDelta.y;
 
                                 // IMPORTANT: when dragging callout, only box moves
+                                // User request update: "leader should also be able to attach..." & "moving the textbox should only move the textbox"
+                                // BUT if we have a manual knee, that knee is usually relative to the box-tip relationship.
+                                // If we just move the box and keep the knee absolute, the leader shape distorts awkwardly.
+                                // Usually if I drag the box, I want the whole "assembly" (stub) to move with it?
+                                // Let's move the knee by delta too if it exists.
                                 if (m.type === "callout") {
+                                    const newBox = { ...m.box, x: m.box.x + dx, y: m.box.y + dy };
+                                    const changes = { box: newBox };
+                                    if (m.knee) {
+                                        changes.knee = { x: m.knee.x + dx, y: m.knee.y + dy };
+                                    }
                                     measToRender = {
                                         ...m,
-                                        box: { ...m.box, x: m.box.x + dx, y: m.box.y + dy },
-                                        // tip stays
+                                        ...changes
                                     };
                                 } else if (m.box) {
                                     measToRender = { ...m, box: { ...m.box, x: m.box.x + dx, y: m.box.y + dy } };
