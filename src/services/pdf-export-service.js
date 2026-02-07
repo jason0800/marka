@@ -105,9 +105,9 @@ const applyStyle = (ctx, style) => {
     ctx.lineJoin = "round";
 
     if (style.strokeDasharray === "dashed") {
-        ctx.setLineDash([10, 5]);
+        ctx.setLineDash([12, 12]);
     } else if (style.strokeDasharray === "dotted") {
-        ctx.setLineDash([2, 5]);
+        ctx.setLineDash([2, 8]);
     } else {
         ctx.setLineDash([]);
     }
@@ -365,41 +365,79 @@ const drawMeasurement = (ctx, m, toUnits, toUnits2, unitLabel) => {
 
     } else if (m.type === "callout" && m.box && m.tip) {
         let kx, ky;
+        const cx = m.box.x + m.box.w / 2;
+        const cy = m.box.y + m.box.h / 2;
+
         if (m.knee) {
             kx = m.knee.x;
             ky = m.knee.y;
         } else {
-            kx = (m.box.x + m.box.w / 2 + m.tip.x) / 2;
-            ky = (m.box.y + m.box.h / 2 + m.tip.y) / 2;
+            kx = (cx + m.tip.x) / 2;
+            cy = (cy + m.tip.y) / 2; // Fixed: was assigning ky to cy logic in original? Check original line 373.
+            // Original: ky = (m.box.y + ... + m.tip.y) / 2; Correct.
+            ky = (cy + m.tip.y) / 2;
         }
 
-        const cx = m.box.x + m.box.w / 2;
-        const cy = m.box.y + m.box.h / 2;
+        // --- Draw Leader ---
+        ctx.save();
+        ctx.lineWidth = m.strokeWidth || 1;
+        ctx.strokeStyle = strokeColor;
+        ctx.lineCap = "round";
+        ctx.lineJoin = "round";
+
+        // Dash array for leader
+        if (m.strokeDasharray === "dashed") ctx.setLineDash([12, 12]);
+        else if (m.strokeDasharray === "dotted") ctx.setLineDash([2, 8]);
+        else if (m.strokeDasharray) ctx.setLineDash(m.strokeDasharray.split(',').map(Number));
+        else ctx.setLineDash([]);
 
         ctx.beginPath();
-        ctx.moveTo(m.tip.x, m.tip.y);
+        // Draw from Box Center (hidden behind box) to Knee to Tip
+        ctx.moveTo(cx, cy);
         ctx.lineTo(kx, ky);
-        ctx.lineTo(cx, cy);
+        ctx.lineTo(m.tip.x, m.tip.y);
         ctx.stroke();
 
-        ctx.beginPath();
-        ctx.arc(m.tip.x, m.tip.y, 3, 0, Math.PI * 2);
-        ctx.fillStyle = strokeColor;
-        ctx.fill();
+        // Arrowhead at Tip
+        // We need a shape object for drawArrowHead { start: knee, end: tip }
+        // But drawArrowHead uses dashed stroke if set? We usually want solid arrow?
+        // OverlayLayer uses `marker` which inherits fill but has no dash.
+        // Let's force solid line for arrowhead
+        ctx.setLineDash([]);
 
+        // Manually draw arrow since drawArrowHead relies on `ctx.lineWidth` which we set.
+        // We define a proxy shape for direction calculation.
+        drawArrowHead(ctx, { start: { x: kx, y: ky }, end: m.tip }, strokeColor);
+        ctx.restore();
+
+        // --- Draw Box ---
         ctx.save();
-        ctx.fillStyle = "white";
-        ctx.strokeStyle = strokeColor; // Use measurement color for border?
-        ctx.lineWidth = 1;
+        // Background color
+        const bg = m.fill && m.fill !== 'none' ? m.fill : "#ffffff";
+        ctx.fillStyle = bg;
+        ctx.strokeStyle = strokeColor;
+        ctx.lineWidth = m.strokeWidth || 1;
+
+        // Dash array for box
+        if (m.strokeDasharray === "dashed") ctx.setLineDash([12, 12]);
+        else if (m.strokeDasharray === "dotted") ctx.setLineDash([2, 8]);
+        else if (m.strokeDasharray) ctx.setLineDash(m.strokeDasharray.split(',').map(Number));
+        else ctx.setLineDash([]);
+
         ctx.fillRect(m.box.x, m.box.y, m.box.w, m.box.h);
         ctx.strokeRect(m.box.x, m.box.y, m.box.w, m.box.h);
 
-        ctx.fillStyle = "black";
+        // Text
+        ctx.fillStyle = m.textColor || "black"; // Use m.textColor
         ctx.textAlign = "left";
         ctx.textBaseline = "top";
-        ctx.font = "14px sans-serif";
+        ctx.font = `${m.fontSize || 14}px sans-serif`;
+
+        // Remove dash for text? fillText doesn't use stroke dash usually, but good practice.
+        ctx.setLineDash([]);
+
         if (m.text) {
-            wrapText(ctx, m.text, m.box.x + 4, m.box.y + 4, m.box.w - 8, 18);
+            wrapText(ctx, m.text, m.box.x + 4, m.box.y + 4, m.box.w - 8, (m.fontSize || 14) * 1.2);
         }
         ctx.restore();
     }

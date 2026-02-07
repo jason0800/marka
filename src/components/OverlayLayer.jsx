@@ -564,11 +564,25 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
                 if (e.shiftKey) newRot = Math.round(newRot / 15) * 15;
 
                 if (resizingState.isMeasurement) {
-                    // Measurements don't strictly support rotation in rendering yet (foreignObject transform?), 
-                    // but let's store it if we added support. 
-                    // For now, if no rotation support for text/callout, skip or implement.
-                    // The proxy shape has it.
-                    updateMeasurement(id, { rotation: newRot });
+                    const updates = { rotation: newRot };
+
+                    // Rotate Callout Tip/Knee with the box
+                    if (startShape.type === 'callout') {
+                        const angleDiff = newRot - (startShape.rotation || 0);
+                        const rad = (angleDiff * Math.PI) / 180;
+                        const cos = Math.cos(rad);
+                        const sin = Math.sin(rad);
+
+                        const rotatePt = (p) => ({
+                            x: cx + (p.x - cx) * cos - (p.y - cy) * sin,
+                            y: cy + (p.x - cx) * sin + (p.y - cy) * cos
+                        });
+
+                        if (startShape.tip) updates.tip = rotatePt(startShape.tip);
+                        if (startShape.knee) updates.knee = rotatePt(startShape.knee);
+                    }
+
+                    updateMeasurement(id, updates);
                 } else {
                     updateShape(id, { rotation: newRot });
                 }
@@ -940,8 +954,8 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
                 {renderHandle(-padding, h / 2, "w-resize", "w")}
 
                 <circle
-                    cx={w / 2}
-                    cy={-rotOffset - padding}
+                    cx={w / 2 - (s.isCallout ? 20 / Math.max(1e-6, viewScale) : 0)}
+                    cy={-(s.isCallout ? rotOffset / Math.max(1e-6, viewScale) : rotOffset) - padding}
                     r={4 / Math.max(1e-6, viewScale)}
                     fill="#b4e6a0"
                     stroke="#3a6b24"
@@ -1135,7 +1149,6 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
         const measCommon = {
             "data-meas-id": m.id,
             cursor: activeTool === "select" ? "move" : "default",
-            opacity: m.opacity,
         };
 
         if (m.type === "length" && m.points?.length === 2) {
@@ -1239,101 +1252,109 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
             );
         }
 
-        if ((m.type === "comment" || m.type === "text" || m.type === "callout") && m.box) {
-            const isEditing = editingId === m.id;
+        const isEditing = editingId === m.id;
+        const measOpacity = m.opacity ?? 1;
 
-            // Comment: Line + Dot. Callout: Arrow. Text: None.
-            const renderConnector = () => {
-                if (m.type === "comment" && m.tip) {
-                    return (
-                        <>
-                            <line
-                                x1={m.tip.x}
-                                y1={m.tip.y}
-                                x2={m.box.x + m.box.w / 2} // connect to center
-                                y2={m.box.y + m.box.h / 2}
-                                stroke={m.stroke || "#333"}
-                                strokeWidth={1 / Math.max(1e-6, viewScale)}
-                                vectorEffect="non-scaling-stroke"
-                            />
-                            <circle
-                                cx={m.tip.x}
-                                cy={m.tip.y}
-                                r={3 / Math.max(1e-6, viewScale)}
-                                fill={m.stroke || "#333"}
-                                vectorEffect="non-scaling-stroke"
-                            />
-                        </>
-                    );
+        // Comment: Line + Dot. Callout: Arrow. Text: None.
+        const renderConnector = () => {
+            if (m.type === "comment" && m.tip) {
+                return (
+                    <>
+                        <line
+                            x1={m.tip.x}
+                            y1={m.tip.y}
+                            x2={m.box.x + m.box.w / 2} // connect to center
+                            y2={m.box.y + m.box.h / 2}
+                            stroke={m.stroke || "#333"}
+                            strokeWidth={1 / Math.max(1e-6, viewScale)}
+                            vectorEffect="non-scaling-stroke"
+                        />
+                        <circle
+                            cx={m.tip.x}
+                            cy={m.tip.y}
+                            r={3 / Math.max(1e-6, viewScale)}
+                            fill={m.stroke || "#333"}
+                            vectorEffect="non-scaling-stroke"
+                        />
+                    </>
+                );
+            }
+            if (m.type === "callout" && m.tip) {
+                const arrowId = `callout-arrow-${m.id}`;
+
+                const { start, knee, end } = getCalloutPoints(m.box, m.tip, m.knee, m.rotation || 0);
+
+                // Shorten the last segment for callout (knee -> tip)
+                // Vector from knee to tip
+                const tipDx = end.x - knee.x;
+                const tipDy = end.y - knee.y;
+                const len = Math.hypot(tipDx, tipDy);
+                const rawSw = m.strokeWidth || 2;
+                const sw = rawSw / Math.max(1e-6, viewScale);
+                const offset = 4 * sw; // refX=2, tip=6 => diff=4
+
+                let drawTx = end.x;
+                let drawTy = end.y;
+
+                if (len > offset) {
+                    const t = (len - offset) / len;
+                    drawTx = knee.x + tipDx * t;
+                    drawTy = knee.y + tipDy * t;
+                } else {
+                    drawTx = knee.x;
+                    drawTy = knee.y;
                 }
-                if (m.type === "callout" && m.tip) {
-                    const arrowId = `callout-arrow-${m.id}`;
 
-                    const { start, knee, end } = getCalloutPoints(m.box, m.tip, m.knee, m.rotation || 0);
+                const points = `${start.x},${start.y} ${knee.x},${knee.y} ${drawTx},${drawTy}`;
 
-                    // Shorten the last segment for callout (knee -> tip)
-                    // Vector from knee to tip
-                    const tipDx = end.x - knee.x;
-                    const tipDy = end.y - knee.y;
-                    const len = Math.hypot(tipDx, tipDy);
-                    const rawSw = m.strokeWidth || 2;
-                    const sw = rawSw / Math.max(1e-6, viewScale);
-                    const offset = 4 * sw; // refX=2, tip=6 => diff=4
+                // Fix: Apply stroke style to Leader
+                const strokeDasharray = m.strokeDasharray === 'dashed' ? '12, 12'
+                    : m.strokeDasharray === 'dotted' ? '2, 8'
+                        : (m.strokeDasharray === 'none' ? undefined : m.strokeDasharray);
 
-                    let drawTx = end.x;
-                    let drawTy = end.y;
+                return (
+                    <>
+                        <defs>
+                            <marker id={arrowId} markerWidth="6" markerHeight="4" refX="2" refY="2" orient="auto-start-reverse">
+                                <polygon points="0 0, 6 2, 0 4" fill={m.stroke || "#333"} />
+                            </marker>
+                        </defs>
+                        <polyline
+                            points={points}
+                            fill="none"
+                            stroke={m.stroke || "#333"}
+                            strokeWidth={sw}
+                            markerEnd={`url(#${arrowId})`}
+                            vectorEffect="non-scaling-stroke"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeDasharray={strokeDasharray}
+                        />
+                        {/* Hit Target for Arrow Tip Marker */}
+                        <circle
+                            cx={drawTx}
+                            cy={drawTy}
+                            r={7.7 / Math.max(1e-6, viewScale)}
+                            fill="transparent"
+                            stroke="none"
+                            data-meas-id={m.id}
+                            style={{ pointerEvents: 'all', cursor: 'move' }}
+                        />
+                    </>
+                );
+            }
+            return null;
+        };
 
-                    if (len > offset) {
-                        const t = (len - offset) / len;
-                        drawTx = knee.x + tipDx * t;
-                        drawTy = knee.y + tipDy * t;
-                    } else {
-                        drawTx = knee.x;
-                        drawTy = knee.y;
-                    }
+        const fontSize = m.fontSize || 14;
+        const textColor = m.textColor || m.stroke || "black";
+        const borderColor = m.stroke || "#333";
+        const bgColor = m.fill && m.fill !== 'none' ? m.fill : (m.type === "text" ? "transparent" : "#fff");
 
-                    const points = `${start.x},${start.y} ${knee.x},${knee.y} ${drawTx},${drawTy}`;
-
-                    return (
-                        <>
-                            <defs>
-                                <marker id={arrowId} markerWidth="6" markerHeight="4" refX="2" refY="2" orient="auto-start-reverse">
-                                    <polygon points="0 0, 6 2, 0 4" fill={m.stroke || "#333"} />
-                                </marker>
-                            </defs>
-                            <polyline
-                                points={points}
-                                fill="none"
-                                stroke={m.stroke || "#333"}
-                                strokeWidth={2 / Math.max(1e-6, viewScale)}
-                                markerEnd={`url(#${arrowId})`}
-                                vectorEffect="non-scaling-stroke"
-                                strokeLinecap="butt"
-                                strokeLinejoin="round"
-                            />
-                            {/* Hit Target for Arrow Tip Marker */}
-                            <circle
-                                cx={drawTx}
-                                cy={drawTy}
-                                r={7.7 / Math.max(1e-6, viewScale)}
-                                fill="transparent"
-                                stroke="none"
-                                data-meas-id={m.id}
-                                style={{ pointerEvents: 'all', cursor: 'move' }}
-                            />
-                        </>
-                    );
-                }
-                return null;
-            };
-
-            const fontSize = m.fontSize || 14;
-            const textColor = m.textColor || m.stroke || "black";
-            const borderColor = m.stroke || "#333";
-            const bgColor = m.fill && m.fill !== 'none' ? m.fill : (m.type === "text" ? "transparent" : "#fff");
-
-            return (
-                <g key={m.id} {...measCommon}>
+        return (
+            <g key={m.id} {...measCommon}>
+                {/* Content Group with Opacity */}
+                <g style={{ opacity: measOpacity }}>
                     {renderConnector()}
                     <g transform={m.rotation ? `rotate(${m.rotation}, ${m.box.x + m.box.w / 2}, ${m.box.y + m.box.h / 2})` : undefined}>
                         {/* Background Rect for Styling */}
@@ -1345,7 +1366,12 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
                             fill={bgColor}
                             stroke={borderColor}
                             strokeWidth={m.strokeWidth || 1}
-                            strokeDasharray={m.strokeDasharray === 'none' ? undefined : m.strokeDasharray}
+                            strokeDasharray={
+                                m.strokeDasharray === 'dashed' ? '12, 12' :
+                                    m.strokeDasharray === 'dotted' ? '2, 8' :
+                                        (m.strokeDasharray === 'none' ? undefined : m.strokeDasharray)
+                            }
+                            strokeLinecap="round" // Fix for dotted style disappearing
                             vectorEffect="non-scaling-stroke"
                             rx={0} ry={0}
                         />
@@ -1420,75 +1446,70 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
                             )}
                         </foreignObject>
                     </g>
+                </g>
 
-                    {
-                        isSelected && (
-                            <g transform={`translate(${m.box.x}, ${m.box.y})`}>
-                                {renderSelectionFrame({
-                                    id: m.id,
-                                    x: 0,
-                                    y: 0,
-                                    width: m.box.w,
-                                    height: m.box.h,
-                                    rotation: m.rotation || 0,
-                                    type: "rectangle" // Proxy
-                                })}
-                            </g>
-                        )
-                    }
+                {/* Handles outside Opacity group */}
+                {
+                    isSelected && (
+                        <g transform={`translate(${m.box.x}, ${m.box.y})`}>
+                            {renderSelectionFrame({
+                                id: m.id,
+                                x: 0,
+                                y: 0,
+                                width: m.box.w,
+                                height: m.box.h,
+                                rotation: m.rotation || 0,
+                                type: "rectangle", // Proxy but we can pass extra meta
+                                isCallout: m.type === 'callout'
+                            })}
+                        </g>
+                    )
+                }
 
-                    {
-                        isSelected && m.type === 'callout' && (
-                            <>
-                                {/* Tip Handle */}
-                                {m.tip && (
+                {
+                    isSelected && m.type === 'callout' && (
+                        <>
+                            {/* Tip Handle - Outside Opacity Group */}
+                            {m.tip && (
+                                <circle
+                                    cx={m.tip.x}
+                                    cy={m.tip.y}
+                                    r={3.5 / Math.max(1e-6, viewScale)}
+                                    fill="#b4e6a0"
+                                    stroke="#3a6b24"
+                                    strokeWidth={1 / Math.max(1e-6, viewScale)}
+                                    data-resize-id={m.id}
+                                    data-resize-handle="callout-tip"
+                                    cursor="default"
+                                />
+                            )}
+
+                            {(() => {
+                                // Use helper to get current displayed knee
+                                const k = getCalloutKnee(m.box, m.tip, m.knee);
+
+                                return (
                                     <circle
-                                        cx={m.tip.x}
-                                        cy={m.tip.y}
+                                        cx={k.x}
+                                        cy={k.y}
                                         r={3.5 / Math.max(1e-6, viewScale)}
-                                        fill="#b4e6a0"
-                                        stroke="#3a6b24"
+                                        fill="#ffcc80"
+                                        stroke="#ef6c00"
                                         strokeWidth={1 / Math.max(1e-6, viewScale)}
                                         data-resize-id={m.id}
-                                        data-resize-handle="callout-tip"
+                                        data-resize-handle="callout-knee"
                                         cursor="default"
                                     />
-                                )}
+                                );
+                            })()}
+                        </>
+                    )
+                }
+            </g >
+        );
+    }
 
-                                {/* Knee Handle */}
-                                {/* We need the *current* rendered knee position, calculated above inside renderConnector.
-                                    But renderConnector returns JSX. The knee coords are local variables there.
-                                    We need to recalculate them or refactor renderConnector to return data + jsx.
-                                    Let's just recalculate briefly or move logic up. 
-                                    Better: Move the logic up before the return. */}
 
-                                {(() => {
-                                    // Use helper to get current displayed knee
-                                    const k = getCalloutKnee(m.box, m.tip, m.knee);
-
-                                    return (
-                                        <circle
-                                            cx={k.x}
-                                            cy={k.y}
-                                            r={3.5 / Math.max(1e-6, viewScale)}
-                                            fill="#b4e6a0"
-                                            stroke="#3a6b24"
-                                            strokeWidth={1 / Math.max(1e-6, viewScale)}
-                                            data-resize-id={m.id}
-                                            data-resize-handle="callout-knee"
-                                            cursor="default"
-                                        />
-                                    );
-                                })()}
-                            </>
-                        )
-                    }
-                </g >
-            );
-        }
-
-        return null;
-    };
 
     // Helper to check if shape is "out of bounds"
     const isOutOfBounds = (s) => {
