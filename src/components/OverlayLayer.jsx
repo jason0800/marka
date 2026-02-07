@@ -31,7 +31,7 @@ const getCalloutKnee = (box, tip, knee = null) => {
     // Let's explicitly define a threshold multiplier for the aspect check.
     // If we make aspect "smaller", vertical becomes harder.
     // multiplier = 1.3 (30% bias to horizontal)
-    const hBias = 1.3;
+    const hBias = 3;
 
     // Original: abs(dy) * aspect > abs(dx)
     // With bias: abs(dy) * (aspect / hBias) > abs(dx)  => vertical is "harder"
@@ -41,7 +41,12 @@ const getCalloutKnee = (box, tip, knee = null) => {
     if (isVertical) {
         kx = boxCx;
         const sy = dy > 0 ? by + bh : by;
-        ky = (sy + ty) / 2;
+        // Fixed Stub Logic: Cap stub length
+        const maxStub = 20;
+        const distY = Math.abs(ty - sy);
+        const actualStub = Math.min(distY / 2, maxStub);
+
+        ky = sy + (ty > sy ? actualStub : -actualStub);
     } else {
         ky = boxCy;
         const sx = dx > 0 ? bx + bw : bx;
@@ -858,10 +863,14 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
                 const dx = point.x - shapeStart.x;
                 const dy = point.y - shapeStart.y;
 
-                // SMOOTH LOGIC:
-                // Always keep box Centered X on cursor to prevent horizontal jumping.
-                // Just flip Y to keep box away from cursor/leader.
-                const bx = point.x - w / 2;
+                // Permanent Offset Logic (Edge Hold)
+                const gap = 20;
+                let bx;
+                if (dx >= 0) {
+                    bx = point.x + gap;
+                } else {
+                    bx = point.x - w - gap;
+                }
                 const by = point.y - h / 2;
 
                 newMeas = {
@@ -869,6 +878,7 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
                     type: "callout",
                     pageIndex,
                     tip: shapeStart,
+                    // Use calculated bx/by
                     box: { x: bx, y: by, w, h },
                     text: "Callout",
                     ...defaultShapeStyle
@@ -1645,9 +1655,12 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
                                 if (m.type === "callout") {
                                     const newBox = { ...m.box, x: m.box.x + dx, y: m.box.y + dy };
                                     const changes = { box: newBox };
-                                    if (m.knee) {
-                                        changes.knee = { x: m.knee.x + dx, y: m.knee.y + dy };
-                                    }
+
+                                    // Fix: If knee is auto (null), calculate its current position and move it
+                                    // so it doesn't "re-flow" during drag.
+                                    const currentKnee = m.knee || getCalloutKnee(m.box, m.tip, null);
+                                    changes.knee = { x: currentKnee.x + dx, y: currentKnee.y + dy };
+
                                     measToRender = {
                                         ...m,
                                         ...changes
@@ -1675,8 +1688,14 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
                             const dx = cursor.x - shapeStart.x;
                             const dy = cursor.y - shapeStart.y;
 
-                            // Smooth Preview Logic (Match Creation)
-                            const bx = cursor.x - w / 2;
+                            // Permanent Offset Logic (Edge Hold)
+                            const gap = 20;
+                            let bx;
+                            if (dx >= 0) {
+                                bx = cursor.x + gap;
+                            } else {
+                                bx = cursor.x - w - gap;
+                            }
                             const by = cursor.y - h / 2;
 
                             const box = {
