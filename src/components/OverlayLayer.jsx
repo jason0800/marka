@@ -1349,7 +1349,7 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
         const fontSize = m.fontSize || 14;
         const textColor = m.textColor || m.stroke || "black";
         const borderColor = m.stroke || "#333";
-        const bgColor = m.fill && m.fill !== 'none' ? m.fill : (m.type === "text" ? "transparent" : "#fff");
+        const bgColor = m.fill || (m.type === "text" ? "transparent" : "#fff");
 
         return (
             <g key={m.id} {...measCommon}>

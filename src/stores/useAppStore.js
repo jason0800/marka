@@ -75,7 +75,7 @@ const useAppStore = create((set, get) => ({
         stroke: "#000000",
         strokeWidth: 2,
         strokeDasharray: "none",
-        fill: "none",
+        fill: "#ffffff",
         opacity: 1,
     },
     setDefaultShapeStyle: (style) =>

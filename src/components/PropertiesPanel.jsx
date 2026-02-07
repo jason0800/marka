@@ -1,10 +1,12 @@
-import React, { useState } from 'react';
-import { Trash2, ChevronDown, ChevronUp, Copy, Minus, Plus } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Trash2, ChevronDown, ChevronUp, Copy, Minus, Plus, Palette, MoreHorizontal } from 'lucide-react';
 import useAppStore from '../stores/useAppStore';
 import { calculatePolygonArea } from '../geometry/transforms';
+import ColorGrid from './ColorGrid';
 
 const STROKE_COLORS = ['#000000', '#FF9999', '#77BBFF', '#88DD88', '#FFDD66'];
-const FILL_COLORS = ['none', '#FF9999', '#77BBFF', '#88DD88', '#FFDD66'];
+const FILL_COLORS = ['none', '#FF9999', '#77BBFF', '#88DD88', '#FFFFFF'];
+
 
 /**
  * PropertiesPanel Component
@@ -28,6 +30,8 @@ const PropertiesPanel = () => {
         selectedIds, shapes, updateShape, updateMeasurement, theme,
         activeTool, deleteShape, defaultShapeStyle, setDefaultShapeStyle
     } = useAppStore();
+
+
 
     // Helper to find selected items (Shapes + Measurements)
     const selectedItems = [
@@ -72,6 +76,31 @@ const PropertiesPanel = () => {
 
     // Local state for rotation input to allow typing "-"
     const [tempRotation, setTempRotation] = useState(null);
+
+    // Color Picker State
+    const [colorPicker, setColorPicker] = useState({ isOpen: false, type: null, current: null, position: null });
+
+    const openColorPicker = (e, type, current) => {
+        const rect = e.currentTarget.getBoundingClientRect();
+        setColorPicker({
+            isOpen: true,
+            type,
+            current,
+            position: { x: rect.right + 10, y: rect.top - 10 }
+        });
+    };
+
+    const handleColorChange = (newColor) => {
+        if (colorPicker.type) {
+            updateProp(colorPicker.type, newColor);
+            // Don't close immediately if user exploring? Or close? User didn't specify.
+            // "When the user clicks on a palette button the colour palette should appear."
+            // "when the user clicks on the 6th (custom) colour, a dialog opens up."
+            // ColorGrid `handleGridClick` calls `onChange`.
+            // I'll keep it open for hex typing, maybe close on grid click?
+            // ColorGrid handles hex input via `onChange` too.
+        }
+    };
 
     // Sync temp rotation if selection changes (optional, but good practice to reset if we switch shapes)
     // Actually, on blur we reset, so switching shapes should be fine if we assume blur happens.
@@ -131,26 +160,31 @@ const PropertiesPanel = () => {
                             {/* Text Color */}
                             <div className="flex flex-col gap-1">
                                 <label className="text-xs text-[var(--text-secondary)] font-medium">Text Color</label>
-                                <div className="flex gap-2 flex-wrap items-center">
+                                <div className="flex gap-2 items-center">
                                     {STROKE_COLORS.map(c => (
                                         <button
                                             key={c}
-                                            className={`w-5 h-5 rounded border-2 border-transparent cursor-pointer transition-transform duration-100 hover:scale-110 ${(source?.textColor || source?.stroke) === c ? 'ring-2 ring-[var(--text-primary)] ring-offset-1 ring-offset-[var(--bg-secondary)]' : ''}`}
+                                            className={`w-5 h-5 rounded border border-transparent cursor-pointer transition-transform duration-100 hover:scale-110 ${(source?.textColor || source?.stroke) === c ? 'ring-2 ring-[var(--text-primary)] ring-offset-1 ring-offset-[var(--bg-secondary)]' : ''}`}
                                             style={{ backgroundColor: c }}
                                             onClick={() => updateProp('textColor', c)}
                                         />
                                     ))}
-                                    <div className="flex items-center bg-[var(--bg-color)] border border-transparent rounded-[6px] px-2 py-0.5 flex-1 h-6 transition-colors duration-200 focus-within:bg-[var(--bg-secondary)] focus-within:border-[var(--primary-color)]">
-                                        <span className="text-[0.8em] text-[var(--text-secondary)] mr-1 select-none">#</span>
-                                        <input
-                                            type="text"
-                                            value={(source?.textColor || source?.stroke || '').replace('#', '')}
-                                            onChange={(e) => updateProp('textColor', '#' + e.target.value)}
-                                            className="w-full text-[11px] border-none bg-transparent text-[var(--text-primary)] outline-none font-mono uppercase"
-                                            maxLength={6}
-                                            placeholder="000000"
-                                        />
-                                    </div>
+
+                                    {/* Divider */}
+                                    <div className="w-px h-4 bg-[var(--border-color)] mx-1" />
+
+                                    {/* Custom Color Button */}
+                                    <button
+                                        className={`w-5 h-5 rounded border border-transparent cursor-pointer flex items-center justify-center transition-transform duration-100 hover:scale-110 ${!STROKE_COLORS.includes(source?.textColor || source?.stroke) ? 'ring-2 ring-[var(--text-primary)] ring-offset-1 ring-offset-[var(--bg-secondary)]' : ''}`}
+                                        style={{
+                                            background: !STROKE_COLORS.includes(source?.textColor || source?.stroke) ? (source?.textColor || source?.stroke) : 'linear-gradient(135deg, #E5E7EB, #9CA3AF)',
+                                            border: '1px solid var(--border-color)'
+                                        }}
+                                        onClick={(e) => openColorPicker(e, 'textColor', source?.textColor || source?.stroke)}
+                                        title="Custom Color"
+                                    >
+                                        {!STROKE_COLORS.includes(source?.textColor || source?.stroke) ? null : <div className="w-full h-full rounded-sm bg-[var(--bg-secondary)] opacity-0 hover:opacity-20" />}
+                                    </button>
                                 </div>
                             </div>
                             <div className="w-full h-px bg-[var(--border-color)] my-2" />
@@ -161,28 +195,30 @@ const PropertiesPanel = () => {
                         <label className="text-xs text-[var(--text-secondary)] font-medium">
                             {source?.type === 'callout' ? 'Line Color' : (source?.type === 'text' ? 'Border Color' : 'Stroke')}
                         </label>
-                        <div className="flex gap-2 flex-wrap items-center">
+                        <div className="flex gap-2 items-center">
                             {STROKE_COLORS.map(c => (
                                 <button
                                     key={c}
-                                    className={`w-5 h-5 rounded border-2 border-transparent cursor-pointer transition-transform duration-100 hover:scale-110 ${stroke === c ? 'ring-2 ring-[var(--text-primary)] ring-offset-1 ring-offset-[var(--bg-secondary)]' : ''}`}
+                                    className={`w-5 h-5 rounded border border-transparent cursor-pointer transition-transform duration-100 hover:scale-110 ${stroke === c ? 'ring-2 ring-[var(--text-primary)] ring-offset-1 ring-offset-[var(--bg-secondary)]' : ''}`}
                                     style={{ backgroundColor: c }}
                                     onClick={() => updateProp('stroke', c)}
                                 />
                             ))}
 
-                            {/* Hex Input */}
-                            <div className="flex items-center bg-[var(--bg-color)] border border-transparent rounded-[6px] px-2 py-0.5 flex-1 h-6 transition-colors duration-200 focus-within:bg-[var(--bg-secondary)] focus-within:border-[var(--primary-color)]">
-                                <span className="text-[0.8em] text-[var(--text-secondary)] mr-1 select-none">#</span>
-                                <input
-                                    type="text"
-                                    value={(stroke || '').replace('#', '')}
-                                    onChange={(e) => updateProp('stroke', '#' + e.target.value)}
-                                    className="w-full text-[11px] border-none bg-transparent text-[var(--text-primary)] outline-none font-mono uppercase"
-                                    maxLength={6}
-                                    placeholder="000000"
-                                />
-                            </div>
+                            {/* Divider */}
+                            <div className="w-px h-4 bg-[var(--border-color)] mx-1" />
+
+                            {/* Custom Color Button */}
+                            <button
+                                className={`w-5 h-5 rounded border-2 border-transparent cursor-pointer flex items-center justify-center transition-transform duration-100 hover:scale-110 ${!STROKE_COLORS.includes(stroke) ? 'ring-2 ring-[var(--text-primary)] ring-offset-1 ring-offset-[var(--bg-secondary)]' : ''}`}
+                                style={{
+                                    background: !STROKE_COLORS.includes(stroke) ? stroke : 'linear-gradient(135deg, #E5E7EB, #9CA3AF)',
+                                    border: '1px solid var(--border-color)'
+                                }}
+                                onClick={(e) => openColorPicker(e, 'stroke', stroke)}
+                                title="Custom Color"
+                            >
+                            </button>
                         </div>
                     </div>
 
@@ -192,11 +228,11 @@ const PropertiesPanel = () => {
                             <label className="text-xs text-[var(--text-secondary)] font-medium">
                                 {['text', 'callout', 'comment'].includes(source?.type) ? 'Background' : 'Fill'}
                             </label>
-                            <div className="flex gap-2 flex-wrap items-center">
+                            <div className="flex gap-2 items-center">
                                 {FILL_COLORS.map(c => (
                                     <button
                                         key={c}
-                                        className={`w-5 h-5 rounded border-2 border-transparent cursor-pointer transition-transform duration-100 hover:scale-110 ${fill === c ? 'ring-2 ring-[var(--text-primary)] ring-offset-1 ring-offset-[var(--bg-secondary)]' : ''}`}
+                                        className={`w-5 h-5 rounded border cursor-pointer transition-transform duration-100 hover:scale-110 ${c === '#FFFFFF' ? 'border-[#b0b0b0]' : 'border-transparent'} ${fill === c ? 'ring-2 ring-[var(--text-primary)] ring-offset-1 ring-offset-[var(--bg-secondary)]' : ''}`}
                                         style={{
                                             backgroundColor: c === 'none' ? '#fff' : c,
                                             background: c === 'none'
@@ -208,18 +244,19 @@ const PropertiesPanel = () => {
                                     />
                                 ))}
 
-                                {/* Hex Input */}
-                                <div className="flex items-center bg-[var(--bg-color)] border border-transparent rounded-[6px] px-2 py-0.5 flex-1 h-6 transition-colors duration-200 focus-within:bg-[var(--bg-secondary)] focus-within:border-[var(--primary-color)]">
-                                    <span className="text-[0.8em] text-[var(--text-secondary)] mr-1 select-none">#</span>
-                                    <input
-                                        type="text"
-                                        value={(fill === 'none' ? '' : (fill || '')).replace('#', '')}
-                                        onChange={(e) => updateProp('fill', e.target.value ? '#' + e.target.value : 'none')}
-                                        className="w-full text-[11px] border-none bg-transparent text-[var(--text-primary)] outline-none font-mono uppercase"
-                                        maxLength={6}
-                                        placeholder="None"
-                                    />
-                                </div>
+                                {/* Divider */}
+                                <div className="w-px h-4 bg-[var(--border-color)] mx-1" />
+
+                                {/* Custom Color Button */}
+                                <button
+                                    className={`w-5 h-5 rounded border border-transparent cursor-pointer flex items-center justify-center transition-transform duration-100 hover:scale-110 ${!FILL_COLORS.includes(fill) ? 'ring-2 ring-[var(--text-primary)] ring-offset-1 ring-offset-[var(--bg-secondary)]' : ''}`}
+                                    style={{
+                                        background: !FILL_COLORS.includes(fill) ? fill : 'linear-gradient(135deg, #E5E7EB, #9CA3AF)',
+                                        border: '1px solid var(--border-color)'
+                                    }}
+                                    onClick={(e) => openColorPicker(e, 'fill', fill)}
+                                    title="Custom Color"
+                                />
                             </div>
                         </div>
                     )}
@@ -364,6 +401,19 @@ const PropertiesPanel = () => {
                     )}
                 </div>
             )}
+            {colorPicker.isOpen && (
+                <div
+                    className="fixed inset-0 z-40 bg-transparent"
+                    onClick={() => setColorPicker(prev => ({ ...prev, isOpen: false }))}
+                />
+            )}
+            <ColorGrid
+                isOpen={colorPicker.isOpen}
+                onClose={() => setColorPicker({ ...colorPicker, isOpen: false })}
+                onChange={handleColorChange}
+                currentColor={colorPicker.current}
+                position={colorPicker.position}
+            />
         </div>
     );
 };
