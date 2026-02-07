@@ -186,40 +186,43 @@ const PropertiesPanel = () => {
                         </div>
                     </div>
 
-                    <div className="flex flex-col gap-1">
-                        <label className="text-xs text-[var(--text-secondary)] font-medium">
-                            {['text', 'callout', 'comment'].includes(source?.type) ? 'Background' : 'Fill'}
-                        </label>
-                        <div className="flex gap-2 flex-wrap items-center">
-                            {FILL_COLORS.map(c => (
-                                <button
-                                    key={c}
-                                    className={`w-5 h-5 rounded border-2 border-transparent cursor-pointer transition-transform duration-100 hover:scale-110 ${fill === c ? 'ring-2 ring-[var(--text-primary)] ring-offset-1 ring-offset-[var(--bg-secondary)]' : ''}`}
-                                    style={{
-                                        backgroundColor: c === 'none' ? '#fff' : c,
-                                        background: c === 'none'
-                                            ? `url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='8' height='8' viewBox='0 0 8 8'><path d='M0 0h4v4H0zm4 4h4v4H4z' fill='%23e0e0e0'/></svg>")`
-                                            : c
-                                    }}
-                                    onClick={() => updateProp('fill', c)}
-                                    title={c === 'none' ? 'Transparent' : c}
-                                />
-                            ))}
+                    {/* Fill / Background - Hidden for Lines/Arrows */}
+                    {!['line', 'arrow'].includes(source?.type) && (
+                        <div className="flex flex-col gap-1">
+                            <label className="text-xs text-[var(--text-secondary)] font-medium">
+                                {['text', 'callout', 'comment'].includes(source?.type) ? 'Background' : 'Fill'}
+                            </label>
+                            <div className="flex gap-2 flex-wrap items-center">
+                                {FILL_COLORS.map(c => (
+                                    <button
+                                        key={c}
+                                        className={`w-5 h-5 rounded border-2 border-transparent cursor-pointer transition-transform duration-100 hover:scale-110 ${fill === c ? 'ring-2 ring-[var(--text-primary)] ring-offset-1 ring-offset-[var(--bg-secondary)]' : ''}`}
+                                        style={{
+                                            backgroundColor: c === 'none' ? '#fff' : c,
+                                            background: c === 'none'
+                                                ? `url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='8' height='8' viewBox='0 0 8 8'><path d='M0 0h4v4H0zm4 4h4v4H4z' fill='%23e0e0e0'/></svg>")`
+                                                : c
+                                        }}
+                                        onClick={() => updateProp('fill', c)}
+                                        title={c === 'none' ? 'Transparent' : c}
+                                    />
+                                ))}
 
-                            {/* Hex Input */}
-                            <div className="flex items-center bg-[var(--bg-color)] border border-transparent rounded-[6px] px-2 py-0.5 flex-1 h-6 transition-colors duration-200 focus-within:bg-[var(--bg-secondary)] focus-within:border-[var(--primary-color)]">
-                                <span className="text-[0.8em] text-[var(--text-secondary)] mr-1 select-none">#</span>
-                                <input
-                                    type="text"
-                                    value={(fill === 'none' ? '' : (fill || '')).replace('#', '')}
-                                    onChange={(e) => updateProp('fill', e.target.value ? '#' + e.target.value : 'none')}
-                                    className="w-full text-[11px] border-none bg-transparent text-[var(--text-primary)] outline-none font-mono uppercase"
-                                    maxLength={6}
-                                    placeholder="None"
-                                />
+                                {/* Hex Input */}
+                                <div className="flex items-center bg-[var(--bg-color)] border border-transparent rounded-[6px] px-2 py-0.5 flex-1 h-6 transition-colors duration-200 focus-within:bg-[var(--bg-secondary)] focus-within:border-[var(--primary-color)]">
+                                    <span className="text-[0.8em] text-[var(--text-secondary)] mr-1 select-none">#</span>
+                                    <input
+                                        type="text"
+                                        value={(fill === 'none' ? '' : (fill || '')).replace('#', '')}
+                                        onChange={(e) => updateProp('fill', e.target.value ? '#' + e.target.value : 'none')}
+                                        className="w-full text-[11px] border-none bg-transparent text-[var(--text-primary)] outline-none font-mono uppercase"
+                                        maxLength={6}
+                                        placeholder="None"
+                                    />
+                                </div>
                             </div>
                         </div>
-                    </div>
+                    )}
 
                     {/* // line widths */}
                     <div className="flex flex-col gap-1">

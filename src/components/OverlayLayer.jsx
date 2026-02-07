@@ -1135,6 +1135,7 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
         const measCommon = {
             "data-meas-id": m.id,
             cursor: activeTool === "select" ? "move" : "default",
+            opacity: m.opacity,
         };
 
         if (m.type === "length" && m.points?.length === 2) {

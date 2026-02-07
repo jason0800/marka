@@ -140,12 +140,24 @@ const useAppStore = create((set, get) => ({
             pageUnits: { ...state.pageUnits, [pageIndex]: unit },
         })),
 
+    isPremium: false, // Start as free user
+    setPremiumStatus: (status) => set({ isPremium: status }),
+
     setProjectData: (data) =>
         set({
             measurements: data.measurements || [],
+            shapes: data.shapes || [], // Also restore shapes
             calibrationScales: data.calibrationScales || {},
             pageUnits: data.pageUnits || {},
+            pageRotations: data.pageRotations || {}, // Restore rotations
+            // We might want to restore viewport too, but maybe better to reset it? 
+            // Let's reset viewport for now to avoid being lost
+            viewport: initialViewport
         }),
+
+    // Helper to get project data for saving (not a state setter, so just a getter is fine, 
+    // but usually we do this in the component via useAppStore.getState(). 
+    // We can add a convenience method here if we want, but getState() is cleaner for "read-only" export.)
 
     // --- File Info ---
     fileName: "Untitled.pdf",
