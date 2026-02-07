@@ -675,18 +675,48 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
                 if (w > 2 && h > 2) {
                     const newSelected = [];
 
-                    pageShapes.forEach((s) => {
+                    const itemsToCheck = [...pageShapes, ...pageMeasurements];
+                    itemsToCheck.forEach((s) => {
                         let sb = { x: 0, y: 0, w: 0, h: 0 };
+
                         if (s.type === "line" || s.type === "arrow") {
                             sb.x = Math.min(s.start.x, s.end.x);
                             sb.y = Math.min(s.start.y, s.end.y);
                             sb.w = Math.abs(s.end.x - s.start.x);
                             sb.h = Math.abs(s.end.y - s.start.y);
+                        } else if (s.points && s.points.length > 0) {
+                            const xs = s.points.map(p => p.x);
+                            const ys = s.points.map(p => p.y);
+                            const minX = Math.min(...xs);
+                            const minY = Math.min(...ys);
+                            sb.x = minX;
+                            sb.y = minY;
+                            sb.w = Math.max(...xs) - minX;
+                            sb.h = Math.max(...ys) - minY;
+                        } else if (s.box) {
+                            // Text, Callout, Comment
+                            sb.x = s.box.x;
+                            sb.y = s.box.y;
+                            sb.w = s.box.w;
+                            sb.h = s.box.h;
+
+                            // Include Callout Tip in bounds
+                            if (s.type === 'callout' && s.tip) {
+                                const minX = Math.min(sb.x, s.tip.x);
+                                const minY = Math.min(sb.y, s.tip.y);
+                                const maxX = Math.max(sb.x + sb.w, s.tip.x);
+                                const maxY = Math.max(sb.y + sb.h, s.tip.y);
+                                sb.x = minX;
+                                sb.y = minY;
+                                sb.w = maxX - minX;
+                                sb.h = maxY - minY;
+                            }
                         } else {
-                            sb.x = s.x;
-                            sb.y = s.y;
-                            sb.w = s.width;
-                            sb.h = s.height;
+                            // Standard Shapes
+                            sb.x = s.x || 0;
+                            sb.y = s.y || 0;
+                            sb.w = s.width || 0;
+                            sb.h = s.height || 0;
                         }
 
                         if (x < sb.x + sb.w && x + w > sb.x && y < sb.y + sb.h && y + h > sb.y) {

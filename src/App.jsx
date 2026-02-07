@@ -58,9 +58,9 @@ function App() {
                 {isLoading && <div className="pdf-viewer-placeholder">Loading...</div>}
                 {pdfDocument && <PDFViewer document={pdfDocument} />}
               </main>
-              <Toolbar />
             </div>
           </div>
+          <Toolbar />
         </div>
       )}
 
