@@ -861,17 +861,27 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
                 const w = 125;
                 const h = 25;
                 const dx = point.x - shapeStart.x;
-                const dy = point.y - shapeStart.y;
+                const dy = point.y - shapeStart.y; // Unused for box pos now, but maybe for side decide?
 
-                // Permanent Offset Logic (Edge Hold)
-                const gap = 20;
-                let bx;
+                // Box Position: The cursor is the CONNECTION POINT.
+                // Knee Stub: Always stick out 20px from box towards the "outside".
+                // If dx >= 0 (Right), Box is to Right of Cursor. Connection is Left-Center. Knee is Left of Cursor.
+                // If dx < 0 (Left), Box is to Left of Cursor. Connection is Right-Center. Knee is Right of Cursor.
+
+                const stub = 20;
+                let bx, kneeX;
+
                 if (dx >= 0) {
-                    bx = point.x + gap;
+                    bx = point.x;
+                    kneeX = point.x - stub;
                 } else {
-                    bx = point.x - w - gap;
+                    bx = point.x - w;
+                    kneeX = point.x + stub;
                 }
+
+                // Center vertically on cursor
                 const by = point.y - h / 2;
+                const kneeY = point.y;
 
                 newMeas = {
                     id,
@@ -880,6 +890,7 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
                     tip: shapeStart,
                     // Use calculated bx/by
                     box: { x: bx, y: by, w, h },
+                    knee: { x: kneeX, y: kneeY }, // Explicit knee.
                     text: "Callout",
                     ...defaultShapeStyle
                 };
@@ -1686,17 +1697,24 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
                             const w = 125;
                             const h = 25;
                             const dx = cursor.x - shapeStart.x;
-                            const dy = cursor.y - shapeStart.y;
+                            // dy unused for logic
 
-                            // Permanent Offset Logic (Edge Hold)
-                            const gap = 20;
-                            let bx;
+                            // Box Position: Cursor is Connection Point.
+                            // Knee Stub: Fixed 20px from connection point.
+                            const stub = 20;
+                            let bx, kneeX;
+
                             if (dx >= 0) {
-                                bx = cursor.x + gap;
+                                bx = cursor.x;
+                                kneeX = cursor.x - stub;
                             } else {
-                                bx = cursor.x - w - gap;
+                                bx = cursor.x - w;
+                                kneeX = cursor.x + stub;
                             }
+
+                            // Center vertically on cursor
                             const by = cursor.y - h / 2;
+                            const kneeY = cursor.y;
 
                             const box = {
                                 x: bx,
@@ -1709,6 +1727,7 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
                                 type: "callout",
                                 box,
                                 tip: shapeStart,
+                                knee: { x: kneeX, y: kneeY }, // Explicit knee for preview
                                 text: "Callout",
                                 ...defaultShapeStyle,
                                 // Add styling that matches current properties if possible

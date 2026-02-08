@@ -87,7 +87,8 @@ const ColorGrid = ({ isOpen, onClose, onChange, currentColor, position }) => {
                         {row.map((c) => (
                             <button
                                 key={c}
-                                className={`w-8 h-8 rounded border border-transparent hover:scale-110 transition-transform ${c === hex ? 'ring-2 ring-[var(--text-primary)] ring-offset-1 ring-offset-[var(--bg-secondary)] z-10' : ''}`}
+                                className={`w-8 h-8 rounded border transition-transform hover:scale-110 ${c === '#FFFFFF' ? 'border-gray-200' : 'border-transparent'
+                                    } ${c === hex ? 'ring-2 ring-[var(--text-primary)] ring-offset-1 ring-offset-[var(--bg-secondary)] z-10' : ''}`}
                                 style={{ backgroundColor: c }}
                                 onClick={() => handleGridClick(c)}
                                 title={c}
