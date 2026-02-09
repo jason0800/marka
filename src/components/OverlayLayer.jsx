@@ -869,19 +869,35 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
                 // If dx < 0 (Left), Box is to Left of Cursor. Connection is Right-Center. Knee is Right of Cursor.
 
                 const stub = 20;
-                let bx, kneeX;
+                let bx, kneeX, by, kneeY;
 
-                if (dx >= 0) {
-                    bx = point.x;
-                    kneeX = point.x - stub;
+                if (Math.abs(dy) > Math.abs(dx)) {
+                    // Vertical Mode
+                    bx = point.x - w / 2;
+
+                    if (dy >= 0) {
+                        // Dragged Down -> Box Below
+                        by = point.y;
+                        kneeY = point.y - stub;
+                    } else {
+                        // Dragged Up -> Box Above
+                        by = point.y - h;
+                        kneeY = point.y + stub;
+                    }
+                    kneeX = point.x;
                 } else {
-                    bx = point.x - w;
-                    kneeX = point.x + stub;
+                    // Horizontal Mode (Existing logic)
+                    if (dx >= 0) {
+                        bx = point.x;
+                        kneeX = point.x - stub;
+                    } else {
+                        bx = point.x - w;
+                        kneeX = point.x + stub;
+                    }
+                    // Center vertically on cursor
+                    by = point.y - h / 2;
+                    kneeY = point.y;
                 }
-
-                // Center vertically on cursor
-                const by = point.y - h / 2;
-                const kneeY = point.y;
 
                 newMeas = {
                     id,
@@ -1697,24 +1713,40 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
                             const w = 125;
                             const h = 25;
                             const dx = cursor.x - shapeStart.x;
-                            // dy unused for logic
+                            const dy = cursor.y - shapeStart.y;
 
                             // Box Position: Cursor is Connection Point.
                             // Knee Stub: Fixed 20px from connection point.
                             const stub = 20;
-                            let bx, kneeX;
+                            let bx, kneeX, by, kneeY;
 
-                            if (dx >= 0) {
-                                bx = cursor.x;
-                                kneeX = cursor.x - stub;
+                            if (Math.abs(dy) > Math.abs(dx)) {
+                                // Vertical Mode
+                                bx = cursor.x - w / 2;
+
+                                if (dy >= 0) {
+                                    // Dragged Down -> Box Below
+                                    by = cursor.y;
+                                    kneeY = cursor.y - stub;
+                                } else {
+                                    // Dragged Up -> Box Above
+                                    by = cursor.y - h;
+                                    kneeY = cursor.y + stub;
+                                }
+                                kneeX = cursor.x;
                             } else {
-                                bx = cursor.x - w;
-                                kneeX = cursor.x + stub;
+                                // Horizontal Mode (Existing logic)
+                                if (dx >= 0) {
+                                    bx = cursor.x;
+                                    kneeX = cursor.x - stub;
+                                } else {
+                                    bx = cursor.x - w;
+                                    kneeX = cursor.x + stub;
+                                }
+                                // Center vertically on cursor
+                                by = cursor.y - h / 2;
+                                kneeY = cursor.y;
                             }
-
-                            // Center vertically on cursor
-                            const by = cursor.y - h / 2;
-                            const kneeY = cursor.y;
 
                             const box = {
                                 x: bx,
