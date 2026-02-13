@@ -1,6 +1,7 @@
 import React, { useRef, useState } from 'react';
-import { FileUp, Plus, FileText } from 'lucide-react';
+import { FileUp, Plus, FileText, FolderOpen } from 'lucide-react';
 import { loadPDF } from '../services/pdf-service';
+import { loadProject, promptForProjectFiles, promptForPDF } from '../services/project-service';
 
 import useAppStore from '../stores/useAppStore';
 
@@ -8,6 +9,7 @@ const StartupPage = ({ setPdfDocument, setIsLoading, onNewPDF }) => {
     const fileInputRef = useRef(null);
     const [isDragging, setIsDragging] = useState(false);
     const setFileInfo = useAppStore(state => state.setFileInfo);
+    const setProjectData = useAppStore(state => state.setProjectData);
 
     const handleFileChange = async (file) => {
         if (!file) return;
@@ -45,11 +47,93 @@ const StartupPage = ({ setPdfDocument, setIsLoading, onNewPDF }) => {
         setIsDragging(false);
     };
 
-    const handleDrop = (e) => {
+    const processProjectFiles = async (markaFile, pdfFile) => {
+        setIsLoading(true); // Start loading indicator early
+        try {
+            // Load and parse the .marka file
+            const projectData = await loadProject(markaFile);
+
+            // If we don't have a PDF file yet (e.g. dropped only .marka), we need to check matches or prompt
+            let validPdfFile = pdfFile;
+
+            // If PDF file is provided, validate it matches
+            if (validPdfFile && projectData.pdfFileName && validPdfFile.name !== projectData.pdfFileName) {
+                const mismatchMessage = `Warning: You selected "${validPdfFile.name}" but this project was created with "${projectData.pdfFileName}".\n\nAnnotations may not align correctly. Continue anyway?`;
+                if (!confirm(mismatchMessage)) {
+                    setIsLoading(false);
+                    return; // User cancelled
+                }
+            }
+
+            // If no PDF provided, or validation failed and user wants to pick another? 
+            // Actually if validation failed and user cancelled, we returned.
+            // If we didn't have a PDF file, we need to prompt for it now.
+            if (!validPdfFile) {
+                // Let's implement a specific prompt for PDF here if missing
+                const pdfFileName = projectData.pdfFileName || 'the PDF';
+                const confirmMessage = `This project requires "${pdfFileName}". Please locate the PDF file.`;
+                if (!confirm(confirmMessage)) {
+                    setIsLoading(false);
+                    return;
+                }
+                try {
+                    validPdfFile = await promptForPDF(pdfFileName);
+                } catch (e) {
+                    setIsLoading(false);
+                    return; // Cancelled
+                }
+            }
+
+            // Load the PDF first
+            const doc = await loadPDF(validPdfFile);
+            setPdfDocument(doc); // setPdfDocument takes only the doc, file info is set separately
+            setFileInfo(validPdfFile.name, validPdfFile.size);
+
+            // Then apply the project data (annotations, calibrations, etc.)
+            setProjectData(projectData);
+
+        } catch (err) {
+            console.error("Failed to load project", err);
+            alert("Failed to load project: " + err.message);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const handleDrop = async (e) => {
         e.preventDefault();
         setIsDragging(false);
-        const file = e.dataTransfer.files[0];
-        handleFileChange(file);
+
+        const files = Array.from(e.dataTransfer.files);
+        if (files.length === 0) return;
+
+        // Check for .marka and .pdf pair
+        const markaFile = files.find(f => f.name.endsWith('.marka') || f.name.endsWith('.json'));
+        const pdfFile = files.find(f => f.name.endsWith('.pdf') || f.type === 'application/pdf');
+
+        if (markaFile) {
+            // Found a project file, try to process it (with or without PDF)
+            await processProjectFiles(markaFile, pdfFile);
+        } else if (pdfFile) {
+            // Only PDF found
+            handleFileChange(pdfFile);
+        }
+    };
+
+    const handleOpenProject = async () => {
+        try {
+            // Prompt user to select both .marka and PDF files at once
+            const result = await promptForProjectFiles();
+            await processProjectFiles(result.markaFile, result.pdfFile);
+        } catch (err) {
+            if (err.message === 'NEED_PDF') {
+                alert('Please select the PDF file as well, or use the file picker to select both files at once.');
+            } else if (err.message !== 'User cancelled') {
+                console.error("Failed to load project", err);
+                alert("Failed to load project: " + err.message);
+            }
+            setIsLoading(false);
+        }
     };
 
     return (
@@ -68,7 +152,17 @@ const StartupPage = ({ setPdfDocument, setIsLoading, onNewPDF }) => {
                 </div>
 
                 {/* Actions */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 w-full max-w-[400px]">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 w-full max-w-[600px]">
+                    <button
+                        onClick={handleOpenProject}
+                        className="group flex flex-row items-center justify-center gap-1 p-4 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border-color)] hover:border-[var(--primary-color)] hover:shadow-md transition-all duration-200"
+                    >
+                        <div className="p-1 rounded-full bg-[var(--bg-primary)] transition-colors">
+                            <FolderOpen size={20} />
+                        </div>
+                        <span className="font-semibold text-sm">Open Project</span>
+                    </button>
+
                     <button
                         onClick={() => fileInputRef.current?.click()}
                         className="group flex flex-row items-center justify-center gap-1 p-4 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border-color)] hover:border-[var(--primary-color)] hover:shadow-md transition-all duration-200"
@@ -91,8 +185,8 @@ const StartupPage = ({ setPdfDocument, setIsLoading, onNewPDF }) => {
                 </div>
 
                 {/* Drop Zone Hint */}
-                <div className="p-6 border-2 border-dashed border-[var(--border-color)] rounded-xl w-full max-w-[400px] flex items-center justify-center text-[var(--text-secondary)] bg-[var(--bg-secondary)]/50">
-                    <p>or drag and drop a PDF file anywhere</p>
+                <div className="p-6 border-2 border-dashed border-[var(--border-color)] rounded-xl w-full max-w-[600px] flex items-center justify-center text-[var(--text-secondary)] bg-[var(--bg-secondary)]/50">
+                    <p>or drag and drop Marka projects or PDF files anywhere</p>
                 </div>
 
                 <input
