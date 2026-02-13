@@ -1,5 +1,5 @@
 import {
-    MousePointer2, Hand, Ruler, Scaling, Square, Milestone, Hash, MessageSquare,
+    MousePointer2, Hand, Ruler, Scaling, Square, Hash, MessageSquare,
     Box, Circle, Minus, ArrowRight, Pentagon, RectangleHorizontal, Type, MessageCircle
 } from 'lucide-react';
 import useAppStore from '../stores/useAppStore';
@@ -13,16 +13,14 @@ const TOOLS = [
     { type: 'separator' },
     { id: 'length', icon: Ruler, label: 'Length (L)', key: 'l' },
     { id: 'area', icon: Pentagon, label: 'Area (E)', key: 'e' },
-    { id: 'perimeter', icon: Milestone, label: 'Perimeter (P)', key: 'p' },
     { id: 'count', icon: Hash, label: 'Count (N)', key: 'n' },
     { type: 'separator' },
+    { id: 'callout', icon: CalloutIcon, label: 'Callout (Q)', key: 'q' },
+    { id: 'text', icon: Type, label: 'Text Box (T)', key: 't' },
     { id: 'rectangle', icon: RectangleHorizontal, label: 'Rectangle (R)', key: 'r' },
     { id: 'circle', icon: Circle, label: 'Circle (C)', key: 'c' },
     { id: 'line', icon: Minus, label: 'Line (L)', key: 'l' },
     { id: 'arrow', icon: ArrowRight, label: 'Arrow (A)', key: 'a' },
-    { type: 'separator' },
-    { id: 'text', icon: Type, label: 'Text Box (T)', key: 't' },
-    { id: 'callout', icon: CalloutIcon, label: 'Callout (Q)', key: 'q' },
 ];
 
 const Toolbar = () => {
@@ -100,8 +98,8 @@ function CalloutIcon({ size, ...props }) {
             {...props}
         >
             <rect x="3" y="8" width="12" height="10" rx="2" />
-            <path d="M15 13h3l3-5" />
-            <path d="M18 8h3v3" />
+            <path d="M15 13h3l3.5-5" />
+            <path d="M18 8h4v4" />
         </svg>
     );
 }

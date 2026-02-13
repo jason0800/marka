@@ -1379,19 +1379,33 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
                     : m.strokeDasharray === 'dotted' ? '2, 8'
                         : (m.strokeDasharray === 'none' ? undefined : m.strokeDasharray);
 
+                let angle = 0;
+                if (len > 1e-6) {
+                    angle = Math.atan2(tipDy, tipDx) * (180 / Math.PI);
+                } else {
+                    // Knee is at tip? Use start -> end direction
+                    const startDx = end.x - start.x;
+                    const startDy = end.y - start.y;
+                    if (Math.hypot(startDx, startDy) > 1e-6) {
+                        angle = Math.atan2(startDy, startDx) * (180 / Math.PI);
+                    }
+                }
+                const arrowTransform = `translate(${end.x}, ${end.y}) rotate(${angle}) scale(${sw})`;
+
                 return (
                     <>
-                        <defs>
-                            <marker id={arrowId} markerWidth="6" markerHeight="4" refX="2" refY="2" orient="auto-start-reverse">
-                                <polygon points="0 0, 6 2, 0 4" fill={m.stroke || "#333"} />
-                            </marker>
-                        </defs>
+                        {/* Manual Arrow Head */}
+                        <polygon
+                            points="0,0 -8,-3 -8,3"
+                            transform={arrowTransform}
+                            fill={m.stroke || "#333"}
+                            vectorEffect="non-scaling-stroke"
+                        />
                         <polyline
                             points={points}
                             fill="none"
                             stroke={m.stroke || "#333"}
                             strokeWidth={sw}
-                            markerEnd={`url(#${arrowId})`}
                             vectorEffect="non-scaling-stroke"
                             strokeLinecap="round"
                             strokeLinejoin="round"
@@ -1399,8 +1413,8 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
                         />
                         {/* Hit Target for Arrow Tip Marker */}
                         <circle
-                            cx={drawTx}
-                            cy={drawTy}
+                            cx={end.x}
+                            cy={end.y}
                             r={7.7 / Math.max(1e-6, viewScale)}
                             fill="transparent"
                             stroke="none"
