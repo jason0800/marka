@@ -11,6 +11,7 @@ import {
 import UpgradeDialog from './UpgradeDialog';
 import DocumentPropertiesDialog from './DocumentPropertiesDialog';
 import { exportFlattenedPDF } from '../services/pdf-export-service';
+import { saveProject, loadProject, promptForPDF, promptForProjectFiles } from '../services/project-service';
 
 
 const TopMenu = ({ setPdfDocument, setIsLoading, isDocumentLoaded, onNewPDF, pdfDocument }) => {
@@ -172,82 +173,109 @@ const TopMenu = ({ setPdfDocument, setIsLoading, isDocumentLoaded, onNewPDF, pdf
 
     // --- Project Save/Load (.marka) ---
     const handleSaveProject = () => {
-        if (!isPremium) {
-            setShowUpgradeDialog(true);
-            setActiveMenu(null);
-            return;
-        }
+        // PRO mode check temporarily disabled for testing
+        // if (!isPremium) {
+        //     setShowUpgradeDialog(true);
+        //     setActiveMenu(null);
+        //     return;
+        // }
 
         const state = useAppStore.getState();
-        const projectData = {
-            version: 1,
-            timestamp: Date.now(),
-            fileName: state.fileName,
-            fileSize: state.fileSize,
-            measurements: state.measurements,
-            shapes: state.shapes,
-            calibrationScales: state.calibrationScales,
-            pageUnits: state.pageUnits,
-            pageRotations: state.pageRotations,
-            // We don't save the PDF binary itself in .marka for now (too big), 
-            // just the metadata and annotations. User implies "Premium users can save and open projects".
-            // If they open a .marka, they might need the original PDF? 
-            // For now, let's assume .marka is just the annotation overlay data.
-            // Best practice: warn if PDF doesn't match? Or just load it.
-        };
-
-        const blob = new Blob([JSON.stringify(projectData, null, 2)], { type: 'application/json' });
-        const link = document.createElement('a');
-        link.href = URL.createObjectURL(blob);
-        link.download = state.fileName.replace(/\.pdf$/i, '') + '.marka';
-        link.click();
+        saveProject(state, state.fileName);
         setActiveMenu(null);
     };
 
-    const handleOpenProject = () => {
-        if (!isPremium) {
-            setShowUpgradeDialog(true);
-            setActiveMenu(null);
-            return;
+    const handleOpenProject = async () => {
+        // PRO mode check temporarily disabled for testing
+        // if (!isPremium) {
+        //     setShowUpgradeDialog(true);
+        //     setActiveMenu(null);
+        //     return;
+        // }
+
+        setActiveMenu(null);
+
+        try {
+            // Prompt user to select both .marka and PDF files at once
+            const result = await promptForProjectFiles();
+
+            // Load and parse the .marka file
+            const projectData = await loadProject(result.markaFile);
+
+            // Validate PDF filename matches
+            if (projectData.pdfFileName && result.pdfFile.name !== projectData.pdfFileName) {
+                const mismatchMessage = `Warning: You selected "${result.pdfFile.name}" but this project was created with "${projectData.pdfFileName}".\n\nAnnotations may not align correctly. Continue anyway?`;
+                if (!confirm(mismatchMessage)) {
+                    return; // User cancelled
+                }
+            }
+
+            // Load the PDF first
+            setIsLoading(true);
+            const doc = await loadPDF(result.pdfFile);
+            setPdfDocument(doc, result.pdfFile.name, result.pdfFile.size);
+            setFileInfo(result.pdfFile.name, result.pdfFile.size);
+
+            // Then apply the project data (annotations, calibrations, etc.)
+            setProjectData(projectData);
+
+            setIsLoading(false);
+        } catch (err) {
+            if (err.message === 'NEED_PDF') {
+                // User only selected .marka file, prompt for PDF separately
+                alert('Please select the PDF file as well, or use the file picker to select both files at once.');
+            } else if (err.message !== 'User cancelled') {
+                console.error("Failed to load project", err);
+                alert("Failed to load project: " + err.message);
+            }
+            setIsLoading(false);
         }
-        projectInputRef.current?.click();
-        setActiveMenu(null);
     };
 
-    const handleProjectFileChange = (e) => {
+    const handleProjectFileChange = async (e) => {
+        // This is now unused, but keeping for backwards compatibility
         const file = e.target.files[0];
         if (!file) return;
 
-        const reader = new FileReader();
-        reader.onload = (event) => {
-            try {
-                const data = JSON.parse(event.target.result);
-                // Validate generic structure
-                if (!data.measurements && !data.shapes) {
-                    throw new Error("Invalid project file");
-                }
+        try {
+            // Load and parse the .marka file
+            const projectData = await loadProject(file);
 
-                // If the project file has a fileName, maybe warn if it doesn't match current?
-                // For now, just load the data.
-                setProjectData(data);
-                if (data.fileName) {
-                    // Optionally update filename if we want to reflect the project source
-                    // But usually the PDF source is the source of truth for the document.
-                    // If we load a .marka, we are strictly overlaying data onto the *current* PDF.
-                    // If no PDF is loaded, we might need to prompt? 
-                    // The user requirement says "Open projects". 
-                    // If I open a project, do I need the PDF? 
-                    // "Free users can open PDFs... Premium users can save and open projects".
-                    // Implicitly, opening a project might require the PDF to be present or loaded separately.
-                    // I'll assume for now it just loads the *layer* data onto whatever is open.
-                }
+            // Prompt user to locate the PDF file
+            const pdfFileName = projectData.pdfFileName || 'the PDF';
+            const confirmMessage = `This project requires "${pdfFileName}". Please locate the PDF file.`;
 
-            } catch (err) {
-                console.error("Failed to load project", err);
-                alert("Invalid .marka file");
+            if (!confirm(confirmMessage)) {
+                return; // User cancelled
             }
-        };
-        reader.readAsText(file);
+
+            // Prompt for PDF file
+            const pdfFile = await promptForPDF(pdfFileName);
+
+            // Validate PDF filename matches
+            if (projectData.pdfFileName && pdfFile.name !== projectData.pdfFileName) {
+                const mismatchMessage = `Warning: You selected "${pdfFile.name}" but this project was created with "${projectData.pdfFileName}".\n\nAnnotations may not align correctly. Continue anyway?`;
+                if (!confirm(mismatchMessage)) {
+                    return; // User cancelled
+                }
+            }
+
+            // Load the PDF first
+            setIsLoading(true);
+            const doc = await loadPDF(pdfFile);
+            setPdfDocument(doc, pdfFile.name, pdfFile.size);
+            setFileInfo(pdfFile.name, pdfFile.size);
+
+            // Then apply the project data (annotations, calibrations, etc.)
+            setProjectData(projectData);
+
+            setIsLoading(false);
+        } catch (err) {
+            console.error("Failed to load project", err);
+            alert("Failed to load project: " + err.message);
+            setIsLoading(false);
+        }
+
         e.target.value = null;
     };
 
