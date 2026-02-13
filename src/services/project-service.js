@@ -93,7 +93,7 @@ export const promptForProjectFiles = (pdfFileName) => {
     return new Promise((resolve, reject) => {
         const input = document.createElement('input');
         input.type = 'file';
-        input.accept = '.marka,.json,application/pdf';
+        input.accept = '.marka,application/pdf'; // Only .marka and PDF files
         input.multiple = true; // Allow selecting multiple files
 
         input.onchange = (e) => {
