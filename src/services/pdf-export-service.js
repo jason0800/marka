@@ -366,7 +366,7 @@ const drawMeasurement = (ctx, m, toUnits, toUnits2, unitLabel) => {
     } else if (m.type === "callout" && m.box && m.tip) {
         let kx, ky;
         const cx = m.box.x + m.box.w / 2;
-        const cy = m.box.y + m.box.h / 2;
+        let cy = m.box.y + m.box.h / 2;
 
         if (m.knee) {
             kx = m.knee.x;

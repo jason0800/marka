@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { Toaster, toast } from 'sonner';
 import { loadPDF } from './services/pdf-service';
 import PDFViewer from './components/PDFViewer';
 import Toolbar from './components/Toolbar';
@@ -80,6 +81,8 @@ function App() {
           }}
         />
       )}
+
+      <Toaster position="top-center" richColors />
     </div>
   );
 }

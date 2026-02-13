@@ -1,8 +1,9 @@
 import React, { useRef, useState } from 'react';
 import { FileUp, Plus, FileText, FolderOpen } from 'lucide-react';
 import { loadPDF } from '../services/pdf-service';
+import { toast } from 'sonner';
+import { confirmToast } from '../utils/confirm-toast';
 import { loadProject, promptForProjectFiles, promptForPDF } from '../services/project-service';
-
 import useAppStore from '../stores/useAppStore';
 
 const StartupPage = ({ setPdfDocument, setIsLoading, onNewPDF }) => {
@@ -16,7 +17,7 @@ const StartupPage = ({ setPdfDocument, setIsLoading, onNewPDF }) => {
 
         // Basic validation
         if (file.type !== 'application/pdf') {
-            alert('Please select a valid PDF file.');
+            toast.error('Please select a valid PDF file.');
             return;
         }
 
@@ -27,7 +28,7 @@ const StartupPage = ({ setPdfDocument, setIsLoading, onNewPDF }) => {
             setFileInfo(file.name, file.size);
         } catch (err) {
             console.error("Failed to load PDF", err);
-            alert("Failed to load PDF");
+            toast.error("Failed to load PDF");
         } finally {
             setIsLoading(false);
         }
@@ -59,7 +60,7 @@ const StartupPage = ({ setPdfDocument, setIsLoading, onNewPDF }) => {
             // If PDF file is provided, validate it matches
             if (validPdfFile && projectData.pdfFileName && validPdfFile.name !== projectData.pdfFileName) {
                 const mismatchMessage = `Warning: You selected "${validPdfFile.name}" but this project was created with "${projectData.pdfFileName}".\n\nAnnotations may not align correctly. Continue anyway?`;
-                if (!confirm(mismatchMessage)) {
+                if (!(await confirmToast(mismatchMessage, 'Continue', 'Cancel'))) {
                     setIsLoading(false);
                     return; // User cancelled
                 }
@@ -72,10 +73,13 @@ const StartupPage = ({ setPdfDocument, setIsLoading, onNewPDF }) => {
                 // Let's implement a specific prompt for PDF here if missing
                 const pdfFileName = projectData.pdfFileName || 'the PDF';
                 const confirmMessage = `This project requires "${pdfFileName}". Please locate the PDF file.`;
-                if (!confirm(confirmMessage)) {
+
+                // Use confirmToast instead of confirm
+                if (!(await confirmToast(confirmMessage, 'Locate PDF', 'Cancel'))) {
                     setIsLoading(false);
                     return;
                 }
+
                 try {
                     validPdfFile = await promptForPDF(pdfFileName);
                 } catch (e) {
@@ -92,9 +96,11 @@ const StartupPage = ({ setPdfDocument, setIsLoading, onNewPDF }) => {
             // Then apply the project data (annotations, calibrations, etc.)
             setProjectData(projectData);
 
+            toast.success('Project loaded successfully');
+
         } catch (err) {
             console.error("Failed to load project", err);
-            alert("Failed to load project: " + err.message);
+            toast.error("Failed to load project: " + err.message);
         } finally {
             setIsLoading(false);
         }
@@ -127,10 +133,10 @@ const StartupPage = ({ setPdfDocument, setIsLoading, onNewPDF }) => {
             await processProjectFiles(result.markaFile, result.pdfFile);
         } catch (err) {
             if (err.message === 'NEED_PDF') {
-                alert('Please select the PDF file as well, or use the file picker to select both files at once.');
+                toast.error('Please select the PDF file as well, or use the file picker to select both files at once.');
             } else if (err.message !== 'User cancelled') {
                 console.error("Failed to load project", err);
-                alert("Failed to load project: " + err.message);
+                toast.error("Failed to load project: " + err.message);
             }
             setIsLoading(false);
         }

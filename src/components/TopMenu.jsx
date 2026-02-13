@@ -11,7 +11,106 @@ import {
 import UpgradeDialog from './UpgradeDialog';
 import DocumentPropertiesDialog from './DocumentPropertiesDialog';
 import { exportFlattenedPDF } from '../services/pdf-export-service';
-import { saveProject, loadProject, promptForPDF, promptForProjectFiles } from '../services/project-service';
+import { toast } from 'sonner';
+import { confirmToast } from '../utils/confirm-toast';
+
+// ... (existing imports)
+
+const handleOpenProject = async () => {
+    // PRO mode check temporarily disabled for testing
+    // if (!isPremium) {
+    //     setShowUpgradeDialog(true);
+    //     setActiveMenu(null);
+    //     return;
+    // }
+
+    setActiveMenu(null);
+
+    try {
+        // Prompt user to select both .marka and PDF files at once
+        const result = await promptForProjectFiles();
+
+        // Load and parse the .marka file
+        const projectData = await loadProject(result.markaFile);
+
+        // Validate PDF filename matches
+        if (projectData.pdfFileName && result.pdfFile.name !== projectData.pdfFileName) {
+            const mismatchMessage = `Warning: You selected "${result.pdfFile.name}" but this project was created with "${projectData.pdfFileName}".\n\nAnnotations may not align correctly. Continue anyway?`;
+            if (!(await confirmToast(mismatchMessage, 'Continue', 'Cancel'))) {
+                return; // User cancelled
+            }
+        }
+
+        // Load the PDF first
+        setIsLoading(true);
+        const doc = await loadPDF(result.pdfFile);
+        setPdfDocument(doc, result.pdfFile.name, result.pdfFile.size);
+        setFileInfo(result.pdfFile.name, result.pdfFile.size);
+
+        // Then apply the project data (annotations, calibrations, etc.)
+        setProjectData(projectData);
+
+        setIsLoading(false);
+        toast.success('Project loaded successfully');
+    } catch (err) {
+        if (err.message === 'NEED_PDF') {
+            // User only selected .marka file, prompt for PDF separately
+            toast.error('Please select the PDF file as well, or use the file picker to select both files at once.');
+        } else if (err.message !== 'User cancelled') {
+            console.error("Failed to load project", err);
+            toast.error("Failed to load project: " + err.message);
+        }
+        setIsLoading(false);
+    }
+};
+
+const handleProjectFileChange = async (e) => {
+    // This is now unused, but keeping for backwards compatibility
+    const file = e.target.files[0];
+    if (!file) return;
+
+    try {
+        // Load and parse the .marka file
+        const projectData = await loadProject(file);
+
+        // Prompt user to locate the PDF file
+        const pdfFileName = projectData.pdfFileName || 'the PDF';
+        const confirmMessage = `This project requires "${pdfFileName}". Please locate the PDF file.`;
+
+        if (!(await confirmToast(confirmMessage, 'Locate PDF', 'Cancel'))) {
+            return; // User cancelled
+        }
+
+        // Prompt for PDF file
+        const pdfFile = await promptForPDF(pdfFileName);
+
+        // Validate PDF filename matches
+        if (projectData.pdfFileName && pdfFile.name !== projectData.pdfFileName) {
+            const mismatchMessage = `Warning: You selected "${pdfFile.name}" but this project was created with "${projectData.pdfFileName}".\n\nAnnotations may not align correctly. Continue anyway?`;
+            if (!(await confirmToast(mismatchMessage, 'Continue', 'Cancel'))) {
+                return; // User cancelled
+            }
+        }
+
+        // Load the PDF first
+        setIsLoading(true);
+        const doc = await loadPDF(pdfFile);
+        setPdfDocument(doc, pdfFile.name, pdfFile.size);
+        setFileInfo(pdfFile.name, pdfFile.size);
+
+        // Then apply the project data (annotations, calibrations, etc.)
+        setProjectData(projectData);
+
+        setIsLoading(false);
+        toast.success('Project loaded successfully');
+    } catch (err) {
+        console.error("Failed to load project", err);
+        toast.error("Failed to load project: " + err.message);
+        setIsLoading(false);
+    }
+
+    e.target.value = null;
+};
 
 
 const TopMenu = ({ setPdfDocument, setIsLoading, isDocumentLoaded, onNewPDF, pdfDocument }) => {
