@@ -8,7 +8,8 @@ const BottomBar = ({ totalPages }) => {
         viewMode,
         setViewMode,
         calibrationScales,
-        setPageScale
+        setPageScale,
+        setJumpToPage
     } = useAppStore();
 
     const [pageInput, setPageInput] = useState(currentPage);
@@ -91,10 +92,10 @@ const BottomBar = ({ totalPages }) => {
         }
     };
 
-    const goNext = () => setCurrentPage(Math.min(currentPage + 1, totalPages));
-    const goPrev = () => setCurrentPage(Math.max(currentPage - 1, 1));
-    const goFirst = () => setCurrentPage(1);
-    const goLast = () => setCurrentPage(totalPages);
+    const goNext = () => setJumpToPage(Math.min(currentPage + 1, totalPages));
+    const goPrev = () => setJumpToPage(Math.max(currentPage - 1, 1));
+    const goFirst = () => setJumpToPage(1);
+    const goLast = () => setJumpToPage(totalPages);
 
     return (
         <div className="w-full h-[50px] bg-[var(--bg-secondary)] border-t border-[var(--border-color)] grid grid-cols-[1fr_auto_1fr] items-center px-5 box-border text-[var(--text-primary)] text-[15px] select-none">

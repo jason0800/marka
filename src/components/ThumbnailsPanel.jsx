@@ -8,7 +8,7 @@ const ThumbnailsPanel = ({ pdfDocument }) => {
     const [thumbScale, setThumbScale] = useState(1);
     const [sliderVal, setSliderVal] = useState(160);
 
-    // Initial scroll to active thumbnail logic
+    // Auto-scroll to active thumbnail when page changes
     useEffect(() => {
         if (scrollRef.current) {
             const activeThumb = scrollRef.current.querySelector(`[data-page="${currentPage}"]`);
@@ -16,7 +16,7 @@ const ThumbnailsPanel = ({ pdfDocument }) => {
                 activeThumb.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
             }
         }
-    }, []); // Only on mount
+    }, [currentPage]); // Scroll whenever currentPage changes
 
     if (!pdfDocument) return (
         <div className="flex-1 flex items-center justify-center text-[var(--text-secondary)]">

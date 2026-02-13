@@ -286,6 +286,7 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
                 setSelectionStart(null);
                 setIsDraggingItems(false);
                 setDragStart(null);
+                setActiveTool('select'); // Return to select mode
             }
         };
 
@@ -328,15 +329,15 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
             } else {
                 // Check measurements
                 const meas = pageMeasurements.find(m => m.id === resizeId);
-                if (meas && (meas.type === 'text' || meas.type === 'callout')) {
+                if (meas && (meas.type === 'text' || meas.type === 'callout' || meas.type === 'length' || meas.type === 'area')) {
                     pushHistory();
                     // Normalize to shape-like for resizing logic
                     const startShape = {
                         ...meas,
-                        x: meas.box.x,
-                        y: meas.box.y,
-                        width: meas.box.w,
-                        height: meas.box.h,
+                        x: meas.box?.x || 0,
+                        y: meas.box?.y || 0,
+                        width: meas.box?.w || 0,
+                        height: meas.box?.h || 0,
                         rotation: meas.rotation || 0
                     };
                     setResizingState({
@@ -556,6 +557,30 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
                 }
 
                 updateMeasurement(id, { knee: newKnee });
+                return;
+            }
+
+            // Length measurement endpoint dragging
+            if (startShape.type === "length" && (handle === "start" || handle === "end")) {
+                const newPoints = [...startShape.points];
+                if (handle === "start") {
+                    newPoints[0] = { x: startShape.points[0].x + dx, y: startShape.points[0].y + dy };
+                } else if (handle === "end") {
+                    newPoints[1] = { x: startShape.points[1].x + dx, y: startShape.points[1].y + dy };
+                }
+                updateMeasurement(id, { points: newPoints });
+                return;
+            }
+
+            // Area measurement vertex dragging
+            if (startShape.type === "area" && handle.startsWith("vertex-")) {
+                const vertexIndex = parseInt(handle.split("-")[1]);
+                const newPoints = [...startShape.points];
+                newPoints[vertexIndex] = {
+                    x: startShape.points[vertexIndex].x + dx,
+                    y: startShape.points[vertexIndex].y + dy
+                };
+                updateMeasurement(id, { points: newPoints });
                 return;
             }
 
@@ -1222,6 +1247,7 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
             const a = m.points[0];
             const b = m.points[1];
             const dist = calculateDistance(a, b);
+            const strokeColor = m.stroke || "#e74c3c";
 
             return (
                 <g key={m.id} {...measCommon}>
@@ -1230,20 +1256,61 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
                         y1={a.y}
                         x2={b.x}
                         y2={b.y}
-                        stroke="#e74c3c"
+                        stroke={strokeColor}
                         strokeWidth={nonScalingStroke}
                         vectorEffect="non-scaling-stroke"
                     />
                     <text
                         x={(a.x + b.x) / 2}
                         y={(a.y + b.y) / 2 - 6 / Math.max(1e-6, viewScale)}
-                        fill="#e74c3c"
+                        fill={strokeColor}
                         fontSize={14 / Math.max(1e-6, viewScale)}
                         textAnchor="middle"
                         vectorEffect="non-scaling-stroke"
                     >
                         {toUnits(dist).toFixed(2)} {unit}
                     </text>
+                    {isSelected && (
+                        <>
+                            {/* Selection highlight on the line */}
+                            <line
+                                x1={a.x}
+                                y1={a.y}
+                                x2={b.x}
+                                y2={b.y}
+                                stroke="var(--primary-color)"
+                                strokeWidth={nonScalingStroke * 2}
+                                vectorEffect="non-scaling-stroke"
+                                opacity={0.3}
+                                pointerEvents="none"
+                            />
+                            {/* Handles at endpoints */}
+                            <circle
+                                cx={a.x}
+                                cy={a.y}
+                                r={handleSize / 2}
+                                fill="#b4e6a0"
+                                stroke="#3a6b24"
+                                strokeWidth={1 / Math.max(1e-6, viewScale)}
+                                vectorEffect="non-scaling-stroke"
+                                cursor="move"
+                                data-resize-id={m.id}
+                                data-resize-handle="start"
+                            />
+                            <circle
+                                cx={b.x}
+                                cy={b.y}
+                                r={handleSize / 2}
+                                fill="#b4e6a0"
+                                stroke="#3a6b24"
+                                strokeWidth={1 / Math.max(1e-6, viewScale)}
+                                vectorEffect="non-scaling-stroke"
+                                cursor="move"
+                                data-resize-id={m.id}
+                                data-resize-handle="end"
+                            />
+                        </>
+                    )}
                 </g>
             );
         }
@@ -1251,25 +1318,57 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
         if (m.type === "area" && m.points?.length >= 3) {
             const pointsStr = m.points.map((p) => `${p.x},${p.y}`).join(" ");
             const area = calculatePolygonArea(m.points);
+            const strokeColor = m.stroke || "#2ecc71";
+            const fillColor = m.fill || "rgba(108, 176, 86, 0.25)";
 
             return (
                 <g key={m.id} {...measCommon}>
                     <polygon
                         points={pointsStr}
-                        fill="rgba(108, 176, 86, 0.25)"
-                        stroke="var(--primary-color)"
+                        fill={fillColor}
+                        stroke={strokeColor}
                         strokeWidth={nonScalingStroke}
                         vectorEffect="non-scaling-stroke"
                     />
                     <text
                         x={m.points[0].x}
                         y={m.points[0].y - 8 / Math.max(1e-6, viewScale)}
-                        fill="var(--primary-color)"
+                        fill={strokeColor}
                         fontSize={14 / Math.max(1e-6, viewScale)}
                         vectorEffect="non-scaling-stroke"
                     >
                         {toUnits2(area).toFixed(2)} {unit}²
                     </text>
+                    {isSelected && (
+                        <>
+                            {/* Selection highlight on the polygon */}
+                            <polygon
+                                points={pointsStr}
+                                fill="none"
+                                stroke="var(--primary-color)"
+                                strokeWidth={nonScalingStroke * 2}
+                                vectorEffect="non-scaling-stroke"
+                                opacity={0.5}
+                                pointerEvents="none"
+                            />
+                            {/* Handles at each vertex */}
+                            {m.points.map((p, idx) => (
+                                <circle
+                                    key={idx}
+                                    cx={p.x}
+                                    cy={p.y}
+                                    r={handleSize / 2}
+                                    fill="#b4e6a0"
+                                    stroke="#3a6b24"
+                                    strokeWidth={1 / Math.max(1e-6, viewScale)}
+                                    vectorEffect="non-scaling-stroke"
+                                    cursor="move"
+                                    data-resize-id={m.id}
+                                    data-resize-handle={`vertex-${idx}`}
+                                />
+                            ))}
+                        </>
+                    )}
                 </g>
             );
         }
