@@ -1344,7 +1344,8 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
                         fontSize={fontSize / Math.max(1e-6, viewScale)}
                         textAnchor="middle"
                         vectorEffect="non-scaling-stroke"
-                        pointerEvents="none"
+                        pointerEvents="all"
+                        style={{ cursor: "move" }}
                     >
                         {toUnits(dist).toFixed(2)} {unit}
                     </text>
@@ -1413,16 +1414,6 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
                     </text>
                     {isSelected && (
                         <>
-                            {/* Selection highlight on the polygon */}
-                            <polygon
-                                points={pointsStr}
-                                fill="none"
-                                stroke="var(--primary-color)"
-                                strokeWidth={nonScalingStroke * 2}
-                                vectorEffect="non-scaling-stroke"
-                                opacity={0.5}
-                                pointerEvents="none"
-                            />
                             {/* Handles at each vertex */}
                             {m.points.map((p, idx) => (
                                 <circle
@@ -1792,7 +1783,10 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
                     height={height}
                     viewScale={viewScale}
                     renderScale={renderScale}
-                    shapes={isDraggingItems ? pageShapes.filter(s => !selectedIds.includes(s.id)) : pageShapes}
+                    shapes={
+                        (isDraggingItems ? pageShapes.filter(s => !selectedIds.includes(s.id)) : pageShapes)
+                            .filter(s => !['rectangle', 'circle', 'line', 'arrow'].includes(s.type))
+                    }
                     measurements={
                         (isDraggingItems ? pageMeasurements.filter(m => !selectedIds.includes(m.id)) : pageMeasurements)
                             .filter(m => !["length", "area", "perimeter"].includes(m.type))
@@ -1822,7 +1816,6 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
 
                 {/* Selected / OOB Shapes */}
                 {pageShapes
-                    .filter(s => selectedIds.includes(s.id) || isOutOfBounds(s))
                     .map(s => {
                         let shapeToRender = s;
 
