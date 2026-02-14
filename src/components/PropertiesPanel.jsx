@@ -171,7 +171,7 @@ const PropertiesPanel = () => {
             ) : (
                 <div className="flex-1 p-4 flex flex-col gap-4 overflow-y-auto">
                     {/* Text Properties */}
-                    {(['text', 'callout', 'comment'].includes(source?.type)) && (
+                    {(['text', 'callout', 'comment', 'length', 'area', 'perimeter'].includes(source?.type)) && (
                         <>
                             {/* Font Size */}
                             <div className="flex flex-col gap-1">
@@ -219,7 +219,6 @@ const PropertiesPanel = () => {
                                     </button>
                                 </div>
                             </div>
-                            <div className="w-full h-px bg-[var(--border-color)] my-2" />
                         </>
                     )}
 
@@ -254,8 +253,8 @@ const PropertiesPanel = () => {
                         </div>
                     </div>
 
-                    {/* Fill / Background - Hidden for Lines/Arrows */}
-                    {!['line', 'arrow'].includes(source?.type) && (
+                    {/* Fill / Background - Hidden for Lines/Arrows/Length */}
+                    {!['line', 'arrow', 'length'].includes(source?.type) && (
                         <div className="flex flex-col gap-1">
                             <label className="text-xs text-[var(--text-secondary)] font-medium">
                                 {['text', 'callout', 'comment'].includes(source?.type) ? 'Background' : 'Fill'}
@@ -377,8 +376,8 @@ const PropertiesPanel = () => {
                         />
                     </div>
 
-                    {/* Rotation Control - Hidden for Lines/Arrows */}
-                    {!['line', 'arrow'].includes(source?.type) && (
+                    {/* Rotation Control - Hidden for Lines/Arrows/Length */}
+                    {!['line', 'arrow', 'length'].includes(source?.type) && (
                         <div className="flex flex-col gap-1">
                             <div className="flex justify-between items-center">
                                 <label className="text-xs text-[var(--text-secondary)] font-medium">Rotation</label>

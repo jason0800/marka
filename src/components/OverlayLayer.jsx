@@ -202,6 +202,7 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
     const [selectionStart, setSelectionStart] = useState(null);
     const [dragStart, setDragStart] = useState(null);
     const [isDraggingItems, setIsDraggingItems] = useState(false);
+    const [dragStartItems, setDragStartItems] = useState({});
 
     // Resize
     const [resizingState, setResizingState] = useState(null); // { id, handle, startShape, startPoint }
@@ -363,17 +364,42 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
 
             if (hitId) {
                 // DOM Hit (SVG element)
+                let newSelection = [];
                 const isSelected = selectedIds.includes(hitId);
 
                 if (isShift) {
-                    setSelectedIds((prev) =>
-                        isSelected ? prev.filter((id) => id !== hitId) : [...prev, hitId]
-                    );
+                    if (isSelected) {
+                        newSelection = selectedIds.filter((id) => id !== hitId);
+                    } else {
+                        newSelection = [...selectedIds, hitId];
+                    }
                 } else {
-                    if (!isSelected) setSelectedIds([hitId]);
+                    if (isSelected) {
+                        newSelection = selectedIds;
+                    } else {
+                        newSelection = [hitId];
+                    }
                 }
 
+                setSelectedIds(newSelection);
+
+                // Prepare Drag Snapshot for items in newSelection
+                const snapshot = {};
+                newSelection.forEach(id => {
+                    const s = pageShapes.find(x => x.id === id);
+                    if (s) {
+                        snapshot[id] = JSON.parse(JSON.stringify(s));
+                    } else {
+                        const m = pageMeasurements.find(x => x.id === id);
+                        if (m) {
+                            snapshot[id] = JSON.parse(JSON.stringify(m));
+                        }
+                    }
+                });
+                setDragStartItems(snapshot);
+
                 setDragStart({ x: point.x, y: point.y });
+                setDragDelta({ x: 0, y: 0 }); // Fix shifting
                 setIsDraggingItems(true);
                 pushHistory();
             } else {
@@ -383,14 +409,36 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
                 if (hit) {
                     const hitId = hit.item.id;
                     const isSelected = selectedIds.includes(hitId);
+
+                    let newSelection = [];
                     if (isShift) {
-                        setSelectedIds((prev) =>
-                            isSelected ? prev.filter((id) => id !== hitId) : [...prev, hitId]
-                        );
+                        if (isSelected) {
+                            newSelection = selectedIds.filter((id) => id !== hitId);
+                        } else {
+                            newSelection = [...selectedIds, hitId];
+                        }
                     } else {
-                        setSelectedIds([hitId]);
+                        newSelection = isSelected ? selectedIds : [hitId];
                     }
+                    setSelectedIds(newSelection);
+
+                    // Snapshot
+                    const snapshot = {};
+                    newSelection.forEach(id => {
+                        const s = pageShapes.find(x => x.id === id);
+                        if (s) {
+                            snapshot[id] = JSON.parse(JSON.stringify(s));
+                        } else {
+                            const m = pageMeasurements.find(x => x.id === id);
+                            if (m) {
+                                snapshot[id] = JSON.parse(JSON.stringify(m));
+                            }
+                        }
+                    });
+                    setDragStartItems(snapshot);
+
                     setDragStart({ x: point.x, y: point.y });
+                    setDragDelta({ x: 0, y: 0 }); // Fix shifting
                     setIsDraggingItems(true);
                     pushHistory();
                     return;
@@ -788,34 +836,31 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
                         }
                     } else {
                         const meas = pageMeasurements.find(m => m.id === id);
-                        if (meas && meas.box) {
-                            // If dragging a callout, we want to move ONLY the box, keeping the tip stationary.
-                            // UNLESS we selected the whole shape/tip via selection box? 
-                            // The user request: "moving the textbox should only move the textbox".
-                            // If we selected it via click on box -> move box.
-                            // If we selected via selection rect covering tip -> move both?
-                            // Currently 'selectedIds' doesn't distinguish *what* part was clicked.
-                            // BUT: If the user just drags the "selected item", we assume whole-shape drag usually.
-                            // However, strictly complying with the request for Callouts:
+                        if (meas) {
+                            if (meas.box) {
+                                // If dragging a callout, we want to move ONLY the box, keeping the tip stationary.
+                                if (meas.type === 'callout') {
+                                    // Only move the BOX. Tip stays.
+                                    const newBox = { ...meas.box, x: meas.box.x + dx, y: meas.box.y + dy };
+                                    const changes = { box: newBox };
 
-                            if (meas.type === 'callout') {
-                                // Only move the BOX. Tip stays.
-                                const newBox = { ...meas.box, x: meas.box.x + dx, y: meas.box.y + dy };
-                                const changes = { box: newBox };
+                                    // User: "knee should remain the same length away from the text box"
+                                    const currentKnee = meas.knee || getCalloutKnee(meas.box, meas.tip, null);
+                                    changes.knee = {
+                                        x: currentKnee.x + dx,
+                                        y: currentKnee.y + dy
+                                    };
 
-                                // User: "knee should remain the same length away from the text box"
-                                // Crystallize Knee if not present, then move it.
-                                const currentKnee = meas.knee || getCalloutKnee(meas.box, meas.tip, null);
-                                changes.knee = {
-                                    x: currentKnee.x + dx,
-                                    y: currentKnee.y + dy
-                                };
-
-                                updateMeasurement(id, changes);
-                            } else {
-                                // Other measurements (text, etc) - move whole thing or box
-                                const newBox = { ...meas.box, x: meas.box.x + dx, y: meas.box.y + dy };
-                                updateMeasurement(id, { box: newBox });
+                                    updateMeasurement(id, changes);
+                                } else {
+                                    // Other measurements (text, etc) - move whole thing or box
+                                    const newBox = { ...meas.box, x: meas.box.x + dx, y: meas.box.y + dy };
+                                    updateMeasurement(id, { box: newBox });
+                                }
+                            } else if (meas.points) {
+                                // Length, Area, Perimeter
+                                const newPoints = meas.points.map(p => ({ x: p.x + dx, y: p.y + dy }));
+                                updateMeasurement(id, { points: newPoints });
                             }
                         }
                     }
@@ -1250,7 +1295,9 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
         const isSelected = selectedIds.includes(m.id);
         const measCommon = {
             "data-meas-id": m.id,
-            cursor: activeTool === "select" ? "move" : "default",
+            style: {
+                cursor: activeTool === "select" ? "move" : "default",
+            }
         };
 
         if (m.type === "length" && m.points?.length === 2) {
@@ -1258,42 +1305,51 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
             const b = m.points[1];
             const dist = calculateDistance(a, b);
             const strokeColor = m.stroke || "#e74c3c";
+            const strokeWidth = m.strokeWidth || 2;
+            const strokeDasharray = m.strokeDasharray === 'none' ? undefined : (m.strokeDasharray === 'dashed' ? '12, 12' : (m.strokeDasharray === 'dotted' ? '2, 8' : m.strokeDasharray));
+            const fontSize = m.fontSize || 14;
+            const textColor = m.textColor || strokeColor;
+            const opacity = m.opacity ?? 1;
 
             return (
-                <g key={m.id} {...measCommon}>
+                <g key={m.id} {...measCommon} style={{ ...measCommon.style, opacity }}>
+                    {/* Hit Area for dragging */}
+                    <line
+                        x1={a.x}
+                        y1={a.y}
+                        x2={b.x}
+                        y2={b.y}
+                        stroke="transparent"
+                        strokeWidth={15 / Math.max(1e-6, viewScale)}
+                        vectorEffect="non-scaling-stroke"
+                        pointerEvents="all"
+                        data-meas-id={m.id} // Ensure it's identifiable
+                        style={{ cursor: "move" }}
+                    />
                     <line
                         x1={a.x}
                         y1={a.y}
                         x2={b.x}
                         y2={b.y}
                         stroke={strokeColor}
-                        strokeWidth={nonScalingStroke}
+                        strokeWidth={strokeWidth / Math.max(1e-6, viewScale)}
+                        strokeDasharray={strokeDasharray}
                         vectorEffect="non-scaling-stroke"
+                        pointerEvents="none" // Let hit area handle events
                     />
                     <text
                         x={(a.x + b.x) / 2}
                         y={(a.y + b.y) / 2 - 6 / Math.max(1e-6, viewScale)}
-                        fill={strokeColor}
-                        fontSize={14 / Math.max(1e-6, viewScale)}
+                        fill={textColor}
+                        fontSize={fontSize / Math.max(1e-6, viewScale)}
                         textAnchor="middle"
                         vectorEffect="non-scaling-stroke"
+                        pointerEvents="none"
                     >
                         {toUnits(dist).toFixed(2)} {unit}
                     </text>
                     {isSelected && (
                         <>
-                            {/* Selection highlight on the line */}
-                            <line
-                                x1={a.x}
-                                y1={a.y}
-                                x2={b.x}
-                                y2={b.y}
-                                stroke="var(--primary-color)"
-                                strokeWidth={nonScalingStroke * 2}
-                                vectorEffect="non-scaling-stroke"
-                                opacity={0.3}
-                                pointerEvents="none"
-                            />
                             {/* Handles at endpoints */}
                             <circle
                                 cx={a.x}
@@ -1303,7 +1359,7 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
                                 stroke="#3a6b24"
                                 strokeWidth={1 / Math.max(1e-6, viewScale)}
                                 vectorEffect="non-scaling-stroke"
-                                cursor="move"
+                                cursor="default"
                                 data-resize-id={m.id}
                                 data-resize-handle="start"
                             />
@@ -1315,7 +1371,7 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
                                 stroke="#3a6b24"
                                 strokeWidth={1 / Math.max(1e-6, viewScale)}
                                 vectorEffect="non-scaling-stroke"
-                                cursor="move"
+                                cursor="default"
                                 data-resize-id={m.id}
                                 data-resize-handle="end"
                             />
@@ -1329,22 +1385,28 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
             const pointsStr = m.points.map((p) => `${p.x},${p.y}`).join(" ");
             const area = calculatePolygonArea(m.points);
             const strokeColor = m.stroke || "#2ecc71";
+            const strokeWidth = m.strokeWidth || 2;
+            const strokeDasharray = m.strokeDasharray === 'none' ? undefined : (m.strokeDasharray === 'dashed' ? '12, 12' : (m.strokeDasharray === 'dotted' ? '2, 8' : m.strokeDasharray));
             const fillColor = m.fill || "rgba(108, 176, 86, 0.25)";
+            const fontSize = m.fontSize || 14;
+            const textColor = m.textColor || strokeColor;
+            const opacity = m.opacity ?? 1;
 
             return (
-                <g key={m.id} {...measCommon}>
+                <g key={m.id} {...measCommon} style={{ ...measCommon.style, opacity }}>
                     <polygon
                         points={pointsStr}
                         fill={fillColor}
                         stroke={strokeColor}
-                        strokeWidth={nonScalingStroke}
+                        strokeWidth={strokeWidth / Math.max(1e-6, viewScale)}
+                        strokeDasharray={strokeDasharray}
                         vectorEffect="non-scaling-stroke"
                     />
                     <text
                         x={m.points[0].x}
                         y={m.points[0].y - 8 / Math.max(1e-6, viewScale)}
-                        fill={strokeColor}
-                        fontSize={14 / Math.max(1e-6, viewScale)}
+                        fill={textColor}
+                        fontSize={fontSize / Math.max(1e-6, viewScale)}
                         vectorEffect="non-scaling-stroke"
                     >
                         {toUnits2(area).toFixed(2)} {unit}²
@@ -1372,7 +1434,7 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
                                     stroke="#3a6b24"
                                     strokeWidth={1 / Math.max(1e-6, viewScale)}
                                     vectorEffect="non-scaling-stroke"
-                                    cursor="move"
+                                    cursor="default"
                                     data-resize-id={m.id}
                                     data-resize-handle={`vertex-${idx}`}
                                 />
@@ -1731,7 +1793,10 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
                     viewScale={viewScale}
                     renderScale={renderScale}
                     shapes={isDraggingItems ? pageShapes.filter(s => !selectedIds.includes(s.id)) : pageShapes}
-                    measurements={isDraggingItems ? pageMeasurements.filter(m => !selectedIds.includes(m.id)) : pageMeasurements}
+                    measurements={
+                        (isDraggingItems ? pageMeasurements.filter(m => !selectedIds.includes(m.id)) : pageMeasurements)
+                            .filter(m => !["length", "area", "perimeter"].includes(m.type))
+                    }
                     selectedIds={selectedIds}
                     pageIndex={pageIndex}
                     pageUnits={pageUnits}
@@ -1784,9 +1849,7 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
                 {pageMeasurements
                     .filter(m =>
                         selectedIds.includes(m.id) ||
-                        m.type === "comment" ||
-                        m.type === "text" ||
-                        m.type === "callout" ||
+                        ["comment", "text", "callout", "length", "area", "perimeter"].includes(m.type) ||
                         isOutOfBounds(m)
                     )
                     .map(m => {
@@ -1817,6 +1880,11 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
                                     };
                                 } else if (m.box) {
                                     measToRender = { ...m, box: { ...m.box, x: m.box.x + dx, y: m.box.y + dy } };
+                                } else if (m.points) {
+                                    measToRender = {
+                                        ...m,
+                                        points: m.points.map(p => ({ x: p.x + dx, y: p.y + dy }))
+                                    };
                                 }
                             }
                         }
@@ -1839,8 +1907,8 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
                             const dy = cursor.y - shapeStart.y;
 
                             // Box Position: Cursor is Connection Point.
-                            // Knee Stub: Fixed 20px from connection point.
-                            const stub = 20;
+                            // Knee Stub: Fixed 40px from connection point.
+                            const stub = 40;
                             let bx, kneeX, by, kneeY;
 
                             if (Math.abs(dy) > Math.abs(dx)) {
