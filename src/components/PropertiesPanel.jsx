@@ -58,6 +58,38 @@ const PropertiesPanel = () => {
                 } else {
                     const measurement = measurements.find(m => m.id === id);
                     if (measurement) {
+                        // SPECIAL HANDLING FOR ROTATION ON CALLOUTS
+                        // Rotate the knee point so the "stub" maintains its relative angle/position
+                        if (key === 'rotation' && measurement.type === 'callout') {
+                            const oldRot = measurement.rotation || 0;
+                            const deltaRot = value - oldRot;
+
+                            if (Math.abs(deltaRot) > 0.001) {
+                                const rad = (deltaRot * Math.PI) / 180;
+                                const cos = Math.cos(rad);
+                                const sin = Math.sin(rad);
+
+                                const cx = measurement.box.x + measurement.box.w / 2;
+                                const cy = measurement.box.y + measurement.box.h / 2;
+
+                                // Vector from Center to Knee
+                                const kx = measurement.knee.x - cx;
+                                const ky = measurement.knee.y - cy;
+
+                                // Rotate vector
+                                const newKx = kx * cos - ky * sin;
+                                const newKy = kx * sin + ky * cos;
+
+                                const newKnee = {
+                                    x: cx + newKx,
+                                    y: cy + newKy
+                                };
+
+                                updateMeasurement(id, { [key]: value, knee: newKnee });
+                                return;
+                            }
+                        }
+
                         updateMeasurement(id, { [key]: value });
                     }
                 }

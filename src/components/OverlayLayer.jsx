@@ -899,11 +899,11 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
                 const dy = point.y - shapeStart.y; // Unused for box pos now, but maybe for side decide?
 
                 // Box Position: The cursor is the CONNECTION POINT.
-                // Knee Stub: Always stick out 20px from box towards the "outside".
+                // Knee Stub: Always stick out 40px from box towards the "outside".
                 // If dx >= 0 (Right), Box is to Right of Cursor. Connection is Left-Center. Knee is Left of Cursor.
                 // If dx < 0 (Left), Box is to Left of Cursor. Connection is Right-Center. Knee is Right of Cursor.
 
-                const stub = 20;
+                const stub = 40;
                 let bx, kneeX, by, kneeY;
 
                 if (Math.abs(dy) > Math.abs(dx)) {
