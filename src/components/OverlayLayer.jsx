@@ -518,43 +518,53 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
 
                 // Let's implement the logic:
                 // Calculate current mouse pos vs box center
+                // Calculate box center
                 const cx = startShape.box.x + startShape.box.w / 2;
                 const cy = startShape.box.y + startShape.box.h / 2;
                 const aspect = startShape.box.w / startShape.box.h;
+                const rotation = startShape.rotation || 0;
 
-                // Current vector from center
-                // Use point (current cursor) not startPoint+delta for absolute position control logic
-                const px = point.x;
-                const py = point.y;
+                // Rotated vector from center to mouse point
+                // V_global = P - C
+                const vGx = point.x - cx;
+                const vGy = point.y - cy;
 
-                const boxDx = px - cx;
-                const boxDy = py - cy;
+                // Rotate by -rotation to get V_local
+                const rad = (-rotation * Math.PI) / 180;
+                const cos = Math.cos(rad);
+                const sin = Math.sin(rad);
 
-                // Determine dominant axis for "attachment"
-                // If dy is large -> Top/Bottom attachment -> Knee X is constrained to Box Center X
-                // If dx is large -> Left/Right attachment -> Knee Y is constrained to Box Center Y
+                const vLx = vGx * cos - vGy * sin;
+                const vLy = vGx * sin + vGy * cos;
 
-                const isVertical = Math.abs(boxDy) * aspect > Math.abs(boxDx);
+                // Determine dominant axis in Local Space
+                // Top/Bottom (Vertical) vs Left/Right (Horizontal) relative to box axes
+                const isVertical = Math.abs(vLy) * aspect > Math.abs(vLx);
 
-                let newKnee = { x: px, y: py };
+                let localKneeX, localKneeY;
 
                 if (isVertical) {
-                    // Vertical Mode: Knee is somewhere above/below. 
-                    // Constraint: Knee X = Box Center X (approx, or snapped).
-                    // But wait, the previous logic calculated Knee as (StartX, MidY) or (MidX, StartY).
-                    // If we allow "moving" the knee, we are effectively setting the "stub length".
-                    // Vertical: Knee X is fixed to Center X. Knee Y is standard valid, but user drags it?
-                    // Actually, for a standard orthogonal connector:
-                    // If attached Top/Bottom: Line goes BoxCenter -> (BoxCenter, KneeY) -> Tip.
-                    // So Knee X MUST be Box Center X. Knee Y is what the user controls (the height of the stub).
-                    newKnee.x = cx;
-                    newKnee.y = py;
+                    // Snap to Vertical Centerline (Local X = 0)
+                    localKneeX = 0;
+                    localKneeY = vLy;
                 } else {
-                    // Horizontal Mode: Line goes BoxCenter -> (KneeX, BoxCenter) -> Tip.
-                    // Knee Y MUST be Box Center Y. Knee X is what user controls (width of stub).
-                    newKnee.x = px;
-                    newKnee.y = cy;
+                    // Snap to Horizontal Centerline (Local Y = 0)
+                    localKneeX = vLx;
+                    localKneeY = 0;
                 }
+
+                // Rotate back to Global Space
+                const posRad = (rotation * Math.PI) / 180;
+                const posCos = Math.cos(posRad);
+                const posSin = Math.sin(posRad);
+
+                const gKneeX = localKneeX * posCos - localKneeY * posSin;
+                const gKneeY = localKneeX * posSin + localKneeY * posCos;
+
+                const newKnee = {
+                    x: cx + gKneeX,
+                    y: cy + gKneeY
+                };
 
                 updateMeasurement(id, { knee: newKnee });
                 return;
@@ -1046,8 +1056,8 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
                 {renderHandle(-padding, h / 2, "w-resize", "w")}
 
                 <circle
-                    cx={w / 2 - (s.isCallout ? 20 / Math.max(1e-6, viewScale) : 0)}
-                    cy={-(s.isCallout ? rotOffset / Math.max(1e-6, viewScale) : rotOffset) - padding}
+                    cx={w / 2}
+                    cy={-rotOffset / Math.max(1e-6, viewScale) - padding}
                     r={4 / Math.max(1e-6, viewScale)}
                     fill="#b4e6a0"
                     stroke="#3a6b24"
@@ -1631,14 +1641,14 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
                 {/* Handles outside Opacity group */}
                 {
                     isSelected && (
-                        <g transform={`translate(${m.box.x}, ${m.box.y})`}>
+                        <g transform={`translate(${m.box.x}, ${m.box.y}) ${m.rotation ? `rotate(${m.rotation}, ${m.box.w / 2}, ${m.box.h / 2})` : ''}`}>
                             {renderSelectionFrame({
                                 id: m.id,
                                 x: 0,
                                 y: 0,
                                 width: m.box.w,
                                 height: m.box.h,
-                                rotation: m.rotation || 0,
+                                rotation: 0, // Already applied to group
                                 type: "rectangle", // Proxy but we can pass extra meta
                                 isCallout: m.type === 'callout'
                             })}
