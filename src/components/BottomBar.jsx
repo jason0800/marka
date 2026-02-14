@@ -8,12 +8,13 @@ const BottomBar = ({ totalPages }) => {
         viewMode,
         setViewMode,
         calibrationScales,
+        calibrationDetails,
         setPageScale,
         setJumpToPage
     } = useAppStore();
 
     const [pageInput, setPageInput] = useState(currentPage);
-    const [scaleInput, setScaleInput] = useState('');
+    const [scaleDisplay, setScaleDisplay] = useState('');
 
     useEffect(() => {
         setPageInput(currentPage);
@@ -21,13 +22,19 @@ const BottomBar = ({ totalPages }) => {
         // Load scale for current page
         const pageIndex = currentPage - 1;
         const scale = calibrationScales[pageIndex];
-        if (scale) {
-            // Convert scale back to 1:X format
-            setScaleInput(`1:${Math.round(scale)}`);
+        const details = calibrationDetails[pageIndex];
+
+        if (details) {
+            // Format: "1 mm = 0.5 m"
+            setScaleDisplay(`${details.paperVal} ${details.paperUnit} = ${details.realVal} ${details.realUnit}`);
+        } else if (scale) {
+            // Fallback for legacy/unknown details: 1:X (where X is calculated assuming mm/mm or similar?)
+            // Actually, without units, 1:X is ambiguous but "1:50" usually means 1 unit paper = 50 units real.
+            setScaleDisplay(`1:${Math.round(scale)}`);
         } else {
-            setScaleInput('');
+            setScaleDisplay('Not Set');
         }
-    }, [currentPage, calibrationScales]);
+    }, [currentPage, calibrationScales, calibrationDetails]);
 
     const handlePageChange = (e) => {
         const val = parseInt(e.target.value);
@@ -48,50 +55,6 @@ const BottomBar = ({ totalPages }) => {
         }
     };
 
-    const handleScaleChange = (e) => {
-        setScaleInput(e.target.value);
-    };
-
-    const handleScaleKeyDown = (e) => {
-        if (e.key === 'Enter') {
-            const input = scaleInput.trim();
-
-            // Parse format: 1:X or just X
-            let scale = null;
-            if (input.includes(':')) {
-                const parts = input.split(':');
-                if (parts.length === 2 && parts[0] === '1') {
-                    const denominator = parseFloat(parts[1]);
-                    if (!isNaN(denominator) && denominator > 0) {
-                        scale = denominator;
-                    }
-                }
-            } else {
-                const num = parseFloat(input);
-                if (!isNaN(num) && num > 0) {
-                    scale = num;
-                }
-            }
-
-            if (scale) {
-                const pageIndex = currentPage - 1;
-                setPageScale(pageIndex, scale, 'units');
-                setScaleInput(`1:${Math.round(scale)}`);
-            } else {
-                // Invalid format, revert
-                const pageIndex = currentPage - 1;
-                const existingScale = calibrationScales[pageIndex];
-                if (existingScale) {
-                    setScaleInput(`1:${Math.round(existingScale)}`);
-                } else {
-                    setScaleInput('');
-                }
-            }
-
-            e.currentTarget.blur();
-        }
-    };
-
     const goNext = () => setJumpToPage(Math.min(currentPage + 1, totalPages));
     const goPrev = () => setJumpToPage(Math.max(currentPage - 1, 1));
     const goFirst = () => setJumpToPage(1);
@@ -101,15 +64,12 @@ const BottomBar = ({ totalPages }) => {
         <div className="w-full h-[50px] bg-[var(--bg-secondary)] border-t border-[var(--border-color)] grid grid-cols-[1fr_auto_1fr] items-center px-5 box-border text-[var(--text-primary)] text-[15px] select-none">
             <div className="flex items-center gap-2 justify-self-start">
                 <span className="opacity-80 text-sm font-medium">Scale:</span>
-                <input
-                    type="text"
-                    className="bg-[var(--bg-color)] border border-[var(--border-color)] text-[var(--text-primary)] rounded-md px-2 py-1.5 w-[80px] text-center text-sm font-medium focus:outline-none focus:border-[#4CAF50] focus:ring-2 focus:ring-[#4CAF50]/20 placeholder:opacity-50"
-                    value={scaleInput}
-                    onChange={handleScaleChange}
-                    onKeyDown={handleScaleKeyDown}
-                    placeholder="1:50"
-                    title="Enter drawing scale (e.g., 1:50, 1:100)"
-                />
+                <div
+                    className="text-[var(--text-primary)] text-sm font-medium opacity-75 cursor-default"
+                    title="Current Scale (Set via Toolbar)"
+                >
+                    {scaleDisplay}
+                </div>
             </div>
 
             <div className="flex items-center justify-self-center" style={{ visibility: totalPages > 0 ? 'visible' : 'hidden' }}>

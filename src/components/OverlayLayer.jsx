@@ -154,8 +154,8 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
 
     // Page meta (PDF points)
     const pageIndex = page.pageNumber;
-    const calibrationScale = calibrationScales[pageIndex] || 1.0; // (pdfPoints per unit) OR (px per unit) - whatever you defined
-    const unit = pageUnits[pageIndex] || "px";
+    const calibrationScale = calibrationScales[pageIndex - 1] || 1.0; // (pdfPoints per unit) OR (px per unit) - whatever you defined
+    const unit = pageUnits[pageIndex - 1] || "px";
 
     // Keep viewport + viewBox stable (avoid calling getViewport every render)
     const unscaledViewport = useMemo(() => page.getViewport({ scale: 1.0, rotation }), [page, rotation]);

@@ -79,7 +79,7 @@ const CustomSelect = ({ value, onChange, options, placeholder, className }) => {
 };
 
 const CalibrationDialog = ({ onClose }) => {
-    const { currentPage, setPageScale, pdfDocument } = useAppStore();
+    const { currentPage, setPageScale, pdfDocument, calibrationDetails, calibrationScales } = useAppStore();
 
     // State
     const [mode, setMode] = useState('preset'); // 'preset' | 'custom'
@@ -92,6 +92,28 @@ const CalibrationDialog = ({ onClose }) => {
 
     const [scope, setScope] = useState('current'); // 'current', 'all', 'range'
     const [pageRange, setPageRange] = useState('');
+
+    // Load initial state from store
+    useEffect(() => {
+        // useAppStore uses 0-based index for arrays but calibrationDetails key needs to match setPageScale
+        const pageIndex = currentPage - 1; // Assuming 0-based index for storage keys
+        const details = calibrationDetails[pageIndex];
+
+        if (details) {
+            setMode(details.mode || 'custom');
+            if (details.mode === 'preset') {
+                setSelectedPreset(details.presetIndex || 0);
+            }
+            // Load values regardless of mode so custom is also pre-filled correctly
+            setPaperVal(details.paperVal);
+            setPaperUnit(details.paperUnit);
+            setRealVal(details.realVal);
+            setRealUnit(details.realUnit);
+        } else {
+            // Check if scale exists but no details (legacy)
+            // Just default to preset 1:1 or whatever logical default
+        }
+    }, [currentPage, calibrationDetails]);
 
     // Update custom inputs when preset changes
     useEffect(() => {
@@ -112,6 +134,15 @@ const CalibrationDialog = ({ onClose }) => {
         const ptsPerPaper = UNIT_TO_PTS[paperUnit];
         const pixels = paperVal * ptsPerPaper;
         const scale = pixels / realVal; // Pixels per Real Unit
+
+        const details = {
+            mode,
+            presetIndex: selectedPreset,
+            paperVal,
+            paperUnit,
+            realVal,
+            realUnit
+        };
 
         const totalPages = pdfDocument ? pdfDocument.numPages : 1;
         let pagesToApply = [];
@@ -138,8 +169,9 @@ const CalibrationDialog = ({ onClose }) => {
         }
 
         // Apply
-        pagesToApply.forEach(pageIndex => {
-            setPageScale(pageIndex, scale, realUnit);
+        pagesToApply.forEach(pageNum => {
+            const pageIndex = pageNum - 1; // 0-based index
+            setPageScale(pageIndex, scale, realUnit, details);
         });
 
         onClose();

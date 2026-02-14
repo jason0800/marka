@@ -8,6 +8,7 @@ import {
 import useAppStore from '../stores/useAppStore';
 import { useEffect, useState } from 'react';
 import CalibrationDialog from './CalibrationDialog';
+import { confirmToast } from '../utils/confirm-toast';
 
 const TOOLS = [
     { id: 'select', icon: MousePointer2, label: 'Select (V)', key: 'v' },
@@ -30,6 +31,34 @@ const Toolbar = () => {
     const { activeTool, setActiveTool } = useAppStore();
     const [showCalibrationDialog, setShowCalibrationDialog] = useState(false);
 
+    const handleToolSelect = async (toolId) => {
+        if (toolId === 'calibrate') {
+            setShowCalibrationDialog(true);
+            return;
+        }
+
+        // Check for calibration if selecting measurement tools
+        if (['length', 'area'].includes(toolId)) {
+            const { calibrationScales, currentPage } = useAppStore.getState();
+
+            // Check if scale exists for current page
+            if (!calibrationScales[currentPage - 1]) {
+                const confirmed = await confirmToast(
+                    "Scale not set. Please set the scale first to use this tool.",
+                    "Set Scale",
+                    "Cancel"
+                );
+
+                if (confirmed) {
+                    setShowCalibrationDialog(true);
+                }
+                return; // Don't activate tool if uncalibrated
+            }
+        }
+
+        setActiveTool(toolId);
+    };
+
     useEffect(() => {
         const handleKeyDown = (e) => {
             // Ignore if typing in an input
@@ -40,17 +69,13 @@ const Toolbar = () => {
 
             const tool = TOOLS.find(t => t.key === e.key);
             if (tool) {
-                if (tool.id === 'calibrate') {
-                    setShowCalibrationDialog(true);
-                } else {
-                    setActiveTool(tool.id);
-                }
+                handleToolSelect(tool.id);
             }
         };
 
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [setActiveTool]);
+    }, [setActiveTool]); // handleToolSelect is stable enough or we ignore dependency warning since it uses getState
 
     return (
         <aside className="w-[60px] bg-[var(--bg-secondary)] border-l border-[var(--border-color)] flex flex-col items-center pt-4 pb-4 gap-2 z-10 shrink-0 overflow-y-auto no-scrollbar">
@@ -66,13 +91,7 @@ const Toolbar = () => {
                             ? '!bg-[var(--primary-color)] !text-[var(--text-active)] shadow-[0_0_10px_rgba(var(--primary-color-rgb),0.25)]'
                             : ''
                             }`}
-                        onClick={() => {
-                            if (tool.id === 'calibrate') {
-                                setShowCalibrationDialog(true);
-                            } else {
-                                setActiveTool(tool.id);
-                            }
-                        }}
+                        onClick={() => handleToolSelect(tool.id)}
                         title={tool.label}
                     >
                         <tool.icon size={20} />

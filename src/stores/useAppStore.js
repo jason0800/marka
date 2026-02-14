@@ -134,10 +134,13 @@ const useAppStore = create((set, get) => ({
             };
         }),
 
-    setPageScale: (pageIndex, scale, unit = "units") =>
+    calibrationDetails: {}, // pageIndex -> { mode, presetIndex, paperVal, paperUnit, realVal, realUnit }
+
+    setPageScale: (pageIndex, scale, unit = "units", details = null) =>
         set((state) => ({
             calibrationScales: { ...state.calibrationScales, [pageIndex]: scale },
             pageUnits: { ...state.pageUnits, [pageIndex]: unit },
+            calibrationDetails: details ? { ...state.calibrationDetails, [pageIndex]: details } : state.calibrationDetails
         })),
 
     isPremium: false, // Start as free user

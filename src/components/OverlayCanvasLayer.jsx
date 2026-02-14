@@ -19,8 +19,8 @@ const OverlayCanvasLayer = ({
     const canvasRef = useRef(null);
 
     // Helpers for units
-    const calibrationScale = calibrationScales[pageIndex] || 1.0;
-    const unit = pageUnits[pageIndex] || "px";
+    const calibrationScale = calibrationScales[pageIndex - 1] || 1.0;
+    const unit = pageUnits[pageIndex - 1] || "px";
 
     const toUnits = (pdfPoints) => pdfPoints / Math.max(1e-9, calibrationScale);
     const toUnits2 = (pdfPoints2) => pdfPoints2 / Math.max(1e-9, calibrationScale * calibrationScale);

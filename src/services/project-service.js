@@ -121,7 +121,7 @@ export const promptForProjectFiles = (pdfFileName) => {
                 // Only .marka selected, need PDF
                 reject(new Error('NEED_PDF'));
             } else if (pdfFile && !markaFile) {
-                reject(new Error('No .marka file selected'));
+                reject(new Error('Please select the .marka file as well'));
             } else {
                 reject(new Error('Please select both .marka and PDF files'));
             }
