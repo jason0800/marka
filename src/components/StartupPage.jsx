@@ -82,6 +82,15 @@ const StartupPage = ({ setPdfDocument, setIsLoading, onNewPDF }) => {
 
                 try {
                     validPdfFile = await promptForPDF(pdfFileName);
+
+                    // Validate if the user selected the correct PDF
+                    if (validPdfFile && projectData.pdfFileName && validPdfFile.name !== projectData.pdfFileName) {
+                        const mismatchMessage = `Warning: You selected "${validPdfFile.name}" but this project was created with "${projectData.pdfFileName}".\n\nAnnotations may not align correctly. Continue anyway?`;
+                        if (!(await confirmToast(mismatchMessage, 'Continue', 'Cancel'))) {
+                            setIsLoading(false);
+                            return; // User cancelled
+                        }
+                    }
                 } catch (e) {
                     setIsLoading(false);
                     return; // Cancelled
@@ -115,7 +124,14 @@ const StartupPage = ({ setPdfDocument, setIsLoading, onNewPDF }) => {
 
         // Check for .marka and .pdf pair
         const markaFile = files.find(f => f.name.endsWith('.marka') || f.name.endsWith('.json'));
-        const pdfFile = files.find(f => f.name.endsWith('.pdf') || f.type === 'application/pdf');
+        const pdfFiles = files.filter(f => f.name.endsWith('.pdf') || f.type === 'application/pdf');
+
+        if (markaFile && pdfFiles.length > 1) {
+            toast.error('Multiple PDF files dropped. Please drop only one PDF with the project file.');
+            return;
+        }
+
+        const pdfFile = pdfFiles[0];
 
         if (markaFile) {
             // Found a project file, try to process it (with or without PDF)
@@ -133,7 +149,7 @@ const StartupPage = ({ setPdfDocument, setIsLoading, onNewPDF }) => {
             await processProjectFiles(result.markaFile, result.pdfFile);
         } catch (err) {
             if (err.message === 'NEED_PDF') {
-                toast.error('Please select the PDF file as well, or use the file picker to select both files at once.');
+                toast.error('Please select the PDF file as well to open the project.');
             } else if (err.message !== 'User cancelled') {
                 console.error("Failed to load project", err);
                 toast.error("Failed to load project: " + err.message);

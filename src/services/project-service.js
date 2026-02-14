@@ -106,7 +106,14 @@ export const promptForProjectFiles = (pdfFileName) => {
 
             // Find .marka and .pdf files
             const markaFile = files.find(f => f.name.endsWith('.marka') || f.name.endsWith('.json'));
-            const pdfFile = files.find(f => f.name.endsWith('.pdf') || f.type === 'application/pdf');
+            const pdfFiles = files.filter(f => f.name.endsWith('.pdf') || f.type === 'application/pdf');
+
+            if (pdfFiles.length > 1) {
+                reject(new Error('Multiple PDF files selected. Please select only one PDF file.'));
+                return;
+            }
+
+            const pdfFile = pdfFiles[0];
 
             if (markaFile && pdfFile) {
                 resolve({ markaFile, pdfFile });
