@@ -1,6 +1,9 @@
 import {
-    MousePointer2, Hand, Ruler, Scaling, Square, Hash, MessageSquare,
-    Box, Circle, Minus, ArrowRight, Pentagon, RectangleHorizontal, Type, MessageCircle
+    MousePointer2, Hand, Ruler, RulerDimensionLine, Square, Hash, MessageSquare,
+    Box, Circle, Minus, ArrowRight, RectangleHorizontal, Type, MessageCircle,
+    ScalingIcon,
+    Tally5Icon,
+    PencilRuler
 } from 'lucide-react';
 import useAppStore from '../stores/useAppStore';
 import { useEffect, useState } from 'react';
@@ -9,11 +12,11 @@ import CalibrationDialog from './CalibrationDialog';
 const TOOLS = [
     { id: 'select', icon: MousePointer2, label: 'Select (V)', key: 'v' },
     { id: 'pan', icon: Hand, label: 'Pan (H)', key: 'h' },
-    { id: 'calibrate', icon: Scaling, label: 'Set Scale (C)', key: 'c' },
+    { id: 'calibrate', icon: PencilRuler, label: 'Set Scale (C)', key: 'c' },
     { type: 'separator' },
-    { id: 'length', icon: Ruler, label: 'Length (L)', key: 'l' },
-    { id: 'area', icon: Pentagon, label: 'Area (E)', key: 'e' },
-    { id: 'count', icon: Hash, label: 'Count (N)', key: 'n' },
+    { id: 'length', icon: RulerDimensionLine, label: 'Length (L)', key: 'l' },
+    { id: 'area', icon: AreaIcon, label: 'Area (E)', key: 'e' },
+    { id: 'count', icon: Tally5Icon, label: 'Count (N)', key: 'n' },
     { type: 'separator' },
     { id: 'callout', icon: CalloutIcon, label: 'Callout (Q)', key: 'q' },
     { id: 'text', icon: Type, label: 'Text Box (T)', key: 't' },
@@ -97,9 +100,39 @@ function CalloutIcon({ size, ...props }) {
             strokeLinejoin="round"
             {...props}
         >
-            <rect x="3" y="8" width="12" height="10" rx="2" />
-            <path d="M15 13h3l3.5-5" />
-            <path d="M18 8h4v4" />
+            <rect x="1" y="8" width="14" height="11" rx="2" />
+            <path d="M15 13h4l3.5-5" />
+            <path d="M19 8h4v4" />
+        </svg>
+    );
+}
+
+function AreaIcon({ size, ...props }) {
+    return (
+        <svg
+            width={size}
+            height={size}
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            {...props}
+        >
+            {/* Square */}
+            {/* Square */}
+            <rect x="2" y="9" width="12" height="12" rx="2" strokeWidth="2.5" />
+
+            {/* Top Horizontal Dimension */}
+            <path d="M2 3h12" />
+            <path d="M2 1v4" />
+            <path d="M14 1v4" />
+
+            {/* Right Vertical Dimension */}
+            <path d="M20 9v12" />
+            <path d="M18 9h4" />
+            <path d="M18 21h4" />
         </svg>
     );
 }
