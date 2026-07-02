@@ -907,6 +907,28 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
             return;
         }
 
+        // finalize length/calibrate draw
+        if (["length", "calibrate"].includes(activeTool) && isDrawingRef.current && drawingPoints.length > 0 && point) {
+            const start = drawingPoints[0];
+            const end = { x: point.x, y: point.y };
+
+            if (calculateDistance(start, end) > 5) {
+                if (activeTool === "length") {
+                    addMeasurement({
+                        id: crypto.randomUUID(),
+                        type: "length",
+                        pageIndex,
+                        points: [start, end],
+                    });
+                    pushHistory();
+                    setActiveTool("select"); // Auto-switch to select
+                }
+                setIsDrawing(false);
+                setDrawingPoints([]);
+                return;
+            }
+        }
+
         // finalize text/callout
         if (["text", "callout"].includes(activeTool) && isDrawingRef.current && shapeStart && point) {
             const id = crypto.randomUUID();
@@ -1048,6 +1070,7 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                 y={y - handleHalf}
                 width={handleSize}
                 height={handleSize}
+                transform={s.rotation ? `rotate(${s.rotation}, ${x}, ${y})` : undefined}
                 cursor={cursorCss}
                 data-resize-id={s.id}
                 data-resize-handle={hName}
@@ -1805,12 +1828,10 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                     viewScale={viewScale}
                     renderScale={renderScale}
                     shapes={
-                        (isDraggingItems ? pageShapes.filter(s => !selectedIds.includes(s.id)) : pageShapes)
-                            .filter(s => !['rectangle', 'circle', 'line', 'arrow'].includes(s.type))
+                        isDraggingItems ? pageShapes.filter(s => !selectedIds.includes(s.id)) : pageShapes
                     }
                     measurements={
-                        (isDraggingItems ? pageMeasurements.filter(m => !selectedIds.includes(m.id)) : pageMeasurements)
-                            .filter(m => !["length", "area", "perimeter"].includes(m.type))
+                        isDraggingItems ? pageMeasurements.filter(m => !selectedIds.includes(m.id)) : pageMeasurements
                     }
                     selectedIds={selectedIds}
                     pageIndex={pageIndex}
@@ -1837,6 +1858,7 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
 
                 {/* Selected / OOB Shapes */}
                 {pageShapes
+                    .filter(s => selectedIds.includes(s.id) || isOutOfBounds(s))
                     .map(s => {
                         let shapeToRender = s;
 
@@ -1863,7 +1885,7 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                 {pageMeasurements
                     .filter(m =>
                         selectedIds.includes(m.id) ||
-                        ["comment", "text", "callout", "length", "area", "perimeter"].includes(m.type) ||
+                        ["comment", "text", "callout"].includes(m.type) ||
                         isOutOfBounds(m)
                     )
                     .map(m => {
@@ -2018,8 +2040,8 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                                 ))}
                             </>
                         ) : null}
-                        {/* Render line for length */}
-                        {activeTool === "length" && cursor ? (
+                        {/* Render line for length or calibrate */}
+                        {["length", "calibrate"].includes(activeTool) && cursor ? (
                             <line x1={drawingPoints[0].x} y1={drawingPoints[0].y} x2={cursor.x} y2={cursor.y} stroke="#e74c3c" strokeWidth={2 / Math.max(1e-6, viewScale)} />
                         ) : null}
 

@@ -697,7 +697,7 @@ const PDFViewer = ({ document }) => {
         >
             <div
                 ref={contentRef}
-                className="absolute top-0 left-0 will-change-transform flex flex-col w-fit min-w-full"
+                className={`absolute top-0 left-0 flex flex-col w-fit min-w-full ${isZooming || dragging ? 'will-change-transform' : ''}`}
                 style={{
                     transform: `translate(${stateRef.current.x}px, ${stateRef.current.y}px) scale(${stateRef.current.scale})`,
                     transformOrigin: "0 0",

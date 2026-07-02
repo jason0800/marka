@@ -68,7 +68,7 @@ const OverlayCanvasLayer = ({
 
         // Global Scaling: Map PDF coordinates to Screen pixels
         ctx.save();
-        ctx.scale(viewScale, viewScale);
+        // ctx.scale(viewScale, viewScale); // Do not double scale coordinates since container scale is already applied
 
         // Pre-calculate constants for "non-scaling" look
         // viewScale is applied to context. So to get 1px visual width, we need 1/viewScale.
