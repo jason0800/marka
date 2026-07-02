@@ -1388,33 +1388,7 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                     >
                         {toUnits(dist).toFixed(2)} {unit}
                     </text>
-                    {isSelected && (
-                        <>
-                            {/* Handles at endpoints */}
-                            <circle
-                                cx={a.x}
-                                cy={a.y}
-                                r={handleSize / 2}
-                                fill="#b4e6a0"
-                                stroke="#3a6b24"
-                                strokeWidth={1}
-                                cursor="default"
-                                data-resize-id={m.id}
-                                data-resize-handle="start"
-                            />
-                            <circle
-                                cx={b.x}
-                                cy={b.y}
-                                r={handleSize / 2}
-                                fill="#b4e6a0"
-                                stroke="#3a6b24"
-                                strokeWidth={1}
-                                cursor="default"
-                                data-resize-id={m.id}
-                                data-resize-handle="end"
-                            />
-                        </>
-                    )}
+                    {isSelected && renderSelectionFrame({ id: m.id, type: "line", start: a, end: b })}
                 </g>
             );
         }
@@ -1806,9 +1780,7 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                     viewScale={viewScale}
                     renderScale={renderScale}
                     shapes={[]}  // Shapes always render on SVG (like callout), never on canvas
-                    measurements={
-                        isDraggingItems ? pageMeasurements.filter(m => !selectedIds.includes(m.id)) : pageMeasurements
-                    }
+                    measurements={[]}  // Measurements always render on SVG (like callout), never on canvas
                     selectedIds={selectedIds}
                     pageIndex={pageIndex}
                     pageUnits={pageUnits}
@@ -1856,13 +1828,8 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                     })
                 }
 
-                {/* Selected / OOB Measurements */}
+                {/* All Measurements — always on SVG (like callout), no canvas/SVG switch */}
                 {pageMeasurements
-                    .filter(m =>
-                        selectedIds.includes(m.id) ||
-                        ["comment", "text", "callout"].includes(m.type) ||
-                        isOutOfBounds(m)
-                    )
                     .map(m => {
                         let measToRender = m;
 
