@@ -12,6 +12,7 @@ import BottomBar from './components/BottomBar';
 import StartupPage from './components/StartupPage';
 import NewPDFDialog from './components/NewPDFDialog';
 import TabBar from './components/TabBar';
+import { Analytics } from "@vercel/analytics/next"
 import './App.css';
 
 function App() {
@@ -83,6 +84,7 @@ function App() {
       )}
 
       <Toaster position="top-center" richColors />
+      <Analytics />
     </div>
   );
 }
