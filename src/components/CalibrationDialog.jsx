@@ -257,38 +257,41 @@ const CalibrationDialog = ({ onClose }) => {
                         ) : (
                             <div className="animate-in fade-in slide-in-from-top-1 duration-200">
                                 <label className="text-sm font-medium text-[var(--text-secondary)] block mb-2">Custom Scale</label>
-                                <div className={`flex flex-col gap-3 p-4 bg-[var(--bg-primary)] rounded-lg`}>
-                                    <div className="flex items-center gap-3">
-                                        <span className="text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider w-24">Drawing</span>
+                                <div className="flex flex-col gap-3 p-4 bg-[var(--bg-primary)] rounded-lg">
+                                    {/* Row 1: Drawing Input */}
+                                    <div className="flex items-center gap-2.5">
                                         <input
                                             type="number"
                                             value={paperVal}
-                                            onChange={e => { setPaperVal(parseFloat(e.target.value) || 0); }}
+                                            onChange={e => setPaperVal(parseFloat(e.target.value) || 0)}
                                             className="flex-1 min-w-[80px] bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-md px-3 py-1.5 text-sm h-9"
                                         />
                                         <CustomSelect
                                             className="w-28 h-9"
                                             options={unitOptionsPaper}
                                             value={paperUnit}
-                                            onChange={val => { setPaperUnit(val); }}
+                                            onChange={val => setPaperUnit(val)}
                                         />
                                     </div>
 
-                                    <div className="flex items-center justify-center my-[-3px] text-[var(--text-secondary)] text-sm italic">is equal to</div>
+                                    {/* Equals Divider (Cleaned up vertical spacing) */}
+                                    <div className="flex items-center justify-center text-[var(--text-secondary)] text-sm font-medium select-none py-0.5">
+                                        =
+                                    </div>
 
-                                    <div className="flex items-center gap-3">
-                                        <span className="text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider w-24">Real World</span>
+                                    {/* Row 2: Real World Input */}
+                                    <div className="flex items-center gap-2.5">
                                         <input
                                             type="number"
                                             value={realVal}
-                                            onChange={e => { setRealVal(parseFloat(e.target.value) || 0); }}
+                                            onChange={e => setRealVal(parseFloat(e.target.value) || 0)}
                                             className="flex-1 min-w-[80px] bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-md px-3 py-1.5 text-sm h-9"
                                         />
                                         <CustomSelect
                                             className="w-28 h-9"
                                             options={unitOptionsReal}
                                             value={realUnit}
-                                            onChange={val => { setRealUnit(val); }}
+                                            onChange={val => setRealUnit(val)}
                                         />
                                     </div>
                                 </div>

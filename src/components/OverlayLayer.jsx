@@ -1984,7 +1984,7 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                         ) : null}
                         {/* Render line for length or calibrate */}
                         {["length", "calibrate"].includes(activeTool) && cursor ? (
-                            <line x1={drawingPoints[0].x} y1={drawingPoints[0].y} x2={cursor.x} y2={cursor.y} stroke="#e74c3c" strokeWidth={2 / Math.max(1e-6, viewScale)} />
+                            <line x1={drawingPoints[0].x} y1={drawingPoints[0].y} x2={cursor.x} y2={cursor.y} stroke="var(--primary-color)" strokeWidth={2 / Math.max(1e-6, viewScale)} />
                         ) : null}
 
                         {/* Comment preview */}

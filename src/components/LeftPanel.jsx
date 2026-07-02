@@ -14,7 +14,7 @@ const LeftPanel = ({ pdfDocument }) => {
             <div className="w-[50px] flex flex-col items-center py-4 border-r border-[var(--border-color)] bg-[var(--bg-secondary)] gap-2">
                 <button
                     className={`p-2 rounded-lg transition-colors ${activeTab === 'thumbnails'
-                        ? 'bg-[var(--primary-color)] text-[var(--text-active)] shadow-md'
+                        ? 'bg-[var(--primary-color)] text-[var(--text-active)]'
                         : 'text-[var(--text-secondary)] hover:bg-[var(--bg-hover)]'
                         }`}
                     onClick={() => setActiveTab(activeTab === 'thumbnails' ? null : 'thumbnails')}
@@ -24,7 +24,7 @@ const LeftPanel = ({ pdfDocument }) => {
                 </button>
                 <button
                     className={`p-2 rounded-lg transition-colors ${activeTab === 'properties'
-                        ? 'bg-[var(--primary-color)] text-[var(--text-active)] shadow-md'
+                        ? 'bg-[var(--primary-color)] text-[var(--text-active)]'
                         : 'text-[var(--text-secondary)] hover:bg-[var(--bg-hover)]'
                         }`}
                     onClick={() => setActiveTab(activeTab === 'properties' ? null : 'properties')}
