@@ -292,21 +292,20 @@ const PropertiesPanel = () => {
                         </div>
                     )}
 
-                    {/* // line widths */}
+                    {/* Stroke Width */}
                     <div className="flex flex-col gap-1">
                         <label className="text-xs text-[var(--text-secondary)] font-medium">Stroke Width</label>
-                        <div className="flex gap-1 bg-[var(--bg-color)] p-0.5 rounded-md border border-[var(--border-color)]">
-                            {[1.5, 2.75, 3.75].map(w => (
-                                <button
-                                    key={w}
-                                    className={`flex-1 h-7 border-none bg-transparent rounded cursor-pointer flex items-center justify-center text-[var(--text-secondary)] hover:bg-[var(--btn-hover)] hover:text-[var(--text-primary)] ${strokeWidth === w ? '!bg-[var(--primary-color)] !text-[var(--text-active)] shadow-[0_0_10px_rgba(var(--primary-color-rgb),0.25)]' : ''}`}
-                                    onClick={() => updateProp('strokeWidth', w)}
-                                    aria-pressed={strokeWidth === w}
-                                    aria-label={`Stroke width ${w}`}
-                                >
-                                    <div style={{ height: Math.max(1, w), width: '24px', background: 'currentColor', borderRadius: 99 }}></div>
-                                </button>
-                            ))}
+                        <div className="flex items-center bg-[var(--bg-color)] px-2 py-0.5 rounded border border-transparent focus-within:border-[var(--primary-color)] transition-colors h-7 w-[80px]">
+                            <input
+                                type="number"
+                                min="0.5"
+                                max="20"
+                                step="0.25"
+                                value={strokeWidth}
+                                onChange={(e) => updateProp('strokeWidth', parseFloat(e.target.value) || 2)}
+                                className="w-full text-xs text-[var(--text-primary)] bg-transparent outline-none font-mono"
+                            />
+                            <span className="text-xs text-[var(--text-secondary)] ml-1 select-none">px</span>
                         </div>
                     </div>
 

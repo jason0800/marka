@@ -1081,31 +1081,52 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
         const h = s.height;
         const padding = 6 / Math.max(1e-6, viewScale);
 
+        const getRotatedPoint = (xLocal, yLocal) => {
+            const cx = s.x + w / 2;
+            const cy = s.y + h / 2;
+            const lx = xLocal - w / 2;
+            const ly = yLocal - h / 2;
+            const rad = ((s.rotation || 0) * Math.PI) / 180;
+            const cos = Math.cos(rad);
+            const sin = Math.sin(rad);
+            return {
+                x: cx + lx * cos - ly * sin,
+                y: cy + lx * sin + ly * cos
+            };
+        };
+
+        const nw = getRotatedPoint(-padding, -padding);
+        const n = getRotatedPoint(w / 2, -padding);
+        const ne = getRotatedPoint(w + padding, -padding);
+        const e = getRotatedPoint(w + padding, h / 2);
+        const se = getRotatedPoint(w + padding, h + padding);
+        const sPoint = getRotatedPoint(w / 2, h + padding);
+        const sw = getRotatedPoint(-padding, h + padding);
+        const wPoint = getRotatedPoint(-padding, h / 2);
+        const rotPoint = getRotatedPoint(w / 2, -rotOffset - padding);
+
         return (
             <g>
-                <rect
-                    x={-padding}
-                    y={-padding}
-                    width={w + padding * 2}
-                    height={h + padding * 2}
+                <polygon
+                    points={`${nw.x},${nw.y} ${ne.x},${ne.y} ${se.x},${se.y} ${sw.x},${sw.y}`}
                     fill="none"
                     stroke="var(--primary-color)"
                     strokeWidth={1 / Math.max(1e-6, viewScale)}
                     vectorEffect="non-scaling-stroke"
                     pointerEvents="none"
                 />
-                {renderHandle(-padding, -padding, "nw-resize", "nw")}
-                {renderHandle(w / 2, -padding, "n-resize", "n")}
-                {renderHandle(w + padding, -padding, "ne-resize", "ne")}
-                {renderHandle(w + padding, h / 2, "e-resize", "e")}
-                {renderHandle(w + padding, h + padding, "se-resize", "se")}
-                {renderHandle(w / 2, h + padding, "s-resize", "s")}
-                {renderHandle(-padding, h + padding, "sw-resize", "sw")}
-                {renderHandle(-padding, h / 2, "w-resize", "w")}
+                {renderHandle(nw.x, nw.y, "nw-resize", "nw")}
+                {renderHandle(n.x, n.y, "n-resize", "n")}
+                {renderHandle(ne.x, ne.y, "ne-resize", "ne")}
+                {renderHandle(e.x, e.y, "e-resize", "e")}
+                {renderHandle(se.x, se.y, "se-resize", "se")}
+                {renderHandle(sPoint.x, sPoint.y, "s-resize", "s")}
+                {renderHandle(sw.x, sw.y, "sw-resize", "sw")}
+                {renderHandle(wPoint.x, wPoint.y, "w-resize", "w")}
 
                 <circle
-                    cx={w / 2}
-                    cy={-rotOffset / Math.max(1e-6, viewScale) - padding}
+                    cx={rotPoint.x}
+                    cy={rotPoint.y}
                     r={4 / Math.max(1e-6, viewScale)}
                     fill="#b4e6a0"
                     stroke="#3a6b24"
@@ -1284,11 +1305,12 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
         }
 
         return (
-            <g
-                key={s.id}
-                transform={`translate(${s.x}, ${s.y}) rotate(${rotation}, ${s.width / 2}, ${s.height / 2})`}
-            >
-                {elem}
+            <g key={s.id}>
+                <g
+                    transform={`translate(${s.x}, ${s.y}) rotate(${rotation}, ${s.width / 2}, ${s.height / 2})`}
+                >
+                    {elem}
+                </g>
                 {isSelected && renderSelectionFrame(s)}
             </g>
         );
@@ -1696,20 +1718,16 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
 
                 {/* Handles outside Opacity group */}
                 {
-                    isSelected && (
-                        <g transform={`translate(${m.box.x}, ${m.box.y}) ${m.rotation ? `rotate(${m.rotation}, ${m.box.w / 2}, ${m.box.h / 2})` : ''}`}>
-                            {renderSelectionFrame({
-                                id: m.id,
-                                x: 0,
-                                y: 0,
-                                width: m.box.w,
-                                height: m.box.h,
-                                rotation: 0, // Already applied to group
-                                type: "rectangle", // Proxy but we can pass extra meta
-                                isCallout: m.type === 'callout'
-                            })}
-                        </g>
-                    )
+                    isSelected && renderSelectionFrame({
+                        id: m.id,
+                        x: m.box.x,
+                        y: m.box.y,
+                        width: m.box.w,
+                        height: m.box.h,
+                        rotation: m.rotation || 0,
+                        type: "rectangle",
+                        isCallout: m.type === 'callout'
+                    })
                 }
 
                 {
