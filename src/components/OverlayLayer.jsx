@@ -1805,9 +1805,7 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                     height={height}
                     viewScale={viewScale}
                     renderScale={renderScale}
-                    shapes={
-                        isDraggingItems ? pageShapes.filter(s => !selectedIds.includes(s.id)) : pageShapes
-                    }
+                    shapes={[]}  // Shapes always render on SVG (like callout), never on canvas
                     measurements={
                         isDraggingItems ? pageMeasurements.filter(m => !selectedIds.includes(m.id)) : pageMeasurements
                     }
@@ -1834,9 +1832,8 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                 {/* 1️⃣ INVISIBLE SHAPE HIT TARGETS */}
                 {activeTool === "select" && pageShapes.map(renderShapeHitTarget)}
 
-                {/* Selected / OOB Shapes */}
+                {/* All Shapes — always on SVG (like callout), no canvas/SVG switch */}
                 {pageShapes
-                    .filter(s => selectedIds.includes(s.id) || isOutOfBounds(s))
                     .map(s => {
                         let shapeToRender = s;
 

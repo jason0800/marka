@@ -60,49 +60,21 @@ const OverlayCanvasLayer = ({
         const ctx = canvas.getContext("2d", { alpha: true });
         ctx.setTransform(1, 0, 0, 1, 0, 0); // Reset
 
-        // effectiveDpr * reductionScale gives the correct scale factor
-        const finalScale = effectiveDpr * reductionScale;
-        ctx.scale(finalScale, finalScale);
+        // Use exact pixel ratio derived from the actual backing store size.
+        // This ensures 1 canvas coordinate unit = 1 CSS pixel, matching SVG perfectly.
+        // Using effectiveDpr*reductionScale can introduce sub-pixel rounding drift
+        // because targetW = Math.floor(width * effectiveDpr * reductionScale).
+        const scaleX = targetW / width;
+        const scaleY = targetH / height;
+        ctx.scale(scaleX, scaleY);
 
         ctx.clearRect(0, 0, width, height);
 
-        // Global Scaling: Map PDF coordinates to Screen pixels
-        ctx.save();
-        // ctx.scale(viewScale, viewScale); // Do not double scale coordinates since container scale is already applied
-
-        // Pre-calculate constants for "non-scaling" look
-        // viewScale is applied to context. So to get 1px visual width, we need 1/viewScale.
-        // effectiveDpr is handled by canvas transform.
-        // But we actually want "2px" or "1.5px" essentially.
-        // The safe buffer 1e-6 prevents divide by zero.
-        const safeScale = Math.max(1e-6, viewScale);
-
-        // We want the stroke to effectively be ~2px on screen regardless of zoom?
-        // Or do we want it to scale? 
-        // User wants "non-scaling-stroke".
-        // If we zoom in (viewScale=2), 1 unit = 2px. 1/2 unit = 1px.
-        // So 2px visual = 2/viewScale.
-        // BUT we also have renderScale which affects resolution but NOT coordinate space (handled by initial scale).
-        // Wait, initial scale is `effectiveDpr`.
-        // Then `ctx.scale(viewScale, ...)`
-        // So 1 unit = `viewScale * effectiveDpr` physical pixels.
-        // We want constant visual thickness.
-        // Thickness in units = DesiredPixels / (viewScale * effectiveDpr) ? 
-        // No, the initial scale handles Dpr. `ctx.lineWidth` 1 means 1 * viewScale * effectiveDpr pixels?
-        // No. If I set ctx.scale(2,2), drawing rect(0,0,10,10) draws 20x20 pixels.
-        // ctx.lineWidth=1 draws 2px line.
-        // So to get 2px line, we need lineWidth = 2 / viewScale.
-        // We do NOT divide by renderScale because renderScale should increase resolution (more pixels).
-        // Actually, if renderScale=2, effectiveDpr=2.
-        // If viewScale=1.
-        // ctx.scale(2,2).
-        // lineWidth=2 line becomes 4px physical.
-        // But on high DPI screen, 4px physical looks like 2px CSS. So that's correct?
-        // Yes. We just divide by viewScale.
-
-        const nonScalingLineWidth = 2 / safeScale;
-        const textFontSize = 14 / safeScale;
-        const textOffset = 8 / safeScale;
+        // Shapes and measurements are drawn in page coordinate space (scale=1 PDF units).
+        // The entire page container is CSS-scaled by the viewer's zoom, so strokes and
+        // text use raw values (no viewScale division) to match the SVG overlay layer.
+        const textFontSize = 14;
+        const textOffset = 8;
         const selectedSet = new Set(selectedIds);
 
         const isOutOfBounds = (item) => {
