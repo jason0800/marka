@@ -30,6 +30,7 @@ const TOOLS = [
 const Toolbar = () => {
     const { activeTool, setActiveTool } = useAppStore();
     const [showCalibrationDialog, setShowCalibrationDialog] = useState(false);
+    const [pendingTool, setPendingTool] = useState(null);
 
     const handleToolSelect = async (toolId) => {
         if (toolId === 'calibrate') {
@@ -43,6 +44,7 @@ const Toolbar = () => {
 
             // Check if scale exists for current page
             if (!calibrationScales[currentPage - 1]) {
+                setPendingTool(toolId);
                 const confirmed = await confirmToast(
                     "Scale not set. Please set the scale first to use this tool.",
                     "Set Scale",
@@ -51,6 +53,8 @@ const Toolbar = () => {
 
                 if (confirmed) {
                     setShowCalibrationDialog(true);
+                } else {
+                    setPendingTool(null);
                 }
                 return; // Don't activate tool if uncalibrated
             }
@@ -100,7 +104,14 @@ const Toolbar = () => {
             })}
 
             {showCalibrationDialog && (
-                <CalibrationDialog onClose={() => setShowCalibrationDialog(false)} />
+                <CalibrationDialog onClose={() => {
+                    setShowCalibrationDialog(false);
+                    const { calibrationScales, currentPage } = useAppStore.getState();
+                    if (calibrationScales[currentPage - 1] && pendingTool) {
+                        setActiveTool(pendingTool);
+                    }
+                    setPendingTool(null);
+                }} />
             )}
         </aside>
     );

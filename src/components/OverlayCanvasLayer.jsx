@@ -1,7 +1,7 @@
 import React, { useRef, useEffect, memo } from "react";
 import { calculateDistance, calculatePolygonArea } from "../geometry/transforms";
 
-const MAX_CANVAS_PIXELS = 5_000_000; // ~5MP Cap (Aggressive Memory Optimization)
+const MAX_CANVAS_PIXELS = 25_000_000; // ~25MP Cap to match high-resolution rendering
 const MAX_SIDE = 8192;               // GPU Texture Limit
 
 const OverlayCanvasLayer = ({
@@ -152,7 +152,7 @@ const OverlayCanvasLayer = ({
             // So default shapes ARE non-scaling.
 
             const rawStrokeWidth = shape.strokeWidth || 2;
-            const strokeWidth = rawStrokeWidth / safeScale;
+            const strokeWidth = rawStrokeWidth; // Scales with CSS zoom like SVG selected shapes
 
             const stroke = shape.stroke || "#000";
             const dash = shape.strokeDasharray || "none";
@@ -258,8 +258,8 @@ const OverlayCanvasLayer = ({
             );
 
             const rawStrokeWidth = m.strokeWidth ? m.strokeWidth : 2;
-            // Measurements are usually non-scaling 2px
-            const strokeWidth = rawStrokeWidth / safeScale;
+            // Scale with CSS zoom to match the SVG layer's rendering
+            const strokeWidth = rawStrokeWidth;
 
             ctx.lineWidth = strokeWidth;
             ctx.strokeStyle = strokeColor;

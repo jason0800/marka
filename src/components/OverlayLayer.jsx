@@ -1181,7 +1181,6 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                     y2={s.end.y}
                     stroke="transparent"
                     strokeWidth={sw}
-                    vectorEffect="non-scaling-stroke"
                     pointerEvents="all"
                     style={cursorStyle}
                 />
@@ -1250,8 +1249,7 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                         x2={s.end.x}
                         y2={s.end.y}
                         stroke="transparent"
-                        strokeWidth={15 / Math.max(1e-6, viewScale)}
-                        vectorEffect="non-scaling-stroke"
+                        strokeWidth={15}
                         pointerEvents="all"
                         data-shape-id={s.id}
                         style={{ cursor: "move", pointerEvents: "all" }}
@@ -1274,11 +1272,8 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                     {(() => {
                         // Shorten line so visual tip matches s.end
                         const rawSw = s.strokeWidth || 2;
-                        const sw = rawSw / Math.max(1e-6, viewScale);
                         const dist = Math.hypot(s.end.x - s.start.x, s.end.y - s.start.y);
-                        // refX=2, tip=6. Offset needed = (6-2)*sw = 4*sw.
-                        // Ensure we don't shorten past start (dist > offset)
-                        const offset = 4 * sw;
+                        const offset = 4 * rawSw;
                         const t = dist > offset ? (dist - offset) / dist : 0;
 
                         const endX = s.start.x + (s.end.x - s.start.x) * t;
@@ -1305,8 +1300,7 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                         x2={s.end.x}
                         y2={s.end.y}
                         stroke="transparent"
-                        strokeWidth={15 / Math.max(1e-6, viewScale)}
-                        vectorEffect="non-scaling-stroke"
+                        strokeWidth={15}
                         pointerEvents="all"
                         data-shape-id={s.id}
                         style={{ cursor: "move", pointerEvents: "all" }}
@@ -1368,10 +1362,9 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                         x2={b.x}
                         y2={b.y}
                         stroke="transparent"
-                        strokeWidth={15 / Math.max(1e-6, viewScale)}
-                        vectorEffect="non-scaling-stroke"
+                        strokeWidth={15}
                         pointerEvents="all"
-                        data-meas-id={m.id} // Ensure it's identifiable
+                        data-meas-id={m.id}
                         style={{ cursor: "move" }}
                     />
                     <line
@@ -1380,18 +1373,16 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                         x2={b.x}
                         y2={b.y}
                         stroke={strokeColor}
-                        strokeWidth={strokeWidth / Math.max(1e-6, viewScale)}
+                        strokeWidth={strokeWidth}
                         strokeDasharray={strokeDasharray}
-                        vectorEffect="non-scaling-stroke"
-                        pointerEvents="none" // Let hit area handle events
+                        pointerEvents="none"
                     />
                     <text
                         x={(a.x + b.x) / 2}
-                        y={(a.y + b.y) / 2 - 6 / Math.max(1e-6, viewScale)}
+                        y={(a.y + b.y) / 2 - 6}
                         fill={textColor}
-                        fontSize={fontSize / Math.max(1e-6, viewScale)}
+                        fontSize={fontSize}
                         textAnchor="middle"
-                        vectorEffect="non-scaling-stroke"
                         pointerEvents="all"
                         style={{ cursor: "move" }}
                     >
@@ -1406,8 +1397,7 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                                 r={handleSize / 2}
                                 fill="#b4e6a0"
                                 stroke="#3a6b24"
-                                strokeWidth={1 / Math.max(1e-6, viewScale)}
-                                vectorEffect="non-scaling-stroke"
+                                strokeWidth={1}
                                 cursor="default"
                                 data-resize-id={m.id}
                                 data-resize-handle="start"
@@ -1418,8 +1408,7 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                                 r={handleSize / 2}
                                 fill="#b4e6a0"
                                 stroke="#3a6b24"
-                                strokeWidth={1 / Math.max(1e-6, viewScale)}
-                                vectorEffect="non-scaling-stroke"
+                                strokeWidth={1}
                                 cursor="default"
                                 data-resize-id={m.id}
                                 data-resize-handle="end"
@@ -1447,16 +1436,14 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                         points={pointsStr}
                         fill={fillColor}
                         stroke={strokeColor}
-                        strokeWidth={strokeWidth / Math.max(1e-6, viewScale)}
+                        strokeWidth={strokeWidth}
                         strokeDasharray={strokeDasharray}
-                        vectorEffect="non-scaling-stroke"
                     />
                     <text
                         x={m.points[0].x}
-                        y={m.points[0].y - 8 / Math.max(1e-6, viewScale)}
+                        y={m.points[0].y - 8}
                         fill={textColor}
-                        fontSize={fontSize / Math.max(1e-6, viewScale)}
-                        vectorEffect="non-scaling-stroke"
+                        fontSize={fontSize}
                     >
                         {toUnits2(area).toFixed(2)} {unit}²
                     </text>
@@ -1471,8 +1458,7 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                                     r={handleSize / 2}
                                     fill="#b4e6a0"
                                     stroke="#3a6b24"
-                                    strokeWidth={1 / Math.max(1e-6, viewScale)}
-                                    vectorEffect="non-scaling-stroke"
+                                    strokeWidth={1}
                                     cursor="default"
                                     data-resize-id={m.id}
                                     data-resize-handle={`vertex-${idx}`}
@@ -1497,15 +1483,13 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                         points={pointsStr}
                         fill="none"
                         stroke="#9b59b6"
-                        strokeWidth={nonScalingStroke}
-                        vectorEffect="non-scaling-stroke"
+                        strokeWidth={m.strokeWidth || 2}
                     />
                     <text
                         x={m.points[0].x}
-                        y={m.points[0].y - 8 / Math.max(1e-6, viewScale)}
+                        y={m.points[0].y - 8}
                         fill="#9b59b6"
-                        fontSize={14 / Math.max(1e-6, viewScale)}
-                        vectorEffect="non-scaling-stroke"
+                        fontSize={14}
                     >
                         {toUnits(len).toFixed(2)} {unit}
                     </text>
@@ -1520,11 +1504,10 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                     {...measCommon}
                     cx={m.point.x}
                     cy={m.point.y}
-                    r={8 / Math.max(1e-6, viewScale)}
+                    r={8}
                     fill="var(--primary-color)"
                     stroke="white"
-                    strokeWidth={2 / Math.max(1e-6, viewScale)}
-                    vectorEffect="non-scaling-stroke"
+                    strokeWidth={2}
                 />
             );
         }
@@ -1543,15 +1526,13 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                             x2={m.box.x + m.box.w / 2} // connect to center
                             y2={m.box.y + m.box.h / 2}
                             stroke={m.stroke || "#333"}
-                            strokeWidth={1 / Math.max(1e-6, viewScale)}
-                            vectorEffect="non-scaling-stroke"
+                            strokeWidth={1}
                         />
                         <circle
                             cx={m.tip.x}
                             cy={m.tip.y}
-                            r={3 / Math.max(1e-6, viewScale)}
+                            r={3}
                             fill={m.stroke || "#333"}
-                            vectorEffect="non-scaling-stroke"
                         />
                     </>
                 );
@@ -1567,7 +1548,7 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                 const tipDy = end.y - knee.y;
                 const len = Math.hypot(tipDx, tipDy);
                 const rawSw = m.strokeWidth || 2;
-                const sw = rawSw / Math.max(1e-6, viewScale);
+                const sw = rawSw; 
                 const offset = 4 * sw; // refX=2, tip=6 => diff=4
 
                 let drawTx = end.x;
@@ -1609,14 +1590,12 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                             points="0,0 -8,-3 -8,3"
                             transform={arrowTransform}
                             fill={m.stroke || "#333"}
-                            vectorEffect="non-scaling-stroke"
                         />
                         <polyline
                             points={points}
                             fill="none"
                             stroke={m.stroke || "#333"}
-                            strokeWidth={sw}
-                            vectorEffect="non-scaling-stroke"
+                            strokeWidth={rawSw}
                             strokeLinecap="round"
                             strokeLinejoin="round"
                             strokeDasharray={strokeDasharray}
@@ -1662,8 +1641,7 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                                     m.strokeDasharray === 'dotted' ? '2, 8' :
                                         (m.strokeDasharray === 'none' ? undefined : m.strokeDasharray)
                             }
-                            strokeLinecap="round" // Fix for dotted style disappearing
-                            vectorEffect="non-scaling-stroke"
+                            strokeLinecap="round"
                             rx={0} ry={0}
                         />
 
