@@ -128,7 +128,7 @@ const getCalloutPoints = (box, tip, knee, rotation = 0) => {
 
 
 
-const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0, rotation = 0 }) => {
+const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, renderScale = 1.0, rotation = 0 }) => {
     const {
         activeTool,
         setActiveTool,
@@ -148,7 +148,10 @@ const OverlayLayer = ({ page, width, height, viewScale = 1.0, renderScale = 1.0,
         undo,
         redo,
         defaultShapeStyle,
+        viewport,
     } = useAppStore();
+
+    const viewScale = (viewport && viewport.scale) ? viewport.scale : propViewScale;
 
     const svgRef = useRef(null);
 
