@@ -747,9 +747,45 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
             const finalY = newCenterY - finalH / 2;
 
             if (resizingState.isMeasurement) {
-                updateMeasurement(id, {
-                    box: { x: finalX, y: finalY, w: finalW, h: finalH }
-                });
+                const updates = { box: { x: finalX, y: finalY, w: finalW, h: finalH } };
+                if (startShape.type === 'callout') {
+                    const oldKnee = startShape.knee || getCalloutKnee(startShape.box, startShape.tip, null);
+                    const oldCx = startShape.box.x + startShape.box.w / 2;
+                    const oldCy = startShape.box.y + startShape.box.h / 2;
+                    const newCx = finalX + finalW / 2;
+                    const newCy = finalY + finalH / 2;
+                    
+                    const rot = startShape.rotation || 0;
+                    const rad = (-rot * Math.PI) / 180;
+                    const cosVal = Math.cos(rad);
+                    const sinVal = Math.sin(rad);
+                    
+                    const dx = oldKnee.x - oldCx;
+                    const dy = oldKnee.y - oldCy;
+                    const localKneeX = dx * cosVal - dy * sinVal;
+                    const localKneeY = dx * sinVal + dy * cosVal;
+                    
+                    const isVertical = Math.abs(localKneeX) < Math.abs(localKneeY);
+                    
+                    let newLocalKneeX = localKneeX;
+                    let newLocalKneeY = localKneeY;
+                    
+                    if (isVertical) {
+                        newLocalKneeX = 0;
+                    } else {
+                        newLocalKneeY = 0;
+                    }
+                    
+                    const posRad = (rot * Math.PI) / 180;
+                    const posCos = Math.cos(posRad);
+                    const posSin = Math.sin(posRad);
+                    
+                    updates.knee = {
+                        x: newCx + (newLocalKneeX * posCos - newLocalKneeY * posSin),
+                        y: newCy + (newLocalKneeX * posSin + newLocalKneeY * posCos)
+                    };
+                }
+                updateMeasurement(id, updates);
             } else {
                 updateShape(id, { x: finalX, y: finalY, width: finalW, height: finalH });
             }
@@ -1665,6 +1701,10 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                             {isEditing ? (
                                 <textarea
                                     autoFocus
+                                    onFocus={(e) => {
+                                        const len = e.target.value.length;
+                                        e.target.setSelectionRange(len, len);
+                                    }}
                                     style={{
                                         width: "100%",
                                         height: "100%",
@@ -1703,7 +1743,8 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                                         margin: 0,
                                         fontSize: `${fontSize}px`,
                                         fontFamily: 'sans-serif',
-                                        overflow: "visible",
+                                        overflow: "hidden",
+                                        wordBreak: "break-word",
                                         whiteSpace: "pre-wrap",
                                         cursor: activeTool === "select" ? "move" : "pointer",
                                         pointerEvents: 'auto',
