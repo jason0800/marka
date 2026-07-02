@@ -125,8 +125,17 @@ const getCalloutPoints = (box, tip, knee, rotation = 0) => {
         end: { x: tx, y: ty }
     };
 };
-
-
+const snapTo45Degrees = (start, end) => {
+    const dx = end.x - start.x;
+    const dy = end.y - start.y;
+    const r = Math.hypot(dx, dy);
+    const angle = Math.atan2(dy, dx);
+    const snappedAngle = Math.round(angle / (Math.PI / 4)) * (Math.PI / 4);
+    return {
+        x: start.x + r * Math.cos(snappedAngle),
+        y: start.y + r * Math.sin(snappedAngle)
+    };
+};
 
 const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, renderScale = 1.0, rotation = 0 }) => {
     const {
@@ -486,7 +495,10 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                     setDrawingPoints([{ x: point.x, y: point.y }]);
                 } else {
                     const start = drawingPoints[0];
-                    const end = { x: point.x, y: point.y };
+                    let end = { x: point.x, y: point.y };
+                    if (e.shiftKey) {
+                        end = snapTo45Degrees(start, end);
+                    }
 
                     if (activeTool === "length") {
                         addMeasurement({
@@ -523,7 +535,15 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
         const point = getPagePoint(e);
         if (!point) return;
 
-        setCursor({ x: point.x, y: point.y });
+        let cursorPt = { x: point.x, y: point.y };
+        if (e.shiftKey) {
+            if (["line", "arrow"].includes(activeTool) && shapeStart) {
+                cursorPt = snapTo45Degrees(shapeStart, cursorPt);
+            } else if (["length", "calibrate"].includes(activeTool) && isDrawingRef.current && drawingPoints.length > 0) {
+                cursorPt = snapTo45Degrees(drawingPoints[0], cursorPt);
+            }
+        }
+        setCursor(cursorPt);
 
         // Resizing
         if (resizingState) {
@@ -878,7 +898,11 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
 
         // finalize shape draw
         if (["rectangle", "circle", "line", "arrow"].includes(activeTool) && isDrawingRef.current && shapeStart && point) {
-            if (calculateDistance(shapeStart, point) > 5) {
+            let endPt = { x: point.x, y: point.y };
+            if (e.shiftKey && (activeTool === "line" || activeTool === "arrow")) {
+                endPt = snapTo45Degrees(shapeStart, endPt);
+            }
+            if (calculateDistance(shapeStart, endPt) > 5) {
                 const id = crypto.randomUUID();
 
                 const base = {
@@ -890,12 +914,12 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                 };
 
                 if (activeTool === "line" || activeTool === "arrow") {
-                    addShape({ ...base, start: shapeStart, end: { x: point.x, y: point.y } });
+                    addShape({ ...base, start: shapeStart, end: endPt });
                 } else {
-                    const x = Math.min(shapeStart.x, point.x);
-                    const y = Math.min(shapeStart.y, point.y);
-                    const w = Math.abs(point.x - shapeStart.x);
-                    const h = Math.abs(point.y - shapeStart.y);
+                    const x = Math.min(shapeStart.x, endPt.x);
+                    const y = Math.min(shapeStart.y, endPt.y);
+                    const w = Math.abs(endPt.x - shapeStart.x);
+                    const h = Math.abs(endPt.y - shapeStart.y);
                     addShape({ ...base, x, y, width: w, height: h });
                 }
                 pushHistory(); // Save state after adding shape
@@ -910,7 +934,10 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
         // finalize length/calibrate draw
         if (["length", "calibrate"].includes(activeTool) && isDrawingRef.current && drawingPoints.length > 0 && point) {
             const start = drawingPoints[0];
-            const end = { x: point.x, y: point.y };
+            let end = { x: point.x, y: point.y };
+            if (e.shiftKey) {
+                end = snapTo45Degrees(start, end);
+            }
 
             if (calculateDistance(start, end) > 5) {
                 if (activeTool === "length") {
