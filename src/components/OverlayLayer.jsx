@@ -1215,6 +1215,7 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
         }
 
         const rot = s.rotation || 0;
+        const hasFill = s.fill && s.fill !== "none" && s.fill !== "transparent";
 
         return (
             <g
@@ -1230,9 +1231,10 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                         y={0}
                         width={s.width}
                         height={s.height}
-                        fill="transparent"
-                        stroke="transparent"
-                        pointerEvents="all"
+                        fill={hasFill ? "transparent" : "none"}
+                        stroke={hasFill ? "none" : "transparent"}
+                        strokeWidth={hasFill ? 0 : sw}
+                        pointerEvents={hasFill ? "all" : "stroke"}
                     />
                 ) : (
                     <ellipse
@@ -1240,9 +1242,10 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                         cy={s.height / 2}
                         rx={s.width / 2}
                         ry={s.height / 2}
-                        fill="transparent"
-                        stroke="transparent"
-                        pointerEvents="all"
+                        fill={hasFill ? "transparent" : "none"}
+                        stroke={hasFill ? "none" : "transparent"}
+                        strokeWidth={hasFill ? 0 : sw}
+                        pointerEvents={hasFill ? "all" : "stroke"}
                     />
                 )}
             </g>
@@ -1251,6 +1254,7 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
 
     const renderShape = (s) => {
         const isSelected = selectedIds.includes(s.id);
+        const hasFill = s.fill && s.fill !== "none" && s.fill !== "transparent";
         const commonProps = {
             "data-shape-id": s.id,
             stroke: s.stroke,
@@ -1260,7 +1264,7 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
             opacity: s.opacity,
             style: {
                 cursor: "move",
-                pointerEvents: "all"
+                pointerEvents: hasFill ? "all" : "stroke"
             },
             strokeLinecap: "round",
             strokeLinejoin: "round",
@@ -1549,7 +1553,7 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                 const tipDy = end.y - knee.y;
                 const len = Math.hypot(tipDx, tipDy);
                 const rawSw = m.strokeWidth || 2;
-                const sw = rawSw; 
+                const sw = rawSw;
                 const offset = 4 * sw; // refX=2, tip=6 => diff=4
 
                 let drawTx = end.x;

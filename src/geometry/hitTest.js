@@ -59,30 +59,47 @@ export const isPointInShape = (point, shape, tolerance = 5) => {
     // Using a slightly loose hit test (stroke width included?) - keep it simple for now
     const halfStroke = (shape.strokeWidth || 0) / 2;
     const t = tolerance + halfStroke;
+    const hasFill = shape.fill && shape.fill !== "none" && shape.fill !== "transparent";
 
     if (shape.type === "rectangle") {
-        // Hit test for outlined shape is typically "near the border" or "inside if filled"
-        // But for "select", clicking inside usually selects it too.
-        // Let's assume hitting anywhere inside the bounding box selects it.
-        return (
-            localP.x >= x - t &&
-            localP.x <= x + width + t &&
-            localP.y >= y - t &&
-            localP.y <= y + height + t
-        );
+        if (hasFill) {
+            return (
+                localP.x >= x - t &&
+                localP.x <= x + width + t &&
+                localP.y >= y - t &&
+                localP.y <= y + height + t
+            );
+        } else {
+            // Outlined shape: check distance to 4 segments (top, bottom, left, right)
+            const nearLeft = Math.abs(localP.x - x) <= t && localP.y >= y - t && localP.y <= y + height + t;
+            const nearRight = Math.abs(localP.x - (x + width)) <= t && localP.y >= y - t && localP.y <= y + height + t;
+            const nearTop = Math.abs(localP.y - y) <= t && localP.x >= x - t && localP.x <= x + width + t;
+            const nearBottom = Math.abs(localP.y - (y + height)) <= t && localP.x >= x - t && localP.x <= x + width + t;
+            return nearLeft || nearRight || nearTop || nearBottom;
+        }
     }
 
     if (shape.type === "circle") {
-        // Ellipse hit test
-        // transform local point to be relative to center
         const dx = localP.x - center.x;
         const dy = localP.y - center.y;
+        const rx = width / 2;
+        const ry = height / 2;
 
-        // (x^2 / rx^2) + (y^2 / ry^2) <= 1
-        const rx = width / 2 + t;
-        const ry = height / 2 + t;
+        if (hasFill) {
+            const rxO = rx + t;
+            const ryO = ry + t;
+            return (dx * dx) / (rxO * rxO) + (dy * dy) / (ryO * ryO) <= 1;
+        } else {
+            // Ellipse border check: inside outer bounds but outside inner bounds
+            const rxO = rx + t;
+            const ryO = ry + t;
+            const rxI = Math.max(0.1, rx - t);
+            const ryI = Math.max(0.1, ry - t);
 
-        return (dx * dx) / (rx * rx) + (dy * dy) / (ry * ry) <= 1;
+            const isInsideOuter = (dx * dx) / (rxO * rxO) + (dy * dy) / (ryO * ryO) <= 1;
+            const isOutsideInner = rx - t <= 0.1 || ry - t <= 0.1 || (dx * dx) / (rxI * rxI) + (dy * dy) / (ryI * ryI) > 1;
+            return isInsideOuter && isOutsideInner;
+        }
     }
 
     return false;
