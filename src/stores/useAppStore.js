@@ -96,7 +96,9 @@ const useAppStore = create((set, get) => ({
     measurements: [],
     shapes: [],
     selectedIds: [],
-    setSelectedIds: (ids) => set({ selectedIds: ids }),
+    setSelectedIds: (ids) => set((state) => ({
+        selectedIds: typeof ids === "function" ? ids(state.selectedIds) : ids
+    })),
 
     // --- Default Shape Properties (Sticky) ---
     defaultShapeStyle: {

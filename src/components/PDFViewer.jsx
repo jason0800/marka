@@ -472,11 +472,7 @@ const PDFViewer = ({ document }) => {
                                 e.target.getAttribute('data-resize-handle');
         if (isOverlayTarget) return;
 
-        // Do not pan with Shift if a drawing/measurement tool is active
-        const isDrawingTool = !["select", "pan"].includes(activeTool);
-        if (isDrawingTool && e.shiftKey) return;
-
-        const shouldPan = e.button === 1 || activeTool === "pan" || e.shiftKey;
+        const shouldPan = e.button === 1 || activeTool === "pan";
         if (!shouldPan) return;
 
         startedPanButtonRef.current = e.button;

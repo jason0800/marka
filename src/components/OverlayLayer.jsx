@@ -1455,19 +1455,21 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
         );
     };
 
-    const renderShape = (s) => {
-        const isSelected = selectedIds.includes(s.id);
-        const hasFill = s.fill && s.fill !== "none" && s.fill !== "transparent";
+    const renderShape = (s, isShadow = false) => {
+        const isSelected = isShadow ? false : selectedIds.includes(s.id);
+        const strokeColor = isShadow ? "#cbd5e1" : s.stroke;
+        const fillColor = isShadow ? (s.fill && s.fill !== "none" ? "rgba(226, 232, 240, 0.4)" : "none") : s.fill;
+        const hasFill = fillColor && fillColor !== "none" && fillColor !== "transparent";
         const commonProps = {
-            "data-shape-id": s.id,
-            stroke: s.stroke,
+            "data-shape-id": isShadow ? undefined : s.id,
+            stroke: strokeColor,
             strokeWidth: s.strokeWidth,
-            strokeDasharray: s.strokeDasharray === 'none' ? undefined : s.strokeDasharray,
-            fill: s.fill,
-            opacity: s.opacity,
+            strokeDasharray: isShadow ? undefined : (s.strokeDasharray === 'none' ? undefined : s.strokeDasharray),
+            fill: fillColor,
+            opacity: isShadow ? 0.7 : s.opacity,
             style: {
-                cursor: "move",
-                pointerEvents: hasFill ? "all" : "stroke"
+                cursor: isShadow ? "default" : "move",
+                pointerEvents: isShadow ? "none" : (hasFill ? "all" : "stroke")
             },
             strokeLinecap: "round",
             strokeLinejoin: "round",
@@ -1475,19 +1477,21 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
 
         if (s.type === "line") {
             return (
-                <g key={s.id}>
+                <g key={s.id + (isShadow ? "-shadow" : "")}>
                     {/* fat hit-area */}
-                    <line
-                        x1={s.start.x}
-                        y1={s.start.y}
-                        x2={s.end.x}
-                        y2={s.end.y}
-                        stroke="transparent"
-                        strokeWidth={15}
-                        pointerEvents="all"
-                        data-shape-id={s.id}
-                        style={{ cursor: "move", pointerEvents: "all" }}
-                    />
+                    {!isShadow && (
+                        <line
+                            x1={s.start.x}
+                            y1={s.start.y}
+                            x2={s.end.x}
+                            y2={s.end.y}
+                            stroke="transparent"
+                            strokeWidth={15}
+                            pointerEvents="all"
+                            data-shape-id={s.id}
+                            style={{ cursor: "move", pointerEvents: "all" }}
+                        />
+                    )}
                     <line x1={s.start.x} y1={s.start.y} x2={s.end.x} y2={s.end.y} {...commonProps} strokeLinecap="round" />
                     {isSelected && renderSelectionFrame(s)}
                 </g>
@@ -1495,11 +1499,12 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
         }
 
         if (s.type === "arrow") {
+            const arrowMarkerId = `arrow-${s.id}-v2${isShadow ? '-shadow' : ''}`;
             return (
-                <g key={s.id} data-shape-id={s.id}>
+                <g key={s.id + (isShadow ? "-shadow" : "")} data-shape-id={isShadow ? undefined : s.id}>
                     <defs>
-                        <marker id={`arrow-${s.id}-v2`} markerWidth="6" markerHeight="4" refX="2" refY="2" orient="auto">
-                            <polygon points="0 0, 6 2, 0 4" fill={s.stroke} />
+                        <marker id={arrowMarkerId} markerWidth="6" markerHeight="4" refX="2" refY="2" orient="auto">
+                            <polygon points="0 0, 6 2, 0 4" fill={strokeColor} />
                         </marker>
                     </defs>
 
@@ -1520,25 +1525,27 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                                 x2={endX}
                                 y2={endY}
                                 {...commonProps}
-                                cursor="move"
-                                markerEnd={`url(#arrow-${s.id}-v2)`}
+                                cursor={isShadow ? "default" : "move"}
+                                markerEnd={`url(#${arrowMarkerId})`}
                                 strokeLinecap="butt"
                             />
                         );
                     })()}
 
                     {/* fat hit-area */}
-                    <line
-                        x1={s.start.x}
-                        y1={s.start.y}
-                        x2={s.end.x}
-                        y2={s.end.y}
-                        stroke="transparent"
-                        strokeWidth={15}
-                        pointerEvents="all"
-                        data-shape-id={s.id}
-                        style={{ cursor: "move", pointerEvents: "all" }}
-                    />
+                    {!isShadow && (
+                        <line
+                            x1={s.start.x}
+                            y1={s.start.y}
+                            x2={s.end.x}
+                            y2={s.end.y}
+                            stroke="transparent"
+                            strokeWidth={15}
+                            pointerEvents="all"
+                            data-shape-id={s.id}
+                            style={{ cursor: "move", pointerEvents: "all" }}
+                        />
+                    )}
 
                     {isSelected && renderSelectionFrame(s)}
                 </g>
@@ -1556,7 +1563,7 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
         }
 
         return (
-            <g key={s.id}>
+            <g key={s.id + (isShadow ? "-shadow" : "")}>
                 <g
                     transform={`translate(${s.x}, ${s.y}) rotate(${rotation}, ${s.width / 2}, ${s.height / 2})`}
                 >
@@ -1567,12 +1574,13 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
         );
     };
 
-    const renderMeasurement = (m) => {
-        const isSelected = selectedIds.includes(m.id);
+    const renderMeasurement = (m, isShadow = false) => {
+        const isSelected = isShadow ? false : selectedIds.includes(m.id);
         const measCommon = {
-            "data-meas-id": m.id,
+            "data-meas-id": isShadow ? undefined : m.id,
             style: {
-                cursor: activeTool === "select" ? "move" : "default",
+                cursor: isShadow ? "default" : (activeTool === "select" ? "move" : "default"),
+                pointerEvents: isShadow ? "none" : "all"
             }
         };
 
@@ -1580,27 +1588,29 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
             const a = m.points[0];
             const b = m.points[1];
             const dist = calculateDistance(a, b);
-            const strokeColor = m.stroke || "#e74c3c";
+            const strokeColor = isShadow ? "#cbd5e1" : (m.stroke || "#e74c3c");
             const strokeWidth = m.strokeWidth || 2;
-            const strokeDasharray = m.strokeDasharray === 'none' ? undefined : (m.strokeDasharray === 'dashed' ? '12, 12' : (m.strokeDasharray === 'dotted' ? '2, 8' : m.strokeDasharray));
+            const strokeDasharray = isShadow ? undefined : (m.strokeDasharray === 'none' ? undefined : (m.strokeDasharray === 'dashed' ? '12, 12' : (m.strokeDasharray === 'dotted' ? '2, 8' : m.strokeDasharray)));
             const fontSize = m.fontSize || 14;
-            const textColor = m.textColor || strokeColor;
-            const opacity = m.opacity ?? 1;
+            const textColor = isShadow ? "#94a3b8" : (m.textColor || strokeColor);
+            const opacity = isShadow ? 0.7 : (m.opacity ?? 1);
 
             return (
-                <g key={m.id} {...measCommon} style={{ ...measCommon.style, opacity }}>
+                <g key={m.id + (isShadow ? "-shadow" : "")} {...measCommon} style={{ ...measCommon.style, opacity }}>
                     {/* Hit Area for dragging */}
-                    <line
-                        x1={a.x}
-                        y1={a.y}
-                        x2={b.x}
-                        y2={b.y}
-                        stroke="transparent"
-                        strokeWidth={15}
-                        pointerEvents="all"
-                        data-meas-id={m.id}
-                        style={{ cursor: "move" }}
-                    />
+                    {!isShadow && (
+                        <line
+                            x1={a.x}
+                            y1={a.y}
+                            x2={b.x}
+                            y2={b.y}
+                            stroke="transparent"
+                            strokeWidth={15}
+                            pointerEvents="all"
+                            data-meas-id={m.id}
+                            style={{ cursor: "move" }}
+                        />
+                    )}
                     <line
                         x1={a.x}
                         y1={a.y}
@@ -1611,17 +1621,19 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                         strokeDasharray={strokeDasharray}
                         pointerEvents="none"
                     />
-                    <text
-                        x={(a.x + b.x) / 2}
-                        y={(a.y + b.y) / 2 - 6}
-                        fill={textColor}
-                        fontSize={fontSize}
-                        textAnchor="middle"
-                        pointerEvents="all"
-                        style={{ cursor: "move" }}
-                    >
-                        {toUnits(dist).toFixed(2)} {unit}
-                    </text>
+                    {!isShadow && (
+                        <text
+                            x={(a.x + b.x) / 2}
+                            y={(a.y + b.y) / 2 - 6}
+                            fill={textColor}
+                            fontSize={fontSize}
+                            textAnchor="middle"
+                            pointerEvents="all"
+                            style={{ cursor: "move" }}
+                        >
+                            {toUnits(dist).toFixed(2)} {unit}
+                        </text>
+                    )}
                     {isSelected && renderSelectionFrame({ id: m.id, type: "line", start: a, end: b })}
                 </g>
             );
@@ -1630,16 +1642,16 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
         if (m.type === "area" && m.points?.length >= 3) {
             const pointsStr = m.points.map((p) => `${p.x},${p.y}`).join(" ");
             const area = calculatePolygonArea(m.points);
-            const strokeColor = m.stroke || "#2ecc71";
+            const strokeColor = isShadow ? "#cbd5e1" : (m.stroke || "#2ecc71");
             const strokeWidth = m.strokeWidth || 2;
-            const strokeDasharray = m.strokeDasharray === 'none' ? undefined : (m.strokeDasharray === 'dashed' ? '12, 12' : (m.strokeDasharray === 'dotted' ? '2, 8' : m.strokeDasharray));
-            const fillColor = m.fill || "rgba(108, 176, 86, 0.25)";
+            const strokeDasharray = isShadow ? undefined : (m.strokeDasharray === 'none' ? undefined : (m.strokeDasharray === 'dashed' ? '12, 12' : (m.strokeDasharray === 'dotted' ? '2, 8' : m.strokeDasharray)));
+            const fillColor = isShadow ? "rgba(226, 232, 240, 0.4)" : (m.fill || "rgba(108, 176, 86, 0.25)");
             const fontSize = m.fontSize || 14;
-            const textColor = m.textColor || strokeColor;
-            const opacity = m.opacity ?? 1;
+            const textColor = isShadow ? "#94a3b8" : (m.textColor || strokeColor);
+            const opacity = isShadow ? 0.7 : (m.opacity ?? 1);
 
             return (
-                <g key={m.id} {...measCommon} style={{ ...measCommon.style, opacity }}>
+                <g key={m.id + (isShadow ? "-shadow" : "")} {...measCommon} style={{ ...measCommon.style, opacity }}>
                     <polygon
                         points={pointsStr}
                         fill={fillColor}
@@ -1647,14 +1659,16 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                         strokeWidth={strokeWidth}
                         strokeDasharray={strokeDasharray}
                     />
-                    <text
-                        x={m.points[0].x}
-                        y={m.points[0].y - 8}
-                        fill={textColor}
-                        fontSize={fontSize}
-                    >
-                        {toUnits2(area).toFixed(2)} {unit}²
-                    </text>
+                    {!isShadow && (
+                        <text
+                            x={m.points[0].x}
+                            y={m.points[0].y - 8}
+                            fill={textColor}
+                            fontSize={fontSize}
+                        >
+                            {toUnits2(area).toFixed(2)} {unit}²
+                        </text>
+                    )}
                     {isSelected && (
                         <>
                             {(!isDraggingItems && resizingState === null) && (() => {
@@ -1707,48 +1721,58 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
             for (let i = 0; i < m.points.length - 1; i++) {
                 len += calculateDistance(m.points[i], m.points[i + 1]);
             }
+            const strokeColor = isShadow ? "#cbd5e1" : "#9b59b6";
+            const strokeWidth = m.strokeWidth || 2;
+            const opacity = isShadow ? 0.7 : 1;
 
             return (
-                <g key={m.id} {...measCommon}>
+                <g key={m.id + (isShadow ? "-shadow" : "")} {...measCommon} style={{ opacity }}>
                     <polyline
                         points={pointsStr}
                         fill="none"
-                        stroke="#9b59b6"
-                        strokeWidth={m.strokeWidth || 2}
+                        stroke={strokeColor}
+                        strokeWidth={strokeWidth}
                     />
-                    <text
-                        x={m.points[0].x}
-                        y={m.points[0].y - 8}
-                        fill="#9b59b6"
-                        fontSize={14}
-                    >
-                        {toUnits(len).toFixed(2)} {unit}
-                    </text>
+                    {!isShadow && (
+                        <text
+                            x={m.points[0].x}
+                            y={m.points[0].y - 8}
+                            fill="#9b59b6"
+                            fontSize={14}
+                        >
+                            {toUnits(len).toFixed(2)} {unit}
+                        </text>
+                    )}
                 </g>
             );
         }
 
         if (m.type === "count" && m.point) {
+            const fillColor = isShadow ? "#cbd5e1" : "var(--primary-color)";
+            const strokeColor = isShadow ? "#cbd5e1" : "white";
+            const opacity = isShadow ? 0.7 : 1;
             return (
                 <circle
-                    key={m.id}
+                    key={m.id + (isShadow ? "-shadow" : "")}
                     {...measCommon}
                     cx={m.point.x}
                     cy={m.point.y}
                     r={8}
-                    fill="var(--primary-color)"
-                    stroke="white"
+                    fill={fillColor}
+                    stroke={strokeColor}
                     strokeWidth={2}
+                    style={{ ...measCommon.style, opacity }}
                 />
             );
         }
 
         const isEditing = editingId === m.id;
-        const measOpacity = m.opacity ?? 1;
+        const measOpacity = isShadow ? 0.7 : (m.opacity ?? 1);
 
         // Comment: Line + Dot. Callout: Arrow. Text: None.
         const renderConnector = () => {
             if (m.type === "comment" && m.tip) {
+                const strokeColor = isShadow ? "#cbd5e1" : (m.stroke || "#333");
                 return (
                     <>
                         <line
@@ -1756,21 +1780,19 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                             y1={m.tip.y}
                             x2={m.box.x + m.box.w / 2} // connect to center
                             y2={m.box.y + m.box.h / 2}
-                            stroke={m.stroke || "#333"}
+                            stroke={strokeColor}
                             strokeWidth={1}
                         />
                         <circle
                             cx={m.tip.x}
                             cy={m.tip.y}
                             r={3}
-                            fill={m.stroke || "#333"}
+                            fill={strokeColor}
                         />
                     </>
                 );
             }
             if (m.type === "callout" && m.tip) {
-                const arrowId = `callout-arrow-${m.id}`;
-
                 const { start, knee, end } = getCalloutPoints(m.box, m.tip, m.knee, m.rotation || 0);
 
                 // Shorten the last segment for callout (knee -> tip)
@@ -1797,9 +1819,11 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                 const points = `${start.x},${start.y} ${knee.x},${knee.y} ${drawTx},${drawTy}`;
 
                 // Fix: Apply stroke style to Leader
-                const strokeDasharray = m.strokeDasharray === 'dashed' ? '12, 12'
+                const strokeDasharray = isShadow ? undefined : (
+                    m.strokeDasharray === 'dashed' ? '12, 12'
                     : m.strokeDasharray === 'dotted' ? '2, 8'
-                        : (m.strokeDasharray === 'none' ? undefined : m.strokeDasharray);
+                    : (m.strokeDasharray === 'none' ? undefined : m.strokeDasharray)
+                );
 
                 let angle = 0;
                 if (len > 1e-6) {
@@ -1813,6 +1837,7 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                     }
                 }
                 const arrowTransform = `translate(${end.x}, ${end.y}) rotate(${angle}) scale(${sw})`;
+                const strokeColor = isShadow ? "#cbd5e1" : (m.stroke || "#333");
 
                 return (
                     <>
@@ -1820,27 +1845,29 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                         <polygon
                             points="0,0 -8,-3 -8,3"
                             transform={arrowTransform}
-                            fill={m.stroke || "#333"}
+                            fill={strokeColor}
                         />
                         <polyline
                             points={points}
                             fill="none"
-                            stroke={m.stroke || "#333"}
+                            stroke={strokeColor}
                             strokeWidth={rawSw}
                             strokeLinecap="round"
                             strokeLinejoin="round"
                             strokeDasharray={strokeDasharray}
                         />
                         {/* Hit Target for Arrow Tip Marker */}
-                        <circle
-                            cx={end.x}
-                            cy={end.y}
-                            r={7.7 / Math.max(1e-6, viewScale)}
-                            fill="transparent"
-                            stroke="none"
-                            data-meas-id={m.id}
-                            style={{ pointerEvents: 'all', cursor: 'move' }}
-                        />
+                        {!isShadow && (
+                            <circle
+                                cx={end.x}
+                                cy={end.y}
+                                r={7.7 / Math.max(1e-6, viewScale)}
+                                fill="transparent"
+                                stroke="none"
+                                data-meas-id={m.id}
+                                style={{ pointerEvents: 'all', cursor: 'move' }}
+                            />
+                        )}
                     </>
                 );
             }
@@ -1848,12 +1875,17 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
         };
 
         const fontSize = m.fontSize || 14;
-        const textColor = m.textColor || m.stroke || "black";
-        const borderColor = m.stroke || "#333";
-        const bgColor = m.fill || (m.type === "text" ? "transparent" : "#fff");
+        const textColor = isShadow ? "#94a3b8" : (m.textColor || m.stroke || "black");
+        const borderColor = isShadow ? "#cbd5e1" : (m.stroke || "#333");
+        const bgColor = isShadow ? "rgba(226, 232, 240, 0.4)" : (m.fill || (m.type === "text" ? "transparent" : "#fff"));
+        const strokeDasharray = isShadow ? undefined : (
+            m.strokeDasharray === 'dashed' ? '12, 12' :
+            m.strokeDasharray === 'dotted' ? '2, 8' :
+            (m.strokeDasharray === 'none' ? undefined : m.strokeDasharray)
+        );
 
         return (
-            <g key={m.id} {...measCommon}>
+            <g key={m.id + (isShadow ? "-shadow" : "")} {...measCommon}>
                 {/* Content Group with Opacity */}
                 <g style={{ opacity: measOpacity }}>
                     {renderConnector()}
@@ -1867,89 +1899,87 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                             fill={bgColor}
                             stroke={borderColor}
                             strokeWidth={m.strokeWidth || 1}
-                            strokeDasharray={
-                                m.strokeDasharray === 'dashed' ? '12, 12' :
-                                    m.strokeDasharray === 'dotted' ? '2, 8' :
-                                        (m.strokeDasharray === 'none' ? undefined : m.strokeDasharray)
-                            }
+                            strokeDasharray={strokeDasharray}
                             strokeLinecap="round"
                             rx={0} ry={0}
                         />
 
-                        <foreignObject
-                            x={m.box.x}
-                            y={m.box.y}
-                            width={m.box.w}
-                            height={m.box.h}
-                            className="foreignObject"
-                            style={{
-                                overflow: 'visible',
-                                pointerEvents: 'all',
-                                cursor: activeTool === "select" ? "move" : "default"
-                            }}
-                        >
-                            {isEditing ? (
-                                <textarea
-                                    autoFocus
-                                    onFocus={(e) => {
-                                        const len = e.target.value.length;
-                                        e.target.setSelectionRange(len, len);
-                                    }}
-                                    style={{
-                                        width: "100%",
-                                        height: "100%",
-                                        resize: "none", // Remove handle
-                                        border: "none", // Handled by rect
-                                        padding: "4px",
-                                        margin: 0,
-                                        fontSize: `${fontSize}px`,
-                                        background: "transparent",
-                                        color: textColor,
-                                        outline: "none",
-                                        fontFamily: 'sans-serif',
-                                        pointerEvents: 'auto',
-                                        lineHeight: "1.2",
-                                        overflow: "hidden"
-                                    }}
-                                    defaultValue={m.text}
-                                    onBlur={(ev) => {
-                                        updateMeasurement(m.id, { text: ev.target.value });
-                                        setEditingId(null);
-                                    }}
-                                    onKeyDown={(ev) => {
-                                        if (ev.key === "Escape") setEditingId(null);
-                                        ev.stopPropagation();
-                                    }}
-                                />
-                            ) : (
-                                <div
-                                    style={{
-                                        width: "100%",
-                                        height: "100%",
-                                        border: "none",
-                                        background: "transparent",
-                                        color: textColor,
-                                        padding: "4px",
-                                        margin: 0,
-                                        fontSize: `${fontSize}px`,
-                                        fontFamily: 'sans-serif',
-                                        overflow: "hidden",
-                                        wordBreak: "break-word",
-                                        whiteSpace: "pre-wrap",
-                                        cursor: activeTool === "select" ? "move" : "pointer",
-                                        pointerEvents: 'auto',
-                                        userSelect: 'none',
-                                        lineHeight: "1.2"
-                                    }}
-                                    onDoubleClick={(ev) => {
-                                        ev.stopPropagation();
-                                        setEditingId(m.id);
-                                    }}
-                                >
-                                    {m.text || ""}
-                                </div>
-                            )}
-                        </foreignObject>
+                        {!isShadow && (
+                            <foreignObject
+                                x={m.box.x}
+                                y={m.box.y}
+                                width={m.box.w}
+                                height={m.box.h}
+                                className="foreignObject"
+                                style={{
+                                    overflow: 'visible',
+                                    pointerEvents: 'all',
+                                    cursor: activeTool === "select" ? "move" : "default"
+                                }}
+                            >
+                                {isEditing ? (
+                                    <textarea
+                                        autoFocus
+                                        onFocus={(e) => {
+                                            const len = e.target.value.length;
+                                            e.target.setSelectionRange(len, len);
+                                        }}
+                                        style={{
+                                            width: "100%",
+                                            height: "100%",
+                                            resize: "none",
+                                            border: "none",
+                                            padding: "4px",
+                                            margin: 0,
+                                            fontSize: `${fontSize}px`,
+                                            background: "transparent",
+                                            color: textColor,
+                                            outline: "none",
+                                            fontFamily: 'sans-serif',
+                                            pointerEvents: 'auto',
+                                            lineHeight: "1.2",
+                                            overflow: "hidden"
+                                        }}
+                                        defaultValue={m.text}
+                                        onBlur={(ev) => {
+                                            updateMeasurement(m.id, { text: ev.target.value });
+                                            setEditingId(null);
+                                        }}
+                                        onKeyDown={(ev) => {
+                                            if (ev.key === "Escape") setEditingId(null);
+                                            ev.stopPropagation();
+                                        }}
+                                    />
+                                ) : (
+                                    <div
+                                        style={{
+                                            width: "100%",
+                                            height: "100%",
+                                            border: "none",
+                                            background: "transparent",
+                                            color: textColor,
+                                            padding: "4px",
+                                            margin: 0,
+                                            fontSize: `${fontSize}px`,
+                                            fontFamily: 'sans-serif',
+                                            overflow: "hidden",
+                                            wordBreak: "break-word",
+                                            whiteSpace: "pre-wrap",
+                                            cursor: activeTool === "select" ? "move" : "pointer",
+                                            pointerEvents: 'auto',
+                                            userSelect: 'none',
+                                            lineHeight: "1.2"
+                                        }}
+                                        onDoubleClick={(ev) => {
+                                            ev.stopPropagation();
+                                            setEditingId(m.id);
+                                        }}
+                                    >
+                                        {m.text || ""}
+                                    </div>
+                                )}
+                            </foreignObject>
+                        )}
                     </g>
                 </g>
 
@@ -2063,6 +2093,31 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                 onPointerUp={handlePointerUp}
                 onDoubleClick={() => finishDrawing()}
             >
+                {/* 0️⃣ SHADOW SHAPES / MEASUREMENTS (Left behind during editing) */}
+                {(() => {
+                    const shadows = [];
+                    if (resizingState && resizingState.startShape) {
+                        const start = resizingState.startShape;
+                        if (resizingState.isMeasurement) {
+                            shadows.push({ item: start, type: 'measurement' });
+                        } else {
+                            shadows.push({ item: start, type: 'shape' });
+                        }
+                    } else if (isDraggingItems && dragStartItems) {
+                        Object.entries(dragStartItems).forEach(([id, startItem]) => {
+                            const isMeas = pageMeasurements.some(m => m.id === id);
+                            shadows.push({ item: startItem, type: isMeas ? 'measurement' : 'shape' });
+                        });
+                    }
+                    return shadows.map(({ item, type }) => {
+                        if (type === 'shape') {
+                            return renderShape(item, true);
+                        } else {
+                            return renderMeasurement(item, true);
+                        }
+                    });
+                })()}
+
                 {/* 1️⃣ INVISIBLE SHAPE HIT TARGETS */}
                 {activeTool === "select" && pageShapes.map(renderShapeHitTarget)}
 
