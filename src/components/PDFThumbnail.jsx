@@ -114,7 +114,7 @@ const PDFThumbnail = memo(function PDFThumbnail({
             <div
                 className={`relative bg-white shadow-sm border transition-all duration-0 ${isActive
                         ? "border-[var(--primary-color)] ring-2 ring-[var(--primary-color)] ring-opacity-50"
-                        : "border-[var(--border-color)]"
+                        : "border-[#b0b0b0] dark:border-[#555]"
                     }`}
             >
                 {!page && (

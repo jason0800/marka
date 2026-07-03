@@ -3,7 +3,7 @@ import { X, Lock } from 'lucide-react';
 
 const UpgradeDialog = ({ onClose }) => {
     return (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/50 backdrop-blur-sm">
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-transparent">
             <div className="bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-lg shadow-2xl w-[400px] p-6 relative flex flex-col items-center text-center">
 
                 <button

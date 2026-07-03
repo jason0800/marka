@@ -208,7 +208,7 @@ const CalibrationDialog = ({ onClose }) => {
     );
 
     return (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/40 backdrop-blur-sm" onClick={onClose}>
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-transparent" onClick={onClose}>
             <div className="bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-xl shadow-2xl p-5 w-[450px] flex flex-col gap-4" onClick={e => e.stopPropagation()}>
 
                 {/* Header */}

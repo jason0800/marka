@@ -10,11 +10,37 @@ const BottomBar = ({ totalPages }) => {
         calibrationScales,
         calibrationDetails,
         setPageScale,
-        setJumpToPage
+        setJumpToPage,
+        pdfDocument
     } = useAppStore();
 
     const [pageInput, setPageInput] = useState(currentPage);
     const [scaleDisplay, setScaleDisplay] = useState('');
+    const [pageSizeDisplay, setPageSizeDisplay] = useState('');
+
+    useEffect(() => {
+        if (!pdfDocument) {
+            setPageSizeDisplay('');
+            return;
+        }
+
+        let cancelled = false;
+        pdfDocument.getPage(currentPage).then((page) => {
+            if (cancelled) return;
+            const rotation = page.rotation || 0;
+            const vp = page.getViewport({ scale: 1, rotation });
+            const widthMm = Math.round(vp.width * 25.4 / 72);
+            const heightMm = Math.round(vp.height * 25.4 / 72);
+            setPageSizeDisplay(`${widthMm} x ${heightMm} mm`);
+        }).catch((err) => {
+            console.error("Error getting page size:", err);
+            if (!cancelled) setPageSizeDisplay('');
+        });
+
+        return () => {
+            cancelled = true;
+        };
+    }, [currentPage, pdfDocument]);
 
     useEffect(() => {
         setPageInput(currentPage);
@@ -62,14 +88,27 @@ const BottomBar = ({ totalPages }) => {
 
     return (
         <div className="w-full h-[50px] bg-[var(--bg-secondary)] border-t border-[var(--border-color)] grid grid-cols-[1fr_auto_1fr] items-center px-5 box-border text-[var(--text-primary)] text-[15px] select-none">
-            <div className="flex items-center gap-2 justify-self-start">
-                <span className="opacity-80 text-sm font-medium">Scale:</span>
-                <div
-                    className="text-[var(--text-primary)] text-sm font-medium opacity-75 cursor-default"
-                    title="Current Scale (Set via Toolbar)"
-                >
-                    {scaleDisplay}
+            <div className="flex items-center gap-4 justify-self-start">
+                <div className="flex items-center gap-2">
+                    <span className="opacity-80 text-sm font-medium">Scale:</span>
+                    <div
+                        className="text-[var(--text-primary)] text-sm font-medium opacity-75 cursor-default"
+                        title="Current Scale (Set via Toolbar)"
+                    >
+                        {scaleDisplay}
+                    </div>
                 </div>
+                {pageSizeDisplay && (
+                    <>
+                        <span className="opacity-30 text-xs font-light">|</span>
+                        <div className="flex items-center gap-2">
+                            <span className="opacity-80 text-sm font-medium">Page Size:</span>
+                            <div className="text-[var(--text-primary)] text-sm font-medium opacity-75 cursor-default">
+                                {pageSizeDisplay}
+                            </div>
+                        </div>
+                    </>
+                )}
             </div>
 
             <div className="flex items-center justify-self-center" style={{ visibility: totalPages > 0 ? 'visible' : 'hidden' }}>
@@ -127,11 +166,10 @@ const BottomBar = ({ totalPages }) => {
 
             <div className="flex items-center gap-1.5 justify-self-end">
                 <button
-                    className={`border border-[var(--border-color)] p-1.5 rounded-md text-[13px] cursor-pointer transition-all duration-200 min-w-[36px] h-[36px] flex items-center justify-center ${
-                        viewMode === 'single'
+                    className={`border border-[var(--border-color)] p-1.5 rounded-md text-[13px] cursor-pointer transition-all duration-200 min-w-[36px] h-[36px] flex items-center justify-center ${viewMode === 'single'
                             ? '!bg-[var(--primary-color)] !text-[var(--text-active)] border-[var(--primary-color)] font-medium shadow-[0_0_10px_rgba(var(--primary-color-rgb),0.25)]'
                             : 'bg-[var(--bg-color)] text-[var(--text-primary)] hover:bg-[var(--btn-hover)]'
-                    }`}
+                        }`}
                     onClick={() => setViewMode('single')}
                     title="Single Page View"
                 >
@@ -141,11 +179,10 @@ const BottomBar = ({ totalPages }) => {
                     </svg>
                 </button>
                 <button
-                    className={`border border-[var(--border-color)] p-1.5 rounded-md text-[13px] cursor-pointer transition-all duration-200 min-w-[36px] h-[36px] flex items-center justify-center ${
-                        viewMode === 'continuous'
+                    className={`border border-[var(--border-color)] p-1.5 rounded-md text-[13px] cursor-pointer transition-all duration-200 min-w-[36px] h-[36px] flex items-center justify-center ${viewMode === 'continuous'
                             ? '!bg-[var(--primary-color)] !text-[var(--text-active)] border-[var(--primary-color)] font-medium shadow-[0_0_10px_rgba(var(--primary-color-rgb),0.25)]'
                             : 'bg-[var(--bg-color)] text-[var(--text-primary)] hover:bg-[var(--btn-hover)]'
-                    }`}
+                        }`}
                     onClick={() => setViewMode('continuous')}
                     title="Continuous Scroll View"
                 >
