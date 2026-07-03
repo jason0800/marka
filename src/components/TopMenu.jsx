@@ -6,7 +6,8 @@ import { jsPDF } from 'jspdf';
 import {
     FileText, FolderOpen, Save,
     Undo, Redo, ZoomIn, ZoomOut, Sun, Moon,
-    ChevronDown, RotateCw, RotateCcw, Clipboard, Scissors, Copy
+    ChevronDown, RotateCw, RotateCcw, Clipboard, Scissors, Copy,
+    Magnet, Keyboard
 } from 'lucide-react';
 import UpgradeDialog from './UpgradeDialog';
 import DocumentPropertiesDialog from './DocumentPropertiesDialog';
@@ -14,6 +15,7 @@ import { exportFlattenedPDF } from '../services/pdf-export-service';
 import { toast } from 'sonner';
 import { confirmToast } from '../utils/confirm-toast';
 import { saveProject, loadProject, promptForProjectFiles, promptForPDF } from '../services/project-service';
+import ShortcutsDialog from './ShortcutsDialog';
 
 // ... (existing imports)
 
@@ -26,13 +28,14 @@ const TopMenu = ({ setPdfDocument, setIsLoading, isDocumentLoaded, onNewPDF, pdf
         undo, redo, history, historyIndex, selectedIds, setSelectedIds, deleteShape, deleteMeasurement, pushHistory,
         copy, cut, paste, clipboard, rotateAllPages, currentPage,
         fileName, fileSize, setFileInfo,
-        isPremium, setProjectData
+        isPremium, setProjectData, snappingEnabled, setSnappingEnabled
     } = useAppStore();
 
 
     const [showDocProps, setShowDocProps] = useState(false);
     const [showUpgradeDialog, setShowUpgradeDialog] = useState(false);
     const [loadingProgress, setLoadingProgress] = useState(0);
+    const [showShortcutsDialog, setShowShortcutsDialog] = useState(false);
 
     // Global Key Handlers (Undo/Redo/Delete/Cut/Copy/Paste)
     useEffect(() => {
@@ -486,8 +489,34 @@ const TopMenu = ({ setPdfDocument, setIsLoading, isDocumentLoaded, onNewPDF, pdf
                 </div>
             </div>
 
-            <div className="">
-                {/* Preset Scale (Placeholder for now, better in Toolbar or Dialog) */}
+            {/* Right side controls spacer */}
+            <div className="flex-1" />
+
+            <div className="flex items-center gap-2 mr-2">
+                {/* Snapping Toggle */}
+                {isDocumentLoaded && (
+                    <button
+                        onClick={() => setSnappingEnabled(!snappingEnabled)}
+                        className={`h-7 px-2.5 rounded text-[12px] font-medium border border-[var(--border-color)] bg-transparent flex items-center gap-1.5 transition-all duration-200 hover:bg-[var(--btn-hover)] ${
+                            snappingEnabled
+                                ? '!text-[var(--primary-color)] !border-[var(--primary-color)] !bg-[var(--primary-color)]/10'
+                                : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                        }`}
+                        title={snappingEnabled ? "Disable Snapping" : "Enable Snapping"}
+                    >
+                        <Magnet size={14} />
+                        <span>Snap</span>
+                    </button>
+                )}
+
+                {/* Keyboard Shortcuts Button */}
+                <button
+                    onClick={() => setShowShortcutsDialog(true)}
+                    className="h-7 w-7 rounded border border-[var(--border-color)] bg-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)] flex items-center justify-center transition-all duration-200 hover:bg-[var(--btn-hover)]"
+                    title="Keyboard Shortcuts"
+                >
+                    <Keyboard size={15} />
+                </button>
             </div>
 
             {/* Hidden Input */}
@@ -523,6 +552,10 @@ const TopMenu = ({ setPdfDocument, setIsLoading, isDocumentLoaded, onNewPDF, pdf
 
             {showUpgradeDialog && (
                 <UpgradeDialog onClose={() => setShowUpgradeDialog(false)} />
+            )}
+
+            {showShortcutsDialog && (
+                <ShortcutsDialog onClose={() => setShowShortcutsDialog(false)} />
             )}
         </div>
     );

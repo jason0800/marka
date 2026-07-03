@@ -70,8 +70,8 @@ const ShortcutsDialog = ({ onClose }) => {
     };
 
     return (
-        <div className="fixed inset-0 bg-black/45 backdrop-blur-[2px] flex items-center justify-center z-[9999] animate-fade-in">
-            <div className="bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-xl w-[450px] shadow-2xl overflow-hidden flex flex-col max-h-[85vh] animate-scale-up">
+        <div className="fixed inset-0 bg-transparent flex items-center justify-center z-[9999] animate-fade-in" onClick={onClose}>
+            <div className="bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-xl w-[450px] shadow-2xl overflow-hidden flex flex-col max-h-[85vh] animate-scale-up" onClick={(e) => e.stopPropagation()}>
                 {/* Header */}
                 <div className="px-5 py-4 border-b border-[var(--border-color)] flex items-center justify-between">
                     <h3 className="text-lg font-semibold text-[var(--text-primary)] m-0">Keyboard Shortcuts</h3>
@@ -84,7 +84,7 @@ const ShortcutsDialog = ({ onClose }) => {
                 </div>
 
                 {/* Body */}
-                <div className="p-5 overflow-y-auto flex-1 flex flex-col gap-4">
+                <div className="p-5 flex-1 flex flex-col gap-4 min-h-0">
                     <p className="text-xs text-[var(--text-secondary)] m-0 leading-normal">
                         Click on a shortcut keycap below, then press any letter or number key to rebind that shortcut.
                     </p>
@@ -95,7 +95,7 @@ const ShortcutsDialog = ({ onClose }) => {
                         </div>
                     )}
 
-                    <div className="flex flex-col gap-1 border border-[var(--border-color)] rounded-lg overflow-hidden bg-[var(--bg-color)]/25">
+                    <div className="flex flex-col gap-1 border border-[var(--border-color)] rounded-lg overflow-y-auto max-h-[350px] bg-[var(--bg-color)]/25">
                         {Object.entries(shortcuts).map(([toolId, key]) => {
                             const isListening = listeningId === toolId;
                             return (

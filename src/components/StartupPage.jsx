@@ -177,31 +177,25 @@ const StartupPage = ({ setPdfDocument, setIsLoading, onNewPDF }) => {
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3 w-full max-w-[600px]">
                     <button
                         onClick={handleOpenProject}
-                        className="group flex flex-row items-center justify-center gap-1 p-4 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border-color)] hover:border-[var(--primary-color)] hover:shadow-md transition-all duration-200"
+                        className="group flex flex-row items-center justify-center gap-2 p-4 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border-color)] hover:border-[var(--primary-color)] hover:shadow-md transition-all duration-200"
                     >
-                        <div className="p-1 rounded-full bg-[var(--bg-color)] transition-colors">
-                            <FolderOpen size={20} />
-                        </div>
+                        <FolderOpen size={20} className="text-[var(--text-secondary)] group-hover:text-[var(--primary-color)] transition-colors" />
                         <span className="font-semibold text-sm">Open Project</span>
                     </button>
 
                     <button
                         onClick={() => fileInputRef.current?.click()}
-                        className="group flex flex-row items-center justify-center gap-1 p-4 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border-color)] hover:border-[var(--primary-color)] hover:shadow-md transition-all duration-200"
+                        className="group flex flex-row items-center justify-center gap-2 p-4 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border-color)] hover:border-[var(--primary-color)] hover:shadow-md transition-all duration-200"
                     >
-                        <div className="p-1 rounded-full bg-[var(--bg-color)] transition-colors">
-                            <FileUp size={20} />
-                        </div>
+                        <FileUp size={20} className="text-[var(--text-secondary)] group-hover:text-[var(--primary-color)] transition-colors" />
                         <span className="font-semibold text-sm">Open PDF</span>
                     </button>
 
                     <button
                         onClick={onNewPDF}
-                        className="group flex flex-row items-center justify-center gap-1 p-4 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border-color)] hover:border-[var(--primary-color)] hover:shadow-md transition-all duration-200"
+                        className="group flex flex-row items-center justify-center gap-2 p-4 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border-color)] hover:border-[var(--primary-color)] hover:shadow-md transition-all duration-200"
                     >
-                        <div className="p-1 rounded-full bg-[var(--bg-color)] transition-colors">
-                            <Plus size={20} />
-                        </div>
+                        <Plus size={20} className="text-[var(--text-secondary)] group-hover:text-[var(--primary-color)] transition-colors" />
                         <span className="font-semibold text-sm">New PDF</span>
                     </button>
                 </div>

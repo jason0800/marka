@@ -68,8 +68,9 @@ const PDFThumbnail = memo(function PDFThumbnail({
         } catch { }
         renderTaskRef.current = null;
 
+        const thumbWidth = Math.max(30, width - 16);
         const vp1 = page.getViewport({ scale: 1 });
-        const scale = width / vp1.width;
+        const scale = thumbWidth / vp1.width;
         const vp = page.getViewport({ scale });
 
         // Backing store in device pixels (optional DPR for sharper thumbs)
@@ -119,7 +120,7 @@ const PDFThumbnail = memo(function PDFThumbnail({
             >
                 {!page && (
                     <div
-                        style={{ width: width, height: width * 1.4 }}
+                        style={{ width: Math.max(30, width - 16), height: Math.max(30, width - 16) * 1.4 }}
                         className="flex items-center justify-center bg-[var(--bg-secondary)] text-[var(--text-secondary)] text-xs"
                     >
                         Loading...

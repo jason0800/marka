@@ -53,7 +53,7 @@ const ThumbnailsPanel = ({ pdfDocument }) => {
 
             <div
                 ref={scrollRef}
-                className="flex-1 p-4 flex flex-wrap justify-center content-start gap-4 overflow-y-auto"
+                className="flex-1 p-4 flex flex-wrap justify-center content-start gap-4 overflow-y-auto overflow-x-hidden"
                 style={{ opacity: isReady ? 1 : 0 }}
             >
                 {Array.from({ length: numPages }, (_, i) => {

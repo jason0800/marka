@@ -164,6 +164,10 @@ const useAppStore = create((set, get) => ({
     theme: "light",
     setTheme: (theme) => set({ theme }),
 
+    // --- Snapping ---
+    snappingEnabled: true,
+    setSnappingEnabled: (enabled) => set({ snappingEnabled: enabled }),
+
     // --- Page Navigation & View Mode ---
     currentPage: 1,
     viewMode: 'continuous', // 'single' | 'continuous'

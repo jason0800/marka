@@ -158,6 +158,7 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
         redo,
         defaultShapeStyle,
         viewport,
+        snappingEnabled,
     } = useAppStore();
 
     const viewScale = (viewport && viewport.scale) ? viewport.scale : propViewScale;
@@ -208,6 +209,7 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
     const [drawingPoints, setDrawingPoints] = useState([]); // for area/perimeter/length/comment
     const [cursor, setCursor] = useState(null);
     const [editingId, setEditingId] = useState(null);
+    const [snapIndicator, setSnapIndicator] = useState(null);
 
     // Shape draw (rect/circle/line/arrow)
     const [shapeStart, setShapeStart] = useState(null);
@@ -230,6 +232,15 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
         isDraggingItemsRef.current = isDraggingItems;
     }, [isDraggingItems]);
 
+    // Reset local drawing states when activeTool changes to prevent leaks
+    useEffect(() => {
+        setIsDrawing(false);
+        setShapeStart(null);
+        setDrawingPoints([]);
+        setCursor(null);
+        setSnapIndicator(null);
+    }, [activeTool, setIsDrawing]);
+
     const pageMeasurements = useMemo(
         () => (measurements || []).filter((m) => m.pageIndex === pageIndex),
         [measurements, pageIndex]
@@ -250,6 +261,200 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
         if (!matrix) return null;
         return point.matrixTransform(matrix);
     }, []);
+
+    // Get snapped coordinates from a raw page point
+    const getSnappedPoint = useCallback((rawPoint, excludeId = null) => {
+        if (!snappingEnabled) return { point: rawPoint, snapped: false, type: null };
+
+        const threshold = 16 / Math.max(1e-6, viewScale); // 16 screen pixels
+        const W = unscaledViewport.width;
+        const H = unscaledViewport.height;
+
+        let closestPoint = null;
+        let minDistance = Infinity;
+        let snapType = null; // 'corner' or 'edge'
+
+        // 1. Collect all candidate corners/points
+        const corners = [];
+
+        // Page corners
+        corners.push({ x: 0, y: 0 });
+        corners.push({ x: W, y: 0 });
+        corners.push({ x: W, y: H });
+        corners.push({ x: 0, y: H });
+
+        // Helper for box shape corners
+        const addBoxCorners = (box, rot) => {
+            const cx = box.x + box.w / 2;
+            const cy = box.y + box.h / 2;
+            const rad = (rot * Math.PI) / 180;
+            const cos = Math.cos(rad);
+            const sin = Math.sin(rad);
+
+            const pts = [
+                { x: box.x, y: box.y },
+                { x: box.x + box.w, y: box.y },
+                { x: box.x + box.w, y: box.y + box.h },
+                { x: box.x, y: box.y + box.h },
+                { x: cx, y: cy } // center
+            ];
+
+            pts.forEach(p => {
+                const rx = cx + (p.x - cx) * cos - (p.y - cy) * sin;
+                const ry = cy + (p.x - cx) * sin + (p.y - cy) * cos;
+                corners.push({ x: rx, y: ry });
+            });
+        };
+
+        // Existing page shapes
+        pageShapes.forEach(s => {
+            if (s.id === excludeId) return;
+            if (s.type === 'line' || s.type === 'arrow') {
+                corners.push({ x: s.start.x, y: s.start.y });
+                corners.push({ x: s.end.x, y: s.end.y });
+            } else {
+                addBoxCorners({ x: s.x, y: s.y, w: s.width, h: s.height }, s.rotation || 0);
+            }
+        });
+
+        // Existing page measurements
+        pageMeasurements.forEach(m => {
+            if (m.id === excludeId) return;
+            if (m.points && m.points.length > 0) {
+                m.points.forEach(p => corners.push({ x: p.x, y: p.y }));
+            }
+            if (m.point) {
+                corners.push({ x: m.point.x, y: m.point.y });
+            }
+            if (m.box) {
+                addBoxCorners(m.box, m.rotation || 0);
+            }
+            if (m.tip) {
+                corners.push({ x: m.tip.x, y: m.tip.y });
+            }
+            if (m.knee) {
+                corners.push({ x: m.knee.x, y: m.knee.y });
+            }
+        });
+
+        // Current drawing points
+        if (drawingPoints && drawingPoints.length > 0) {
+            drawingPoints.forEach(p => corners.push({ x: p.x, y: p.y }));
+        }
+
+        // Check corner distances
+        corners.forEach(c => {
+            const dist = Math.hypot(rawPoint.x - c.x, rawPoint.y - c.y);
+            if (dist < minDistance && dist <= threshold) {
+                minDistance = dist;
+                closestPoint = { x: c.x, y: c.y };
+                snapType = 'corner';
+            }
+        });
+
+        if (closestPoint) {
+            return { point: closestPoint, snapped: true, type: snapType };
+        }
+
+        // 2. Collect and check edges/segments
+        const segments = [];
+
+        // Helper for box segments
+        const addBoxSegments = (box, rot) => {
+            const cx = box.x + box.w / 2;
+            const cy = box.y + box.h / 2;
+            const rad = (rot * Math.PI) / 180;
+            const cos = Math.cos(rad);
+            const sin = Math.sin(rad);
+
+            const rotate = (p) => ({
+                x: cx + (p.x - cx) * cos - (p.y - cy) * sin,
+                y: cy + (p.x - cx) * sin + (p.y - cy) * cos
+            });
+
+            const p1 = rotate({ x: box.x, y: box.y });
+            const p2 = rotate({ x: box.x + box.w, y: box.y });
+            const p3 = rotate({ x: box.x + box.w, y: box.y + box.h });
+            const p4 = rotate({ x: box.x, y: box.y + box.h });
+
+            segments.push({ a: p1, b: p2 });
+            segments.push({ a: p2, b: p3 });
+            segments.push({ a: p3, b: p4 });
+            segments.push({ a: p4, b: p1 });
+        };
+
+        // Page boundary segments
+        segments.push({ a: { x: 0, y: 0 }, b: { x: W, y: 0 } });
+        segments.push({ a: { x: W, y: 0 }, b: { x: W, y: H } });
+        segments.push({ a: { x: W, y: H }, b: { x: 0, y: H } });
+        segments.push({ a: { x: 0, y: H }, b: { x: 0, y: 0 } });
+
+        // Existing page shapes segments
+        pageShapes.forEach(s => {
+            if (s.id === excludeId) return;
+            if (s.type === 'line' || s.type === 'arrow') {
+                segments.push({ a: s.start, b: s.end });
+            } else {
+                addBoxSegments({ x: s.x, y: s.y, w: s.width, h: s.height }, s.rotation || 0);
+            }
+        });
+
+        // Existing page measurements segments
+        pageMeasurements.forEach(m => {
+            if (m.id === excludeId) return;
+            if (m.points && m.points.length >= 2) {
+                for (let i = 0; i < m.points.length - 1; i++) {
+                    segments.push({ a: m.points[i], b: m.points[i + 1] });
+                }
+                if (m.type === 'area') {
+                    segments.push({ a: m.points[m.points.length - 1], b: m.points[0] });
+                }
+            }
+            if (m.box) {
+                addBoxSegments(m.box, m.rotation || 0);
+            }
+        });
+
+        // Current drawing points segments
+        if (drawingPoints && drawingPoints.length >= 2) {
+            for (let i = 0; i < drawingPoints.length - 1; i++) {
+                segments.push({ a: drawingPoints[i], b: drawingPoints[i + 1] });
+            }
+        }
+
+        // Check distance to segments
+        segments.forEach(seg => {
+            const { a, b } = seg;
+            const abX = b.x - a.x;
+            const abY = b.y - a.y;
+            const abLenSq = abX * abX + abY * abY;
+            if (abLenSq < 1e-6) return;
+
+            const apX = rawPoint.x - a.x;
+            const apY = rawPoint.y - a.y;
+
+            let t = (apX * abX + apY * abY) / abLenSq;
+            t = Math.max(0, Math.min(1, t)); // clamp to segment bounds
+
+            const projPoint = {
+                x: a.x + t * abX,
+                y: a.y + t * abY
+            };
+
+            const dist = Math.hypot(rawPoint.x - projPoint.x, rawPoint.y - projPoint.y);
+            if (dist < minDistance && dist <= threshold) {
+                minDistance = dist;
+                closestPoint = projPoint;
+                snapType = 'edge';
+            }
+        });
+
+        if (closestPoint) {
+            return { point: closestPoint, snapped: true, type: snapType };
+        }
+
+        return { point: rawPoint, snapped: false, type: null };
+    }, [snappingEnabled, viewScale, unscaledViewport.width, unscaledViewport.height, pageShapes, pageMeasurements, drawingPoints]);
 
     const finishDrawing = useCallback(() => {
         if (!isDrawingRef.current) return;
@@ -335,8 +540,12 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
         // ignore textarea editing interactions
         if (e.target.tagName === "TEXTAREA") return;
 
-        const point = getPagePoint(e);
-        if (!point) return;
+        const rawPoint = getPagePoint(e);
+        if (!rawPoint) return;
+
+        const shouldSnap = snappingEnabled && activeTool !== "select";
+        const snapResult = shouldSnap ? getSnappedPoint(rawPoint) : { point: rawPoint, snapped: false };
+        const point = snapResult.point;
 
         const isShift = e.shiftKey;
 
@@ -559,8 +768,19 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
     };
 
     const handlePointerMove = (e) => {
-        const point = getPagePoint(e);
-        if (!point) return;
+        const rawPoint = getPagePoint(e);
+        if (!rawPoint) return;
+
+        const shouldSnap = snappingEnabled && (activeTool !== "select" || resizingState !== null);
+        const excludeId = resizingState ? resizingState.id : null;
+        const snapResult = shouldSnap ? getSnappedPoint(rawPoint, excludeId) : { point: rawPoint, snapped: false };
+        const point = snapResult.point;
+
+        if (snapResult.snapped) {
+            setSnapIndicator({ x: snapResult.point.x, y: snapResult.point.y, type: snapResult.type });
+        } else {
+            setSnapIndicator(null);
+        }
 
         let cursorPt = { x: point.x, y: point.y };
         if (e.shiftKey) {
@@ -921,7 +1141,15 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
     const handlePointerUp = (e) => {
         if (e.button !== 0) return;
 
-        const point = getPagePoint(e);
+        const rawPoint = getPagePoint(e);
+        if (!rawPoint) return;
+
+        const shouldSnap = snappingEnabled && (activeTool !== "select" || resizingState !== null);
+        const excludeId = resizingState ? resizingState.id : null;
+        const snapResult = shouldSnap ? getSnappedPoint(rawPoint, excludeId) : { point: rawPoint, snapped: false };
+        const point = snapResult.point;
+
+        setSnapIndicator(null); // Clear indicator on pointer up
 
         // End resize
         if (resizingState) {
@@ -2104,6 +2332,7 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                 onPointerDown={handlePointerDown}
                 onPointerMove={handlePointerMove}
                 onPointerUp={handlePointerUp}
+                onPointerLeave={() => setSnapIndicator(null)}
                 onDoubleClick={() => finishDrawing()}
             >
                 {/* 0️⃣ SHADOW SHAPES / MEASUREMENTS (Left behind during editing) */}
@@ -2351,6 +2580,30 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                         vectorEffect="non-scaling-stroke"
                         pointerEvents="none"
                     />
+                )}
+
+                {/* Snapping Indicator */}
+                {snappingEnabled && snapIndicator && (
+                    <g pointerEvents="none">
+                        <circle
+                            cx={snapIndicator.x}
+                            cy={snapIndicator.y}
+                            r={7 / Math.max(1e-6, viewScale)}
+                            fill="none"
+                            stroke="var(--primary-color)"
+                            strokeWidth={1.5 / Math.max(1e-6, viewScale)}
+                            opacity="0.6"
+                            className="animate-pulse"
+                        />
+                        <circle
+                            cx={snapIndicator.x}
+                            cy={snapIndicator.y}
+                            r={4 / Math.max(1e-6, viewScale)}
+                            fill="var(--bg-secondary)"
+                            stroke="var(--primary-color)"
+                            strokeWidth={2 / Math.max(1e-6, viewScale)}
+                        />
+                    </g>
                 )}
 
             </svg>

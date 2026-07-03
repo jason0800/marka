@@ -9,7 +9,6 @@ import {
 import useAppStore from '../stores/useAppStore';
 import { useEffect, useState } from 'react';
 import CalibrationDialog from './CalibrationDialog';
-import ShortcutsDialog from './ShortcutsDialog';
 import { confirmToast } from '../utils/confirm-toast';
 
 const TOOLS = [
@@ -32,7 +31,6 @@ const TOOLS = [
 const Toolbar = () => {
     const { activeTool, setActiveTool, shortcuts } = useAppStore();
     const [showCalibrationDialog, setShowCalibrationDialog] = useState(false);
-    const [showShortcutsDialog, setShowShortcutsDialog] = useState(false);
     const [pendingTool, setPendingTool] = useState(null);
 
     const handleToolSelect = async (toolId) => {
@@ -114,16 +112,6 @@ const Toolbar = () => {
 
             <div className="flex-1" />
 
-            <div className="w-[60%] h-px bg-[var(--border-color)] my-1 shrink-0" />
-
-            <button
-                className="w-[36px] h-[36px] rounded-md border-none bg-transparent text-[var(--text-secondary)] flex items-center justify-center transition-all duration-200 hover:bg-[var(--btn-hover)] hover:text-[var(--text-primary)] shrink-0"
-                onClick={() => setShowShortcutsDialog(true)}
-                title="Keyboard Shortcuts"
-            >
-                <Keyboard size={20} />
-            </button>
-
             {showCalibrationDialog && (
                 <CalibrationDialog onClose={() => {
                     setShowCalibrationDialog(false);
@@ -133,10 +121,6 @@ const Toolbar = () => {
                     }
                     setPendingTool(null);
                 }} />
-            )}
-
-            {showShortcutsDialog && (
-                <ShortcutsDialog onClose={() => setShowShortcutsDialog(false)} />
             )}
         </aside>
     );
