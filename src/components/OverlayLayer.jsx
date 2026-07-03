@@ -198,6 +198,7 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
     // Use a ref to track drawing state synchronously to prevent race conditions/double-fires
     const isDrawingRef = useRef(false);
     const drawStartTimeRef = useRef(0);
+    const pendingDeselectIdRef = useRef(null);
 
     const setIsDrawing = useCallback((val) => {
         isDrawingRef.current = val;
@@ -382,11 +383,14 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
 
                 if (isShift) {
                     if (isSelected) {
-                        newSelection = selectedIds.filter((id) => id !== hitId);
+                        newSelection = selectedIds;
+                        pendingDeselectIdRef.current = hitId;
                     } else {
                         newSelection = [...selectedIds, hitId];
+                        pendingDeselectIdRef.current = null;
                     }
                 } else {
+                    pendingDeselectIdRef.current = null;
                     if (isSelected) {
                         newSelection = selectedIds;
                     } else {
@@ -566,8 +570,12 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
         // Resizing
         if (resizingState) {
             const { id, handle, startShape, startPoint } = resizingState;
-            const dx = point.x - startPoint.x;
-            const dy = point.y - startPoint.y;
+            let targetPt = point;
+            if (e.shiftKey && (startShape.type === "line" || startShape.type === "arrow" || startShape.type === "length" || handle === "callout-tip")) {
+                targetPt = snapTo45Degrees(startPoint, point);
+            }
+            const dx = targetPt.x - startPoint.x;
+            const dy = targetPt.y - startPoint.y;
 
             if (startShape.type === "line" || startShape.type === "arrow") {
                 let newStart = { ...startShape.start };
@@ -887,8 +895,12 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
 
         // Dragging selected items
         if (activeTool === "select" && isDraggingItems && dragStart && selectedIds.length > 0) {
-            const dx = point.x - dragStart.x;
-            const dy = point.y - dragStart.y;
+            let targetPt = point;
+            if (e.shiftKey) {
+                targetPt = snapTo45Degrees(dragStart, point);
+            }
+            const dx = targetPt.x - dragStart.x;
+            const dy = targetPt.y - dragStart.y;
             setDragDelta({ x: dx, y: dy });
         }
     };
@@ -972,51 +984,60 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
             }
 
             // Apply Drag
-            if (isDraggingItems && dragStart && (dragDelta.x !== 0 || dragDelta.y !== 0)) {
-                const { x: dx, y: dy } = dragDelta;
+            if (isDraggingItems && dragStart) {
+                const hasDragged = dragDelta.x !== 0 || dragDelta.y !== 0;
+                if (hasDragged) {
+                    const { x: dx, y: dy } = dragDelta;
 
-                selectedIds.forEach((id) => {
-                    const shape = pageShapes.find((s) => s.id === id);
-                    if (shape) {
-                        if (shape.type === "line" || shape.type === "arrow") {
-                            updateShape(id, {
-                                start: { x: shape.start.x + dx, y: shape.start.y + dy },
-                                end: { x: shape.end.x + dx, y: shape.end.y + dy },
-                            });
+                    selectedIds.forEach((id) => {
+                        const shape = pageShapes.find((s) => s.id === id);
+                        if (shape) {
+                            if (shape.type === "line" || shape.type === "arrow") {
+                                updateShape(id, {
+                                    start: { x: shape.start.x + dx, y: shape.start.y + dy },
+                                    end: { x: shape.end.x + dx, y: shape.end.y + dy },
+                                });
+                            } else {
+                                updateShape(id, { x: shape.x + dx, y: shape.y + dy });
+                            }
                         } else {
-                            updateShape(id, { x: shape.x + dx, y: shape.y + dy });
-                        }
-                    } else {
-                        const meas = pageMeasurements.find(m => m.id === id);
-                        if (meas) {
-                            if (meas.box) {
-                                // If dragging a callout, we want to move ONLY the box, keeping the tip stationary.
-                                if (meas.type === 'callout') {
-                                    // Only move the BOX. Tip stays.
-                                    const newBox = { ...meas.box, x: meas.box.x + dx, y: meas.box.y + dy };
-                                    const changes = { box: newBox };
+                            const meas = pageMeasurements.find(m => m.id === id);
+                            if (meas) {
+                                if (meas.box) {
+                                    // If dragging a callout, we want to move ONLY the box, keeping the tip stationary.
+                                    if (meas.type === 'callout') {
+                                        // Only move the BOX. Tip stays.
+                                        const newBox = { ...meas.box, x: meas.box.x + dx, y: meas.box.y + dy };
+                                        const changes = { box: newBox };
 
-                                    // User: "knee should remain the same length away from the text box"
-                                    const currentKnee = meas.knee || getCalloutKnee(meas.box, meas.tip, null);
-                                    changes.knee = {
-                                        x: currentKnee.x + dx,
-                                        y: currentKnee.y + dy
-                                    };
+                                        // User: "knee should remain the same length away from the text box"
+                                        const currentKnee = meas.knee || getCalloutKnee(meas.box, meas.tip, null);
+                                        changes.knee = {
+                                            x: currentKnee.x + dx,
+                                            y: currentKnee.y + dy
+                                        };
 
-                                    updateMeasurement(id, changes);
-                                } else {
-                                    // Other measurements (text, etc) - move whole thing or box
-                                    const newBox = { ...meas.box, x: meas.box.x + dx, y: meas.box.y + dy };
-                                    updateMeasurement(id, { box: newBox });
+                                        updateMeasurement(id, changes);
+                                    } else {
+                                        // Other measurements (text, etc) - move whole thing or box
+                                        const newBox = { ...meas.box, x: meas.box.x + dx, y: meas.box.y + dy };
+                                        updateMeasurement(id, { box: newBox });
+                                    }
+                                } else if (meas.points) {
+                                    // Length, Area, Perimeter
+                                    const newPoints = meas.points.map(p => ({ x: p.x + dx, y: p.y + dy }));
+                                    updateMeasurement(id, { points: newPoints });
                                 }
-                            } else if (meas.points) {
-                                // Length, Area, Perimeter
-                                const newPoints = meas.points.map(p => ({ x: p.x + dx, y: p.y + dy }));
-                                updateMeasurement(id, { points: newPoints });
                             }
                         }
+                    });
+                } else {
+                    // Clicked without dragging (hasDragged === false)
+                    if (pendingDeselectIdRef.current) {
+                        setSelectedIds((prev) => prev.filter((id) => id !== pendingDeselectIdRef.current));
                     }
-                });
+                }
+                pendingDeselectIdRef.current = null;
             }
 
             setIsDraggingItems(false);
