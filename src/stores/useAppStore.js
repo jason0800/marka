@@ -7,15 +7,20 @@ const initialViewport = { scale: 1, x: 0, y: 0 };
 const useAppStore = create((set, get) => ({
     // --- Viewport (keep zoom+pan together) ---
     viewport: initialViewport,
-    minScale: 0.2,
-    maxScale: 6,
+    zoom: 1,
+    minScale: 0.1,
+    maxScale: 10,
 
     setViewport: (next) =>
-        set((state) => ({
-            viewport: typeof next === "function" ? next(state.viewport) : next,
-        })),
+        set((state) => {
+            const nextViewport = typeof next === "function" ? next(state.viewport) : next;
+            return {
+                viewport: nextViewport,
+                zoom: nextViewport.scale,
+            };
+        }),
 
-    resetViewport: () => set({ viewport: initialViewport }),
+    resetViewport: () => set({ viewport: initialViewport, zoom: 1 }),
 
     panBy: (dx, dy) =>
         set((state) => ({
@@ -47,6 +52,29 @@ const useAppStore = create((set, get) => ({
 
             return {
                 viewport: { scale: targetScale, x: nx, y: ny },
+                zoom: targetScale,
+            };
+        }),
+
+    setZoom: (newScale) =>
+        set((state) => {
+            const oldScale = state.viewport.scale;
+            const targetScale = clamp(newScale, state.minScale, state.maxScale);
+            if (targetScale === oldScale) return {};
+
+            // Zoom centered on the screen/viewport
+            const clientX = window.innerWidth / 2;
+            const clientY = window.innerHeight / 2;
+
+            const wx = (clientX - state.viewport.x) / oldScale;
+            const wy = (clientY - state.viewport.y) / oldScale;
+
+            const nx = clientX - wx * targetScale;
+            const ny = clientY - wy * targetScale;
+
+            return {
+                zoom: targetScale,
+                viewport: { scale: targetScale, x: nx, y: ny }
             };
         }),
 
@@ -155,7 +183,8 @@ const useAppStore = create((set, get) => ({
             pageRotations: data.pageRotations || {}, // Restore rotations
             // We might want to restore viewport too, but maybe better to reset it? 
             // Let's reset viewport for now to avoid being lost
-            viewport: initialViewport
+            viewport: initialViewport,
+            zoom: 1,
         }),
 
     // Helper to get project data for saving (not a state setter, so just a getter is fine, 
@@ -476,6 +505,7 @@ const useAppStore = create((set, get) => ({
 // Helper to capture workspace state
 const getSnapshot = (state) => ({
     viewport: state.viewport,
+    zoom: state.viewport.scale,
     measurements: state.measurements,
     shapes: state.shapes,
     selectedIds: state.selectedIds,
@@ -493,6 +523,7 @@ const getSnapshot = (state) => ({
 
 const initialStateSnapshot = {
     viewport: initialViewport,
+    zoom: 1,
     measurements: [],
     shapes: [],
     selectedIds: [],

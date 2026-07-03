@@ -10,10 +10,14 @@ import OverlayLayer from "./OverlayLayer";
  * - We keep canvas sizing stable and cap DPR + pixel budget.
  */
 
-// Tweak these
-const MAX_CANVAS_PIXELS = 15_000_000; // ~5MP Cap (Aggressive Memory Optimization)
-const MAX_SIDE = 8192;               // many GPUs hate >8192 textures
-const MAX_DPR = 2;                   // cap to reduce spikes on 3x/4x displays
+// Tweak these based on device/browser capabilities
+const isSafari = typeof navigator !== "undefined" && /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+const isMobile = typeof navigator !== "undefined" && /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+
+// Maximize crispness on desktop while keeping mobile/Safari safe from canvas crashes
+const MAX_CANVAS_PIXELS = (isSafari || isMobile) ? 16_777_216 : 100_000_000;
+const MAX_SIDE = (isSafari || isMobile) ? 8192 : 16384;
+const MAX_DPR = (isSafari || isMobile) ? 2 : 3;
 
 // Cached, one-time import for renderTextLayer (if you want it)
 let pdfjsTextLayerPromise = null;
