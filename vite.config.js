@@ -10,9 +10,9 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'mask-icon.svg'],
       manifest: {
-        name: 'Scalario',
-        short_name: 'Scalario',
-        description: 'Measure PDFs in your browser',
+        name: 'Marka',
+        short_name: 'Marka',
+        description: 'Online PDF Markup, Annotation, and Calibration-based Measurement Tool',
         theme_color: '#ffffff',
         icons: [
           {

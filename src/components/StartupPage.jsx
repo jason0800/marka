@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { FileUp, Plus, FileText, FolderOpen } from 'lucide-react';
+import { FileUp, Plus, FileText, FolderOpen, Ruler, Scale, ShieldCheck, Layers } from 'lucide-react';
 import { loadPDF } from '../services/pdf-service';
 import { toast } from 'sonner';
 import { confirmToast } from '../utils/confirm-toast';
@@ -160,12 +160,12 @@ const StartupPage = ({ setPdfDocument, setIsLoading, onNewPDF }) => {
 
     return (
         <div
-            className={`w-full h-full flex flex-col items-center justify-center bg-[var(--bg-primary)] text-[var(--text-primary)] transition-colors duration-200 ${isDragging ? 'bg-[var(--bg-hover)]' : ''}`}
+            className={`w-full h-full overflow-y-auto flex flex-col items-center bg-[var(--bg-color)] text-[var(--text-primary)] transition-colors duration-200 ${isDragging ? 'bg-[var(--bg-hover)]' : ''}`}
             onDragOver={handleDragOver}
             onDragLeave={handleDragLeave}
             onDrop={handleDrop}
         >
-            <div className="flex flex-col items-center gap-10 p-8 max-w-2xl w-full -translate-y-12">
+            <div className="flex flex-col items-center gap-10 p-8 max-w-2xl w-full pt-16">
                 {/* Logo / Header */}
                 <div className="flex flex-col items-center gap-2">
                     <img src="/marka-icon.png" alt="Marka Logo" className="w-40 h-40 mb-2" />
@@ -179,7 +179,7 @@ const StartupPage = ({ setPdfDocument, setIsLoading, onNewPDF }) => {
                         onClick={handleOpenProject}
                         className="group flex flex-row items-center justify-center gap-1 p-4 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border-color)] hover:border-[var(--primary-color)] hover:shadow-md transition-all duration-200"
                     >
-                        <div className="p-1 rounded-full bg-[var(--bg-primary)] transition-colors">
+                        <div className="p-1 rounded-full bg-[var(--bg-color)] transition-colors">
                             <FolderOpen size={20} />
                         </div>
                         <span className="font-semibold text-sm">Open Project</span>
@@ -189,7 +189,7 @@ const StartupPage = ({ setPdfDocument, setIsLoading, onNewPDF }) => {
                         onClick={() => fileInputRef.current?.click()}
                         className="group flex flex-row items-center justify-center gap-1 p-4 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border-color)] hover:border-[var(--primary-color)] hover:shadow-md transition-all duration-200"
                     >
-                        <div className="p-1 rounded-full bg-[var(--bg-primary)] transition-colors">
+                        <div className="p-1 rounded-full bg-[var(--bg-color)] transition-colors">
                             <FileUp size={20} />
                         </div>
                         <span className="font-semibold text-sm">Open PDF</span>
@@ -199,7 +199,7 @@ const StartupPage = ({ setPdfDocument, setIsLoading, onNewPDF }) => {
                         onClick={onNewPDF}
                         className="group flex flex-row items-center justify-center gap-1 p-4 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border-color)] hover:border-[var(--primary-color)] hover:shadow-md transition-all duration-200"
                     >
-                        <div className="p-1 rounded-full bg-[var(--bg-primary)] transition-colors">
+                        <div className="p-1 rounded-full bg-[var(--bg-color)] transition-colors">
                             <Plus size={20} />
                         </div>
                         <span className="font-semibold text-sm">New PDF</span>
@@ -220,8 +220,122 @@ const StartupPage = ({ setPdfDocument, setIsLoading, onNewPDF }) => {
                 />
             </div>
 
+            {/* Separator */}
+            <div className="w-full max-w-[600px] border-t border-[var(--border-color)] my-8"></div>
+
+            {/* Features & Marketing Semantic Section */}
+            <section className="w-full max-w-4xl flex flex-col gap-12 mt-4 mb-16 px-6 text-left">
+                {/* Section Title */}
+                <div className="text-center flex flex-col gap-2">
+                    <h2 className="text-2xl font-bold tracking-tight text-[var(--text-primary)]">
+                        Professional PDF Markup & Construction Takeoff
+                    </h2>
+                    <p className="text-[var(--text-secondary)] text-sm max-w-xl mx-auto">
+                        Marka is engineered for architects, estimators, contractors, and design professionals who need fast, accurate, and secure PDF tools.
+                    </p>
+                </div>
+
+                {/* Feature Cards Grid */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <article className="p-6 rounded-xl bg-[var(--bg-secondary)] border border-[var(--border-color)] hover:border-[var(--primary-color)] hover:shadow-md transition-all duration-200 flex gap-4">
+                        <div className="p-3 rounded-lg bg-[var(--bg-color)] text-[var(--primary-color)] h-fit">
+                            <Scale size={24} />
+                        </div>
+                        <div className="flex flex-col gap-1">
+                            <h3 className="text-lg font-semibold text-[var(--text-primary)]">Precision Calibration</h3>
+                            <p className="text-sm text-[var(--text-secondary)]">
+                                Calibrate technical drawings and construction blueprints by drawing a line over a known dimension. Set scales in metric or imperial.
+                            </p>
+                        </div>
+                    </article>
+
+                    <article className="p-6 rounded-xl bg-[var(--bg-secondary)] border border-[var(--border-color)] hover:border-[var(--primary-color)] hover:shadow-md transition-all duration-200 flex gap-4">
+                        <div className="p-3 rounded-lg bg-[var(--bg-color)] text-[var(--primary-color)] h-fit">
+                            <Ruler size={24} />
+                        </div>
+                        <div className="flex flex-col gap-1">
+                            <h3 className="text-lg font-semibold text-[var(--text-primary)]">Takeoff Measurements</h3>
+                            <p className="text-sm text-[var(--text-secondary)]">
+                                Calculate linear lengths, total perimeters, and polygon areas. Tally elements and objects quickly with the visual count tool.
+                            </p>
+                        </div>
+                    </article>
+
+                    <article className="p-6 rounded-xl bg-[var(--bg-secondary)] border border-[var(--border-color)] hover:border-[var(--primary-color)] hover:shadow-md transition-all duration-200 flex gap-4">
+                        <div className="p-3 rounded-lg bg-[var(--bg-color)] text-[var(--primary-color)] h-fit">
+                            <Layers size={24} />
+                        </div>
+                        <div className="flex flex-col gap-1">
+                            <h3 className="text-lg font-semibold text-[var(--text-primary)]">Advanced Annotation</h3>
+                            <p className="text-sm text-[var(--text-secondary)]">
+                                Draw rectangles, circles, arrows, and lines. Customize fill opacity, borders, dashed patterns, rotation angles, and add text comments.
+                            </p>
+                        </div>
+                    </article>
+
+                    <article className="p-6 rounded-xl bg-[var(--bg-secondary)] border border-[var(--border-color)] hover:border-[var(--primary-color)] hover:shadow-md transition-all duration-200 flex gap-4">
+                        <div className="p-3 rounded-lg bg-[var(--bg-color)] text-[var(--primary-color)] h-fit">
+                            <ShieldCheck size={24} />
+                        </div>
+                        <div className="flex flex-col gap-1">
+                            <h3 className="text-lg font-semibold text-[var(--text-primary)]">100% Secure & Local</h3>
+                            <p className="text-sm text-[var(--text-secondary)]">
+                                Your drawings never leave your device. All parsing, rendering, and calculation happen client-side in the browser for maximum confidentiality.
+                            </p>
+                        </div>
+                    </article>
+                </div>
+
+                {/* Frequently Asked Questions (FAQ) */}
+                <div className="flex flex-col gap-6 mt-4">
+                    <h2 className="text-xl font-bold tracking-tight text-[var(--text-primary)] text-center">
+                        Frequently Asked Questions
+                    </h2>
+                    <div className="flex flex-col gap-4 max-w-2xl mx-auto w-full">
+                        <details className="group p-5 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border-color)] [&_summary::-webkit-details-marker]:hidden">
+                            <summary className="flex items-center justify-between cursor-pointer focus:outline-none">
+                                <span className="font-semibold text-[var(--text-primary)] pr-4">How does blueprint scale calibration work?</span>
+                                <span className="transition-transform duration-200 group-open:rotate-180 text-[var(--text-secondary)]">
+                                    <span className="group-open:hidden">+</span>
+                                    <span className="hidden group-open:inline font-bold">-</span>
+                                </span>
+                            </summary>
+                            <p className="mt-3 text-sm text-[var(--text-secondary)] leading-relaxed border-t border-[var(--border-color)]/50 pt-3">
+                                Upload your drawing, select the calibration tool, draw a line between two points with a known distance (like a dimension line or grid line), and enter its actual value (e.g. 5 meters or 10 feet). Once set, all measurements you draw will automatically use this scale ratio.
+                            </p>
+                        </details>
+
+                        <details className="group p-5 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border-color)] [&_summary::-webkit-details-marker]:hidden">
+                            <summary className="flex items-center justify-between cursor-pointer focus:outline-none">
+                                <span className="font-semibold text-[var(--text-primary)] pr-4">What dimensions and templates are supported?</span>
+                                <span className="transition-transform duration-200 group-open:rotate-180 text-[var(--text-secondary)]">
+                                    <span className="group-open:hidden">+</span>
+                                    <span className="hidden group-open:inline font-bold">-</span>
+                                </span>
+                            </summary>
+                            <p className="mt-3 text-sm text-[var(--text-secondary)] leading-relaxed border-t border-[var(--border-color)]/50 pt-3">
+                                You can create new blank PDF canvases with standard ISO dimensions (A0 to A5, B0 to B5, C0 to C5), US formats (Letter, Legal), or specify custom dimensions in millimeters, centimeters, inches, or points.
+                            </p>
+                        </details>
+
+                        <details className="group p-5 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border-color)] [&_summary::-webkit-details-marker]:hidden">
+                            <summary className="flex items-center justify-between cursor-pointer focus:outline-none">
+                                <span className="font-semibold text-[var(--text-primary)] pr-4">Are my files uploaded to a server?</span>
+                                <span className="transition-transform duration-200 group-open:rotate-180 text-[var(--text-secondary)]">
+                                    <span className="group-open:hidden">+</span>
+                                    <span className="hidden group-open:inline font-bold">-</span>
+                                </span>
+                            </summary>
+                            <p className="mt-3 text-sm text-[var(--text-secondary)] leading-relaxed border-t border-[var(--border-color)]/50 pt-3">
+                                No. Marka respects your privacy. All documents are loaded and processed locally inside your web browser. Nothing is ever sent to our servers, keeping your sensitive proprietary designs fully confidential.
+                            </p>
+                        </details>
+                    </div>
+                </div>
+            </section>
+
             {/* Footer / Version */}
-            <div className="fixed bottom-4 text-xs text-[var(--text-tertiary)]">
+            <div className="mb-6 text-xs text-[var(--text-tertiary)]">
                 Version 1.0.0
             </div>
         </div>
