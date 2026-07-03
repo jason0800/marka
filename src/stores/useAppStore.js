@@ -4,6 +4,33 @@ const clamp = (v, min, max) => Math.min(max, Math.max(min, v));
 
 const initialViewport = { scale: 1, x: 0, y: 0 };
 
+const defaultShortcuts = {
+    select: 'v',
+    pan: 'h',
+    calibrate: 's',
+    length: 'l',
+    area: 'g',
+    count: 'n',
+    callout: 'q',
+    text: 't',
+    rectangle: 'r',
+    circle: 'e',
+    line: 'i',
+    arrow: 'a',
+};
+
+const getStoredShortcuts = () => {
+    try {
+        const stored = localStorage.getItem('marka_shortcuts');
+        if (stored) {
+            return { ...defaultShortcuts, ...JSON.parse(stored) };
+        }
+    } catch (e) {
+        console.error(e);
+    }
+    return defaultShortcuts;
+};
+
 const useAppStore = create((set, get) => ({
     // --- Viewport (keep zoom+pan together) ---
     viewport: initialViewport,
@@ -99,6 +126,26 @@ const useAppStore = create((set, get) => ({
     setSelectedIds: (ids) => set((state) => ({
         selectedIds: typeof ids === "function" ? ids(state.selectedIds) : ids
     })),
+
+    // --- Shortcuts ---
+    shortcuts: getStoredShortcuts(),
+    updateShortcut: (toolId, key) => set((state) => {
+        const newShortcuts = { ...state.shortcuts, [toolId]: key.toLowerCase() };
+        try {
+            localStorage.setItem('marka_shortcuts', JSON.stringify(newShortcuts));
+        } catch (e) {
+            console.error(e);
+        }
+        return { shortcuts: newShortcuts };
+    }),
+    resetShortcuts: () => set(() => {
+        try {
+            localStorage.setItem('marka_shortcuts', JSON.stringify(defaultShortcuts));
+        } catch (e) {
+            console.error(e);
+        }
+        return { shortcuts: defaultShortcuts };
+    }),
 
     // --- Default Shape Properties (Sticky) ---
     defaultShapeStyle: {

@@ -221,6 +221,15 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
     // Resize
     const [resizingState, setResizingState] = useState(null); // { id, handle, startShape, startPoint }
 
+    const resizingStateRef = useRef(null);
+    const isDraggingItemsRef = useRef(false);
+    useEffect(() => {
+        resizingStateRef.current = resizingState;
+    }, [resizingState]);
+    useEffect(() => {
+        isDraggingItemsRef.current = isDraggingItems;
+    }, [isDraggingItems]);
+
     const pageMeasurements = useMemo(
         () => (measurements || []).filter((m) => m.pageIndex === pageIndex),
         [measurements, pageIndex]
@@ -293,14 +302,18 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
             }
 
             if (e.key === "Escape") {
+                if (resizingStateRef.current || isDraggingItemsRef.current) {
+                    undo();
+                    setResizingState(null);
+                    setIsDraggingItems(false);
+                    setDragStart(null);
+                    setDragDelta({ x: 0, y: 0 });
+                }
                 setIsDrawing(false);
                 setDrawingPoints([]);
                 setShapeStart(null);
                 setEditingId(null);
-                setResizingState(null);
                 setSelectionStart(null);
-                setIsDraggingItems(false);
-                setDragStart(null);
                 setActiveTool('select'); // Return to select mode
             }
         };

@@ -3,33 +3,36 @@ import {
     Box, Circle, Minus, ArrowRight, RectangleHorizontal, Type, MessageCircle,
     ScalingIcon,
     Tally5Icon,
-    PencilRuler
+    PencilRuler,
+    Keyboard
 } from 'lucide-react';
 import useAppStore from '../stores/useAppStore';
 import { useEffect, useState } from 'react';
 import CalibrationDialog from './CalibrationDialog';
+import ShortcutsDialog from './ShortcutsDialog';
 import { confirmToast } from '../utils/confirm-toast';
 
 const TOOLS = [
-    { id: 'select', icon: MousePointer2, label: 'Select (V)', key: 'v' },
-    { id: 'pan', icon: Hand, label: 'Pan (H)', key: 'h' },
-    { id: 'calibrate', icon: PencilRuler, label: 'Set Scale (C)', key: 'c' },
+    { id: 'select', icon: MousePointer2, label: 'Select' },
+    { id: 'pan', icon: Hand, label: 'Pan' },
+    { id: 'calibrate', icon: PencilRuler, label: 'Set Scale' },
     { type: 'separator' },
-    { id: 'length', icon: RulerDimensionLine, label: 'Length (L)', key: 'l' },
-    { id: 'area', icon: AreaIcon, label: 'Area (E)', key: 'e' },
-    { id: 'count', icon: Tally5Icon, label: 'Count (N)', key: 'n' },
+    { id: 'length', icon: RulerDimensionLine, label: 'Length' },
+    { id: 'area', icon: AreaIcon, label: 'Area' },
+    { id: 'count', icon: Tally5Icon, label: 'Count' },
     { type: 'separator' },
-    { id: 'callout', icon: CalloutIcon, label: 'Callout (Q)', key: 'q' },
-    { id: 'text', icon: Type, label: 'Text Box (T)', key: 't' },
-    { id: 'rectangle', icon: RectangleHorizontal, label: 'Rectangle (R)', key: 'r' },
-    { id: 'circle', icon: Circle, label: 'Circle (C)', key: 'c' },
-    { id: 'line', icon: Minus, label: 'Line (L)', key: 'l' },
-    { id: 'arrow', icon: ArrowRight, label: 'Arrow (A)', key: 'a' },
+    { id: 'callout', icon: CalloutIcon, label: 'Callout' },
+    { id: 'text', icon: Type, label: 'Text Box' },
+    { id: 'rectangle', icon: RectangleHorizontal, label: 'Rectangle' },
+    { id: 'circle', icon: Circle, label: 'Circle' },
+    { id: 'line', icon: Minus, label: 'Line' },
+    { id: 'arrow', icon: ArrowRight, label: 'Arrow' },
 ];
 
 const Toolbar = () => {
-    const { activeTool, setActiveTool } = useAppStore();
+    const { activeTool, setActiveTool, shortcuts } = useAppStore();
     const [showCalibrationDialog, setShowCalibrationDialog] = useState(false);
+    const [showShortcutsDialog, setShowShortcutsDialog] = useState(false);
     const [pendingTool, setPendingTool] = useState(null);
 
     const handleToolSelect = async (toolId) => {
@@ -71,15 +74,16 @@ const Toolbar = () => {
             // Ignore if Ctrl/Cmd is pressed (to avoid conflicts with undo/redo)
             if (e.ctrlKey || e.metaKey) return;
 
-            const tool = TOOLS.find(t => t.key === e.key);
-            if (tool) {
-                handleToolSelect(tool.id);
+            const pressedKey = e.key.toLowerCase();
+            const toolId = Object.keys(shortcuts).find(id => shortcuts[id] === pressedKey);
+            if (toolId) {
+                handleToolSelect(toolId);
             }
         };
 
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [setActiveTool]); // handleToolSelect is stable enough or we ignore dependency warning since it uses getState
+    }, [setActiveTool, shortcuts]);
 
     return (
         <aside className="w-[50px] bg-[var(--bg-secondary)] border-l border-[var(--border-color)] flex flex-col items-center pt-3 pb-3 gap-1.5 z-10 shrink-0 overflow-y-auto no-scrollbar">
@@ -88,6 +92,11 @@ const Toolbar = () => {
                     return <div key={i} className="w-[60%] h-px bg-[var(--border-color)] my-1 shrink-0" />;
                 }
                 const isActive = activeTool === tool.id && tool.id !== 'calibrate';
+                const shortcutKey = shortcuts[tool.id];
+                const displayTitle = shortcutKey
+                    ? `${tool.label} (${shortcutKey.toUpperCase()})`
+                    : tool.label;
+
                 return (
                     <button
                         key={tool.id}
@@ -96,12 +105,24 @@ const Toolbar = () => {
                             : ''
                             }`}
                         onClick={() => handleToolSelect(tool.id)}
-                        title={tool.label}
+                        title={displayTitle}
                     >
                         <tool.icon size={20} />
                     </button>
                 );
             })}
+
+            <div className="flex-1" />
+
+            <div className="w-[60%] h-px bg-[var(--border-color)] my-1 shrink-0" />
+
+            <button
+                className="w-[36px] h-[36px] rounded-md border-none bg-transparent text-[var(--text-secondary)] flex items-center justify-center transition-all duration-200 hover:bg-[var(--btn-hover)] hover:text-[var(--text-primary)] shrink-0"
+                onClick={() => setShowShortcutsDialog(true)}
+                title="Keyboard Shortcuts"
+            >
+                <Keyboard size={20} />
+            </button>
 
             {showCalibrationDialog && (
                 <CalibrationDialog onClose={() => {
@@ -112,6 +133,10 @@ const Toolbar = () => {
                     }
                     setPendingTool(null);
                 }} />
+            )}
+
+            {showShortcutsDialog && (
+                <ShortcutsDialog onClose={() => setShowShortcutsDialog(false)} />
             )}
         </aside>
     );
@@ -150,7 +175,6 @@ function AreaIcon({ size, ...props }) {
             strokeLinejoin="round"
             {...props}
         >
-            {/* Square */}
             {/* Square */}
             <rect x="2" y="9" width="12" height="12" rx="2" strokeWidth="2.5" />
 

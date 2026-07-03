@@ -81,7 +81,7 @@ const ThumbnailsPanel = ({ pdfDocument }) => {
                         max={maxWidth}
                         value={sliderVal}
                         onChange={(e) => setSliderVal(parseInt(e.target.value))}
-                        className="flex-1 h-1 bg-[var(--border-color)] rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-[var(--primary-color)] [&::-moz-range-thumb]:w-3 [&::-moz-range-thumb]:h-3 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-[var(--primary-color)] [&::-moz-range-thumb]:border-none accent-[var(--primary-color)]"
+                        className="flex-1 h-1 bg-[var(--border-color)] rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-gray-600 [&::-moz-range-thumb]:w-3 [&::-moz-range-thumb]:h-3 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-gray-600 [&::-moz-range-thumb]:border-none accent-gray-600]"
                     />
                     <span className="text-[10px] text-[var(--text-secondary)]">Large</span>
                 </div>
