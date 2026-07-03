@@ -82,7 +82,7 @@ const Toolbar = () => {
     }, [setActiveTool]); // handleToolSelect is stable enough or we ignore dependency warning since it uses getState
 
     return (
-        <aside className="w-[60px] bg-[var(--bg-secondary)] border-l border-[var(--border-color)] flex flex-col items-center pt-4 pb-4 gap-2 z-10 shrink-0 overflow-y-auto no-scrollbar">
+        <aside className="w-[50px] bg-[var(--bg-secondary)] border-l border-[var(--border-color)] flex flex-col items-center pt-3 pb-3 gap-1.5 z-10 shrink-0 overflow-y-auto no-scrollbar">
             {TOOLS.map((tool, i) => {
                 if (tool.type === 'separator') {
                     return <div key={i} className="w-[60%] h-px bg-[var(--border-color)] my-1 shrink-0" />;
@@ -91,7 +91,7 @@ const Toolbar = () => {
                 return (
                     <button
                         key={tool.id}
-                        className={`w-9 h-9 rounded-md border-none bg-transparent text-[var(--text-secondary)] flex items-center justify-center transition-all duration-200 hover:bg-[var(--btn-hover)] hover:text-[var(--text-primary)] shrink-0 ${isActive
+                        className={`w-[36px] h-[36px] rounded-md border-none bg-transparent text-[var(--text-secondary)] flex items-center justify-center transition-all duration-200 hover:bg-[var(--btn-hover)] hover:text-[var(--text-primary)] shrink-0 ${isActive
                             ? '!bg-[var(--primary-color)] !text-[var(--text-active)] shadow-[0_0_10px_rgba(var(--primary-color-rgb),0.25)]'
                             : ''
                             }`}

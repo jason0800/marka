@@ -83,7 +83,7 @@ const PDFViewer = ({ document }) => {
     const MIN_SCALE = 0.1;
     const MAX_SCALE = 10;
     const PADDING = 40;
-    const PAGE_GAP = 12;
+    const PAGE_GAP = 24;
 
     // ---- zoom jank killer: "pin" renderScale while zooming, only re-rasterize after idle ----
     const [isZooming, setIsZooming] = useState(false);
@@ -393,7 +393,9 @@ const PDFViewer = ({ document }) => {
         const hs = baseHeightsRef.current;
 
         let pageTop = PADDING;
-        for (let i = 0; i < idx; i++) pageTop += (hs[i] || DEFAULT_PAGE_H) + PAGE_GAP;
+        if (viewMode === "continuous") {
+            for (let i = 0; i < idx; i++) pageTop += (hs[i] || DEFAULT_PAGE_H) + PAGE_GAP;
+        }
 
         const { scale } = stateRef.current;
 

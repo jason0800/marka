@@ -125,24 +125,35 @@ const BottomBar = ({ totalPages }) => {
                 </div>
             </div>
 
-            <div className="flex items-center gap-2 justify-self-end">
+            <div className="flex items-center gap-1.5 justify-self-end">
                 <button
-                    className="bg-[var(--bg-color)] border border-[var(--border-color)] text-[var(--text-primary)] p-1.5 rounded-md text-[13px] cursor-pointer transition-all duration-200 min-w-[36px] h-[36px] flex items-center justify-center hover:bg-[var(--btn-hover)] hover:text-[var(--text-primary)]"
-                    onClick={() => setViewMode(viewMode === 'continuous' ? 'single' : 'continuous')}
-                    title={viewMode === 'continuous' ? "Switch to Single Page View" : "Switch to Continuous View"}
+                    className={`border border-[var(--border-color)] p-1.5 rounded-md text-[13px] cursor-pointer transition-all duration-200 min-w-[36px] h-[36px] flex items-center justify-center ${
+                        viewMode === 'single'
+                            ? '!bg-[var(--primary-color)] !text-[var(--text-active)] border-[var(--primary-color)] font-medium shadow-[0_0_10px_rgba(var(--primary-color-rgb),0.25)]'
+                            : 'bg-[var(--bg-color)] text-[var(--text-primary)] hover:bg-[var(--btn-hover)]'
+                    }`}
+                    onClick={() => setViewMode('single')}
+                    title="Single Page View"
                 >
-                    {viewMode === 'continuous' ? (
-                        /* Continuous Mode Icon (stack) */
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <rect x="4" y="2" width="16" height="8" rx="1" />
-                            <rect x="4" y="14" width="16" height="8" rx="1" />
-                        </svg>
-                    ) : (
-                        /* Single Page Icon */
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <rect x="5" y="4" width="14" height="16" rx="2" />
-                        </svg>
-                    )}
+                    {/* Single Page Icon */}
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <rect x="5" y="4" width="14" height="16" rx="2" />
+                    </svg>
+                </button>
+                <button
+                    className={`border border-[var(--border-color)] p-1.5 rounded-md text-[13px] cursor-pointer transition-all duration-200 min-w-[36px] h-[36px] flex items-center justify-center ${
+                        viewMode === 'continuous'
+                            ? '!bg-[var(--primary-color)] !text-[var(--text-active)] border-[var(--primary-color)] font-medium shadow-[0_0_10px_rgba(var(--primary-color-rgb),0.25)]'
+                            : 'bg-[var(--bg-color)] text-[var(--text-primary)] hover:bg-[var(--btn-hover)]'
+                    }`}
+                    onClick={() => setViewMode('continuous')}
+                    title="Continuous Scroll View"
+                >
+                    {/* Continuous Mode Icon (stack) */}
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <rect x="4" y="2" width="16" height="8" rx="1" />
+                        <rect x="4" y="14" width="16" height="8" rx="1" />
+                    </svg>
                 </button>
             </div>
         </div>

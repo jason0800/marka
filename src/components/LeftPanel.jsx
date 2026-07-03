@@ -11,11 +11,11 @@ const LeftPanel = ({ pdfDocument }) => {
     return (
         <div className="flex h-full border-r border-[var(--border-color)] bg-[var(--bg-secondary)] shrink-0">
             {/* Skinny Icon Column */}
-            <div className="w-[50px] flex flex-col items-center py-4 border-r border-[var(--border-color)] bg-[var(--bg-secondary)] gap-2">
+            <div className="w-[48px] flex flex-col items-center py-3 border-r border-[var(--border-color)] bg-[var(--bg-secondary)] gap-1.5">
                 <button
-                    className={`p-2 rounded-lg transition-colors ${activeTab === 'thumbnails'
+                    className={`p-2 rounded-md transition-colors ${activeTab === 'thumbnails'
                         ? 'bg-[var(--primary-color)] text-[var(--text-active)]'
-                        : 'text-[var(--text-secondary)] hover:bg-[var(--bg-hover)]'
+                        : 'text-[var(--text-secondary)] hover:bg-[var(--btn-hover)]'
                         }`}
                     onClick={() => setActiveTab(activeTab === 'thumbnails' ? null : 'thumbnails')}
                     title="Thumbnails"
@@ -23,9 +23,9 @@ const LeftPanel = ({ pdfDocument }) => {
                     <LayoutGrid size={20} />
                 </button>
                 <button
-                    className={`p-2 rounded-lg transition-colors ${activeTab === 'properties'
+                    className={`p-2 rounded-md transition-colors ${activeTab === 'properties'
                         ? 'bg-[var(--primary-color)] text-[var(--text-active)]'
-                        : 'text-[var(--text-secondary)] hover:bg-[var(--bg-hover)]'
+                        : 'text-[var(--text-secondary)] hover:bg-[var(--btn-hover)]'
                         }`}
                     onClick={() => setActiveTab(activeTab === 'properties' ? null : 'properties')}
                     title="Properties"

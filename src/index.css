@@ -67,6 +67,7 @@ body {
   box-sizing: border-box;
 }
 
-button {
+button, .cursor-pointer {
   cursor: pointer;
+  transition-duration: 0ms !important;
 }
