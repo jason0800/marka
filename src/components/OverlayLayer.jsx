@@ -197,6 +197,7 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
     const [dragDelta, setDragDelta] = useState({ x: 0, y: 0 });
     // Use a ref to track drawing state synchronously to prevent race conditions/double-fires
     const isDrawingRef = useRef(false);
+    const drawStartTimeRef = useRef(0);
 
     const setIsDrawing = useCallback((val) => {
         isDrawingRef.current = val;
@@ -466,9 +467,18 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
         // 3) Shape tools (start drag)
         if (["rectangle", "circle", "line", "arrow", "text", "callout"].includes(activeTool)) {
             setIsDrawing(true);
+            drawStartTimeRef.current = Date.now();
             setShapeStart({ x: point.x, y: point.y });
             setCursor({ x: point.x, y: point.y });
             setSelectedIds([]);
+
+            if (activeTool === "callout") {
+                setTimeout(() => {
+                    if (isDrawingRef.current && activeTool === "callout") {
+                        setCursor(c => c ? { ...c } : null);
+                    }
+                }, 100);
+            }
             return;
         }
 
@@ -754,32 +764,32 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                     const oldCy = startShape.box.y + startShape.box.h / 2;
                     const newCx = finalX + finalW / 2;
                     const newCy = finalY + finalH / 2;
-                    
+
                     const rot = startShape.rotation || 0;
                     const rad = (-rot * Math.PI) / 180;
                     const cosVal = Math.cos(rad);
                     const sinVal = Math.sin(rad);
-                    
+
                     const dx = oldKnee.x - oldCx;
                     const dy = oldKnee.y - oldCy;
                     const localKneeX = dx * cosVal - dy * sinVal;
                     const localKneeY = dx * sinVal + dy * cosVal;
-                    
+
                     const isVertical = Math.abs(localKneeX) < Math.abs(localKneeY);
-                    
+
                     let newLocalKneeX = localKneeX;
                     let newLocalKneeY = localKneeY;
-                    
+
                     if (isVertical) {
                         newLocalKneeX = 0;
                     } else {
                         newLocalKneeY = 0;
                     }
-                    
+
                     const posRad = (rot * Math.PI) / 180;
                     const posCos = Math.cos(posRad);
                     const posSin = Math.sin(posRad);
-                    
+
                     updates.knee = {
                         x: newCx + (newLocalKneeX * posCos - newLocalKneeY * posSin),
                         y: newCy + (newLocalKneeX * posSin + newLocalKneeY * posCos)
@@ -1036,10 +1046,10 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                 // If dx >= 0 (Right), Box is to Right of Cursor. Connection is Left-Center. Knee is Left of Cursor.
                 // If dx < 0 (Left), Box is to Left of Cursor. Connection is Right-Center. Knee is Right of Cursor.
 
-                const stub = 40;
+                const stub = 10;
                 let bx, kneeX, by, kneeY;
 
-                if (Math.abs(dy) > Math.abs(dx)) {
+                if (Math.abs(dy) > Math.abs(dx) * 1.5) {
                     // Vertical Mode
                     bx = point.x - w / 2;
 
@@ -1950,6 +1960,10 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                         const tempId = "temp-draw";
 
                         if (activeTool === "callout") {
+                            // Don't show callout preview for the first 0.1s (100ms)
+                            if (Date.now() - drawStartTimeRef.current < 100) {
+                                return null;
+                            }
                             // Preview Callout
                             const w = 125;
                             const h = 25;
@@ -1957,11 +1971,11 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                             const dy = cursor.y - shapeStart.y;
 
                             // Box Position: Cursor is Connection Point.
-                            // Knee Stub: Fixed 40px from connection point.
-                            const stub = 40;
+                            // Knee Stub: Fixed 10px from connection point.
+                            const stub = 10;
                             let bx, kneeX, by, kneeY;
 
-                            if (Math.abs(dy) > Math.abs(dx)) {
+                            if (Math.abs(dy) > Math.abs(dx) * 1.5) {
                                 // Vertical Mode
                                 bx = cursor.x - w / 2;
 
