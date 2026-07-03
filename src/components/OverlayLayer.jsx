@@ -42,7 +42,7 @@ const getCalloutKnee = (box, tip, knee = null) => {
         kx = boxCx;
         const sy = dy > 0 ? by + bh : by;
         // Fixed Stub Logic: Cap stub length
-        const maxStub = 20;
+        const maxStub = 30;
         const distY = Math.abs(ty - sy);
         const actualStub = Math.min(distY / 2, maxStub);
 
@@ -551,6 +551,14 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                 cursorPt = snapTo45Degrees(shapeStart, cursorPt);
             } else if (["length", "calibrate"].includes(activeTool) && isDrawingRef.current && drawingPoints.length > 0) {
                 cursorPt = snapTo45Degrees(drawingPoints[0], cursorPt);
+            } else if (["rectangle", "circle"].includes(activeTool) && shapeStart) {
+                const dx = cursorPt.x - shapeStart.x;
+                const dy = cursorPt.y - shapeStart.y;
+                const size = Math.max(Math.abs(dx), Math.abs(dy));
+                cursorPt = {
+                    x: shapeStart.x + (Math.sign(dx) || 1) * size,
+                    y: shapeStart.y + (Math.sign(dy) || 1) * size
+                };
             }
         }
         setCursor(cursorPt);
@@ -729,6 +737,65 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
             if (handle.includes("w")) newL += localDx;
             if (handle.includes("e")) newR += localDx;
 
+            if (e.shiftKey && (startShape.type === "rectangle" || startShape.type === "circle")) {
+                const aspect = w0 / h0;
+                const candidateW = newR - newL;
+                const candidateH = newB - newT;
+                const signW = Math.sign(candidateW) || 1;
+                const signH = Math.sign(candidateH) || 1;
+
+                const absCandidateW = Math.max(1, Math.abs(candidateW));
+                const absCandidateH = Math.max(1, Math.abs(candidateH));
+
+                let w = absCandidateW;
+                let h = absCandidateH;
+
+                const hasN = handle.includes("n");
+                const hasS = handle.includes("s");
+                const hasW = handle.includes("w");
+                const hasE = handle.includes("e");
+
+                if ((hasN || hasS) && !hasW && !hasE) {
+                    // Vertical-only drag
+                    w = h * aspect;
+                } else if ((hasW || hasE) && !hasN && !hasS) {
+                    // Horizontal-only drag
+                    h = w / aspect;
+                } else if ((hasN || hasS) && (hasW || hasE)) {
+                    // Corner drag: project pointer displacement onto unit diagonal to prevent jittering
+                    const dirX = hasE ? 1 : -1;
+                    const dirY = hasS ? 1 : -1;
+                    const scale = (localDx * dirX * aspect + localDy * dirY) / (aspect * aspect + 1);
+                    w = Math.max(1, Math.abs(w0 + scale * aspect));
+                    h = Math.max(1, Math.abs(h0 + scale));
+                }
+
+                // Apply target w and h based on stationary anchors and signs
+                // Horizontal anchors
+                if (hasW) {
+                    newL = w0 - w * signW;
+                    newR = w0;
+                } else if (hasE) {
+                    newL = 0;
+                    newR = w * signW;
+                } else {
+                    newL = 0;
+                    newR = w;
+                }
+
+                // Vertical anchors
+                if (hasN) {
+                    newT = h0 - h * signH;
+                    newB = h0;
+                } else if (hasS) {
+                    newT = 0;
+                    newB = h * signH;
+                } else {
+                    newT = 0;
+                    newB = h;
+                }
+            }
+
             const finalL = Math.min(newL, newR);
             const finalR = Math.max(newL, newR);
             const finalT = Math.min(newT, newB);
@@ -782,8 +849,24 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
 
                     if (isVertical) {
                         newLocalKneeX = 0;
+                        const oldH = startShape.box.h;
+                        if (localKneeY > 0) {
+                            newLocalKneeY = finalH / 2 + (localKneeY - oldH / 2);
+                        } else if (localKneeY < 0) {
+                            newLocalKneeY = -finalH / 2 + (localKneeY + oldH / 2);
+                        } else {
+                            newLocalKneeY = 0;
+                        }
                     } else {
                         newLocalKneeY = 0;
+                        const oldW = startShape.box.w;
+                        if (localKneeX > 0) {
+                            newLocalKneeX = finalW / 2 + (localKneeX - oldW / 2);
+                        } else if (localKneeX < 0) {
+                            newLocalKneeX = -finalW / 2 + (localKneeX + oldW / 2);
+                        } else {
+                            newLocalKneeX = 0;
+                        }
                     }
 
                     const posRad = (rot * Math.PI) / 180;
@@ -945,8 +1028,18 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
         // finalize shape draw
         if (["rectangle", "circle", "line", "arrow"].includes(activeTool) && isDrawingRef.current && shapeStart && point) {
             let endPt = { x: point.x, y: point.y };
-            if (e.shiftKey && (activeTool === "line" || activeTool === "arrow")) {
-                endPt = snapTo45Degrees(shapeStart, endPt);
+            if (e.shiftKey) {
+                if (activeTool === "line" || activeTool === "arrow") {
+                    endPt = snapTo45Degrees(shapeStart, endPt);
+                } else if (activeTool === "rectangle" || activeTool === "circle") {
+                    const dx = endPt.x - shapeStart.x;
+                    const dy = endPt.y - shapeStart.y;
+                    const size = Math.max(Math.abs(dx), Math.abs(dy));
+                    endPt = {
+                        x: shapeStart.x + (Math.sign(dx) || 1) * size,
+                        y: shapeStart.y + (Math.sign(dy) || 1) * size
+                    };
+                }
             }
             if (calculateDistance(shapeStart, endPt) > 5) {
                 const id = crypto.randomUUID();
@@ -1046,7 +1139,7 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                 // If dx >= 0 (Right), Box is to Right of Cursor. Connection is Left-Center. Knee is Left of Cursor.
                 // If dx < 0 (Left), Box is to Left of Cursor. Connection is Right-Center. Knee is Right of Cursor.
 
-                const stub = 10;
+                const stub = 20;
                 let bx, kneeX, by, kneeY;
 
                 if (Math.abs(dy) > Math.abs(dx) * 1.5) {
@@ -1128,6 +1221,7 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
     // Rendering helpers
     const renderSelectionFrame = (s) => {
         const isLine = s.type === "line" || s.type === "arrow";
+        const isRotating = resizingState && resizingState.handle === "rotate" && resizingState.id === s.id;
 
         const handleStyle = {
             fill: "#b4e6a0",
@@ -1253,6 +1347,27 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                     data-resize-id={s.id}
                     data-resize-handle="rotate"
                 />
+                {isRotating && (() => {
+                    const angleLabelPt = getRotatedPoint(w / 2, -rotOffset - padding - 12 / Math.max(1e-6, viewScale));
+                    const displayAngle = (Math.round(s.rotation || 0) % 360 + 360) % 360;
+                    const fontSz = 10 / Math.max(1e-6, viewScale);
+                    const dyOffset = 3 / Math.max(1e-6, viewScale);
+                    return (
+                        <text
+                            x={angleLabelPt.x}
+                            y={angleLabelPt.y}
+                            dy={dyOffset}
+                            fill="#000000"
+                            fontSize={fontSz}
+                            fontWeight="600"
+                            textAnchor="middle"
+                            fontFamily="sans-serif"
+                            pointerEvents="none"
+                        >
+                            {displayAngle}°
+                        </text>
+                    );
+                })()}
             </g>
         );
     };
@@ -2015,8 +2130,8 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                             const dy = cursor.y - shapeStart.y;
 
                             // Box Position: Cursor is Connection Point.
-                            // Knee Stub: Fixed 10px from connection point.
-                            const stub = 10;
+                            // Knee Stub: Fixed 20px from connection point.
+                            const stub = 20;
                             let bx, kneeX, by, kneeY;
 
                             if (Math.abs(dy) > Math.abs(dx) * 1.5) {

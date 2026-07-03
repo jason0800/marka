@@ -465,6 +465,17 @@ const PDFViewer = ({ document }) => {
 
     // ---- mouse pan ----
     const onMouseDown = (e) => {
+        // Do not pan if clicking on an overlay shape, measurement, or resize handle
+        const isOverlayTarget = e.target.closest('[data-shape-id]') ||
+                                e.target.closest('[data-meas-id]') ||
+                                e.target.getAttribute('data-resize-id') ||
+                                e.target.getAttribute('data-resize-handle');
+        if (isOverlayTarget) return;
+
+        // Do not pan with Shift if a drawing/measurement tool is active
+        const isDrawingTool = !["select", "pan"].includes(activeTool);
+        if (isDrawingTool && e.shiftKey) return;
+
         const shouldPan = e.button === 1 || activeTool === "pan" || e.shiftKey;
         if (!shouldPan) return;
 
