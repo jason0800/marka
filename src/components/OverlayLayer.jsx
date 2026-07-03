@@ -1165,8 +1165,29 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
         );
 
         if (isLine) {
+            const minX = Math.min(s.start.x, s.end.x);
+            const maxX = Math.max(s.start.x, s.end.x);
+            const minY = Math.min(s.start.y, s.end.y);
+            const maxY = Math.max(s.start.y, s.end.y);
+            const padding = 12 / Math.max(1e-6, viewScale);
+            const isAdjusting = isDraggingItems || resizingState !== null;
+
             return (
                 <g>
+                    {!isAdjusting && (
+                        <rect
+                            x={minX - padding}
+                            y={minY - padding}
+                            width={maxX - minX + 2 * padding}
+                            height={maxY - minY + 2 * padding}
+                            fill="none"
+                            stroke="var(--primary-color)"
+                            strokeDasharray="4,4"
+                            strokeWidth={1 / Math.max(1e-6, viewScale)}
+                            vectorEffect="non-scaling-stroke"
+                            pointerEvents="none"
+                        />
+                    )}
                     {renderCircleHandle(s.start.x, s.start.y, "default", "start")}
                     {renderCircleHandle(s.end.x, s.end.y, "default", "end")}
                 </g>
@@ -1500,6 +1521,29 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                     </text>
                     {isSelected && (
                         <>
+                            {(!isDraggingItems && resizingState === null) && (() => {
+                                const xs = m.points.map(p => p.x);
+                                const ys = m.points.map(p => p.y);
+                                const minX = Math.min(...xs);
+                                const maxX = Math.max(...xs);
+                                const minY = Math.min(...ys);
+                                const maxY = Math.max(...ys);
+                                const padding = 12 / Math.max(1e-6, viewScale);
+                                return (
+                                    <rect
+                                        x={minX - padding}
+                                        y={minY - padding}
+                                        width={maxX - minX + 2 * padding}
+                                        height={maxY - minY + 2 * padding}
+                                        fill="none"
+                                        stroke="var(--primary-color)"
+                                        strokeDasharray="4,4"
+                                        strokeWidth={1 / Math.max(1e-6, viewScale)}
+                                        vectorEffect="non-scaling-stroke"
+                                        pointerEvents="none"
+                                    />
+                                );
+                            })()}
                             {/* Handles at each vertex */}
                             {m.points.map((p, idx) => (
                                 <circle
@@ -2059,9 +2103,9 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                                         key={i}
                                         cx={p.x}
                                         cy={p.y}
-                                        r={3 / Math.max(1e-6, viewScale)}
-                                        fill="white"
-                                        stroke="#e74c3c"
+                                        r={handleSize / 2}
+                                        fill="#b4e6a0"
+                                        stroke="#3a6b24"
                                         strokeWidth={1 / Math.max(1e-6, viewScale)}
                                         vectorEffect="non-scaling-stroke"
                                     />
