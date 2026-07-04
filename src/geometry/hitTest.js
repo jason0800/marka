@@ -56,6 +56,32 @@ export const isPointInShape = (point, shape, tolerance = 5) => {
         return false;
     }
 
+    // Polygon (closed path — hit segments + optional fill interior)
+    if (shape.type === "polygon" && shape.points?.length >= 3) {
+        const pts = shape.points;
+        const hasFill = shape.fill && shape.fill !== "none" && shape.fill !== "transparent";
+        // Segment hit
+        for (let i = 0; i < pts.length; i++) {
+            const a = pts[i];
+            const b = pts[(i + 1) % pts.length];
+            const dist = distanceToSegment(point, a, b);
+            if (dist <= Math.max(tolerance, (shape.strokeWidth || 2) / 2 + 5)) return true;
+        }
+        // Interior hit (ray-casting)
+        if (hasFill) {
+            let inside = false;
+            for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+                const xi = pts[i].x, yi = pts[i].y;
+                const xj = pts[j].x, yj = pts[j].y;
+                const intersect = ((yi > point.y) !== (yj > point.y)) &&
+                    (point.x < (xj - xi) * (point.y - yi) / (yj - yi) + xi);
+                if (intersect) inside = !inside;
+            }
+            return inside;
+        }
+        return false;
+    }
+
     // 2. Rectangle / Circle (assume usage of x, y, width, height)
     const { x, y, width, height, rotation = 0 } = shape;
 

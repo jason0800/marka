@@ -17,6 +17,7 @@ const defaultShortcuts = {
     rectangle: 'r',
     circle: 'e',
     polyline: 'p',
+    polygon: 'o',
     line: 'i',
     arrow: 'a',
 };

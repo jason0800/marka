@@ -541,6 +541,15 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                 ...defaultShapeStyle,
             });
             pushHistory();
+        } else if (activeTool === "polygon" && drawingPoints.length >= 3) {
+            addShape({
+                id: crypto.randomUUID(),
+                type: "polygon",
+                pageIndex,
+                points: [...drawingPoints],
+                ...defaultShapeStyle,
+            });
+            pushHistory();
         }
 
         setIsDrawing(false);
@@ -776,7 +785,7 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
         }
 
         // 4) Measurement tools
-        if (["length", "calibrate", "area", "perimeter", "angle", "polyline", "count", "comment"].includes(activeTool)) {
+        if (["length", "calibrate", "area", "perimeter", "angle", "polyline", "polygon", "count", "comment"].includes(activeTool)) {
             if (activeTool === "count") {
                 addMeasurement({ id: crypto.randomUUID(), type: "count", pageIndex, point });
                 pushHistory();
@@ -823,13 +832,13 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                 return;
             }
 
-            if (activeTool === "area" || activeTool === "perimeter" || activeTool === "polyline") {
+            if (activeTool === "area" || activeTool === "perimeter" || activeTool === "polyline" || activeTool === "polygon") {
                 if (!isDrawingRef.current) {
                     setIsDrawing(true);
                     setDrawingPoints([{ x: point.x, y: point.y }]);
                 } else {
                     let nextPoint = { x: point.x, y: point.y };
-                    if (activeTool === "polyline" && e.shiftKey && drawingPoints.length > 0) {
+                    if ((activeTool === "polyline" || activeTool === "polygon") && e.shiftKey && drawingPoints.length > 0) {
                         nextPoint = snapTo45Degrees(drawingPoints[drawingPoints.length - 1], nextPoint);
                     }
                     setDrawingPoints((prev) => [...prev, nextPoint]);
@@ -888,7 +897,7 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                 cursorPt = snapTo45Degrees(shapeStart, cursorPt);
             } else if (["length", "calibrate"].includes(activeTool) && isDrawingRef.current && drawingPoints.length > 0) {
                 cursorPt = snapTo45Degrees(drawingPoints[0], cursorPt);
-            } else if (["angle", "polyline"].includes(activeTool) && isDrawingRef.current && drawingPoints.length > 0) {
+            } else if (["angle", "polyline", "polygon"].includes(activeTool) && isDrawingRef.current && drawingPoints.length > 0) {
                 const referencePt = drawingPoints[drawingPoints.length - 1];
                 cursorPt = snapTo45Degrees(referencePt, cursorPt);
             } else if (["rectangle", "circle"].includes(activeTool) && shapeStart) {
@@ -1015,8 +1024,8 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                 return;
             }
 
-            // Area, perimeter, angle, and polyline measurement/shape vertex dragging
-            if (["area", "perimeter", "angle", "polyline"].includes(startShape.type) && handle.startsWith("vertex-")) {
+            // Area, perimeter, angle, polyline, and polygon vertex dragging
+            if (["area", "perimeter", "angle", "polyline", "polygon"].includes(startShape.type) && handle.startsWith("vertex-")) {
                 const vertexIndex = parseInt(handle.split("-")[1]);
                 const newPoints = [...startShape.points];
                 let targetPt = {
@@ -1024,13 +1033,13 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                     y: startShape.points[vertexIndex].y + dy
                 };
 
-                if (["angle", "polyline"].includes(startShape.type) && e.shiftKey) {
+                if (["angle", "polyline", "polygon"].includes(startShape.type) && e.shiftKey) {
                     const startPos = startShape.points[vertexIndex];
                     targetPt = snapTo45Degrees(startPos, targetPt);
                 }
 
                 newPoints[vertexIndex] = targetPt;
-                if (startShape.type === "polyline") {
+                if (startShape.type === "polyline" || startShape.type === "polygon") {
                     updateShape(id, { points: newPoints });
                 } else {
                     updateMeasurement(id, { points: newPoints });
@@ -1352,7 +1361,7 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                                     start: { x: shape.start.x + dx, y: shape.start.y + dy },
                                     end: { x: shape.end.x + dx, y: shape.end.y + dy },
                                 });
-                            } else if (shape.type === "polyline") {
+                            } else if (shape.type === "polyline" || shape.type === "polygon") {
                                 updateShape(id, {
                                     points: shape.points.map(p => ({ x: p.x + dx, y: p.y + dy }))
                                 });
@@ -1832,6 +1841,32 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                         points={pointsStr}
                         {...commonProps}
                         fill="none"
+                        strokeLinecap="butt"
+                        strokeLinejoin="miter"
+                    />
+                </g>
+            );
+        }
+
+        if (s.type === "polygon" && s.points?.length >= 3) {
+            const pointsStr = s.points.map((p) => `${p.x},${p.y}`).join(" ");
+            const hasFill = s.fill && s.fill !== "none" && s.fill !== "transparent";
+            return (
+                <g key={s.id + (isShadow ? "-shadow" : "")}>
+                    {!isShadow && (
+                        <polygon
+                            points={pointsStr}
+                            stroke="transparent"
+                            strokeWidth={15}
+                            fill={hasFill ? s.fill : "transparent"}
+                            pointerEvents={hasFill ? "all" : "stroke"}
+                            data-shape-id={s.id}
+                            style={{ cursor: "move" }}
+                        />
+                    )}
+                    <polygon
+                        points={pointsStr}
+                        {...commonProps}
                         strokeLinecap="butt"
                         strokeLinejoin="miter"
                     />
@@ -2479,7 +2514,7 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                                         start: { x: s.start.x + dx, y: s.start.y + dy },
                                         end: { x: s.end.x + dx, y: s.end.y + dy },
                                     };
-                                } else if (s.type === "polyline") {
+                                } else if (s.type === "polyline" || s.type === "polygon") {
                                     shapeToRender = {
                                         ...s,
                                         points: s.points.map(p => ({ x: p.x + dx, y: p.y + dy }))
@@ -2630,7 +2665,7 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                 {isDrawingRef.current && drawingPoints.length > 0 && (
                     <g pointerEvents="none">
                         {/* Render partial polyline */}
-                        {["area", "perimeter", "polyline"].includes(activeTool) ? (
+                        {["area", "perimeter", "polyline", "polygon"].includes(activeTool) ? (
                             <>
                                 <polyline
                                     points={[...drawingPoints, cursor].map(p => p ? `${p.x},${p.y}` : "").join(" ")}
@@ -2638,6 +2673,19 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                                     stroke="var(--primary-color)"
                                     strokeWidth={2 / Math.max(1e-6, viewScale)}
                                 />
+                                {/* Close-path preview line for polygon */}
+                                {activeTool === "polygon" && drawingPoints.length >= 2 && cursor && (
+                                    <line
+                                        x1={cursor.x}
+                                        y1={cursor.y}
+                                        x2={drawingPoints[0].x}
+                                        y2={drawingPoints[0].y}
+                                        stroke="var(--primary-color)"
+                                        strokeWidth={2 / Math.max(1e-6, viewScale)}
+                                        strokeDasharray={`${6 / Math.max(1e-6, viewScale)},${4 / Math.max(1e-6, viewScale)}`}
+                                        opacity={0.5}
+                                    />
+                                )}
                                 {drawingPoints.map((p, i) => (
                                     <circle
                                         key={i}
@@ -2742,7 +2790,7 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                                     start: { x: s.start.x + dx, y: s.start.y + dy },
                                     end: { x: s.end.x + dx, y: s.end.y + dy },
                                 };
-                            } else if (s.type === "polyline") {
+                            } else if (s.type === "polyline" || s.type === "polygon") {
                                 shapeToRender = {
                                     ...s,
                                     points: s.points.map(p => ({ x: p.x + dx, y: p.y + dy }))
@@ -2751,7 +2799,7 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                                 shapeToRender = { ...s, x: s.x + dx, y: s.y + dy };
                             }
                         }
-                        if (s.type === "polyline" && shapeToRender.points?.length >= 2) {
+                        if ((s.type === "polyline" || s.type === "polygon") && shapeToRender.points?.length >= 2) {
                             return (
                                 <g key={`handles-${s.id}`}>
                                     {shapeToRender.points.map((p, idx) => (

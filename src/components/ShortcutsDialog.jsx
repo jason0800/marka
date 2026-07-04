@@ -15,6 +15,7 @@ const TOOL_LABELS = {
     rectangle: 'Rectangle Shape',
     circle: 'Ellipse / Circle Shape',
     polyline: 'Polyline Shape',
+    polygon: 'Polygon Shape',
     line: 'Line Shape',
     arrow: 'Arrow Shape',
 };

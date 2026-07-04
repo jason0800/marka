@@ -122,9 +122,9 @@ const drawShape = (ctx, shape) => {
     ctx.save();
     applyStyle(ctx, shape);
 
-    // Arrow, line, and polyline specific lineCap
-    if (shape.type === 'arrow' || shape.type === 'line' || shape.type === 'polyline') ctx.lineCap = 'butt';
-    if (shape.type === 'rectangle' || shape.type === 'polyline') ctx.lineJoin = 'miter';
+    // Arrow, line, polyline, and polygon specific lineCap
+    if (shape.type === 'arrow' || shape.type === 'line' || shape.type === 'polyline' || shape.type === 'polygon') ctx.lineCap = 'butt';
+    if (shape.type === 'rectangle' || shape.type === 'polyline' || shape.type === 'polygon') ctx.lineJoin = 'miter';
 
     const hasFill = shape.fill && shape.fill !== "none" && shape.fill !== "transparent";
 
@@ -170,6 +170,15 @@ const drawShape = (ctx, shape) => {
         for (let j = 1; j < shape.points.length; j++) {
             ctx.lineTo(shape.points[j].x, shape.points[j].y);
         }
+        ctx.stroke();
+
+    } else if (shape.type === "polygon" && shape.points?.length >= 3) {
+        ctx.moveTo(shape.points[0].x, shape.points[0].y);
+        for (let j = 1; j < shape.points.length; j++) {
+            ctx.lineTo(shape.points[j].x, shape.points[j].y);
+        }
+        ctx.closePath();
+        if (hasFill) ctx.fill();
         ctx.stroke();
 
     } else if (shape.type === "line") {

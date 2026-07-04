@@ -87,7 +87,7 @@ const OverlayCanvasLayer = ({
                 const maxY = Math.max(...pts.map(p => p.y));
                 return minX < 0 || minY < 0 || maxX > width || maxY > height;
             }
-            if ((item.type === "area" || item.type === "perimeter" || item.type === "polyline") && item.points) {
+            if ((item.type === "area" || item.type === "perimeter" || item.type === "polyline" || item.type === "polygon") && item.points) {
                 const minX = Math.min(...item.points.map(p => p.x));
                 const maxX = Math.max(...item.points.map(p => p.x));
                 const minY = Math.min(...item.points.map(p => p.y));
@@ -133,8 +133,8 @@ const OverlayCanvasLayer = ({
             ctx.globalAlpha = opacity;
             ctx.strokeStyle = stroke;
             ctx.lineWidth = strokeWidth;
-            ctx.lineCap = (shape.type === "arrow" || shape.type === "line" || shape.type === "polyline") ? "butt" : "round";
-            ctx.lineJoin = (shape.type === "rectangle" || shape.type === "polyline") ? "miter" : "round";
+            ctx.lineCap = (shape.type === "arrow" || shape.type === "line" || shape.type === "polyline" || shape.type === "polygon") ? "butt" : "round";
+            ctx.lineJoin = (shape.type === "rectangle" || shape.type === "polyline" || shape.type === "polygon") ? "miter" : "round";
 
             if (dash && dash !== "none") {
                 ctx.setLineDash(dash.split(",").map(Number));
@@ -189,6 +189,12 @@ const OverlayCanvasLayer = ({
                 for (let j = 1; j < shape.points.length; j++) {
                     ctx.lineTo(shape.points[j].x, shape.points[j].y);
                 }
+            } else if (shape.type === "polygon" && shape.points?.length >= 3) {
+                ctx.moveTo(shape.points[0].x, shape.points[0].y);
+                for (let j = 1; j < shape.points.length; j++) {
+                    ctx.lineTo(shape.points[j].x, shape.points[j].y);
+                }
+                ctx.closePath();
             }
 
             if (hasFill) {
