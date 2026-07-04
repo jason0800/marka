@@ -10,6 +10,7 @@ const defaultShortcuts = {
     calibrate: 's',
     length: 'l',
     area: 'g',
+    angle: 'd',
     count: 'n',
     callout: 'q',
     text: 't',

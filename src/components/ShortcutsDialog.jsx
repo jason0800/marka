@@ -8,6 +8,7 @@ const TOOL_LABELS = {
     calibrate: 'Set Scale (Calibration)',
     length: 'Length Measurement',
     area: 'Area Measurement',
+    angle: 'Angle Measurement',
     count: 'Count Tool',
     callout: 'Callout (Text + Leader)',
     text: 'Text Box',

@@ -256,168 +256,159 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                 const opList = await page.getOperatorList();
                 if (!active) return;
 
-                // Render page as SVG in memory to let PDF.js compute all CTM transformations
-                const svgGfx = new pdfjsLib.SVGGraphics(page.commonObjs, page.objs);
-                const svgElement = await svgGfx.getSVG(opList, unscaledViewport);
-                if (!active) return;
-
                 const extractedCorners = [];
                 const extractedSegments = [];
 
-                // Helper to add a corner
-                const addCorner = (x, y) => {
-                    if (!isNaN(x) && !isNaN(y)) {
-                        extractedCorners.push({ x, y });
-                    }
+                const { fnArray, argsArray } = opList;
+                const OPS = pdfjsLib.OPS;
+
+                // CTM (Current Transformation Matrix) tracking
+                let ctm = [1, 0, 0, 1, 0, 0];
+                const ctmStack = [];
+
+                // Helper to transform point by CTM and convert to viewport
+                const transform = (x, y) => {
+                    const tx = ctm[0] * x + ctm[2] * y + ctm[4];
+                    const ty = ctm[1] * x + ctm[3] * y + ctm[5];
+                    return unscaledViewport.convertToViewportPoint(tx, ty);
                 };
 
-                // Helper to add a segment
-                const addSegment = (x1, y1, x2, y2) => {
-                    if (!isNaN(x1) && !isNaN(y1) && !isNaN(x2) && !isNaN(y2)) {
-                        extractedSegments.push({ a: { x: x1, y: y1 }, b: { x: x2, y: y2 } });
-                    }
-                };
+                let currentPoint = { x: 0, y: 0 };
+                let pathStartPoint = { x: 0, y: 0 };
 
-                // 1. Lines
-                const lines = svgElement.querySelectorAll('line');
-                lines.forEach(l => {
-                    const x1 = parseFloat(l.getAttribute('x1') || 0);
-                    const y1 = parseFloat(l.getAttribute('y1') || 0);
-                    const x2 = parseFloat(l.getAttribute('x2') || 0);
-                    const y2 = parseFloat(l.getAttribute('y2') || 0);
-                    addCorner(x1, y1);
-                    addCorner(x2, y2);
-                    addSegment(x1, y1, x2, y2);
-                });
+                for (let i = 0; i < fnArray.length; i++) {
+                    const fn = fnArray[i];
+                    const args = argsArray[i];
 
-                // 2. Rects
-                const rects = svgElement.querySelectorAll('rect');
-                rects.forEach(r => {
-                    const x = parseFloat(r.getAttribute('x') || 0);
-                    const y = parseFloat(r.getAttribute('y') || 0);
-                    const w = parseFloat(r.getAttribute('width') || 0);
-                    const h = parseFloat(r.getAttribute('height') || 0);
-                    const p1 = { x, y };
-                    const p2 = { x: x + w, y };
-                    const p3 = { x: x + w, y: y + h };
-                    const p4 = { x, y: y + h };
-                    addCorner(p1.x, p1.y);
-                    addCorner(p2.x, p2.y);
-                    addCorner(p3.x, p3.y);
-                    addCorner(p4.x, p4.y);
-                    addSegment(p1.x, p1.y, p2.x, p2.y);
-                    addSegment(p2.x, p2.y, p3.x, p3.y);
-                    addSegment(p3.x, p3.y, p4.x, p4.y);
-                    addSegment(p4.x, p4.y, p1.x, p1.y);
-                });
-
-                // 3. Polylines and Polygons
-                const polys = svgElement.querySelectorAll('polyline, polygon');
-                polys.forEach(p => {
-                    const pointsAttr = p.getAttribute('points') || '';
-                    const pts = pointsAttr.trim().split(/[\s,]+/).map(parseFloat).filter(n => !isNaN(n));
-                    const coords = [];
-                    for (let i = 0; i < pts.length; i += 2) {
-                        coords.push({ x: pts[i], y: pts[i + 1] });
-                    }
-                    for (let i = 0; i < coords.length; i++) {
-                        addCorner(coords[i].x, coords[i].y);
-                        if (i > 0) {
-                            addSegment(coords[i - 1].x, coords[i - 1].y, coords[i].x, coords[i].y);
+                    if (fn === OPS.save) {
+                        ctmStack.push([...ctm]);
+                    } else if (fn === OPS.restore) {
+                        if (ctmStack.length > 0) {
+                            ctm = ctmStack.pop();
                         }
-                    }
-                    if (p.tagName.toLowerCase() === 'polygon' && coords.length >= 3) {
-                        addSegment(coords[coords.length - 1].x, coords[coords.length - 1].y, coords[0].x, coords[0].y);
-                    }
-                });
-
-                // 4. Paths (standard CAD PDFs draw everything as paths)
-                const paths = svgElement.querySelectorAll('path');
-                paths.forEach(p => {
-                    const d = p.getAttribute('d') || '';
-                    const tokens = d.match(/[a-df-zZ]|[-+]?[0-9]*\.?[0-9]+(?:[eE][-+]?[0-9]+)?/g) || [];
-                    
-                    let currentPoint = { x: 0, y: 0 };
-                    let startPoint = { x: 0, y: 0 };
-                    let j = 0;
-
-                    while (j < tokens.length) {
-                        let token = tokens[j];
-                        if (token === 'M' || token === 'm') {
-                            const isRelative = token === 'm';
-                            const x = parseFloat(tokens[j + 1]);
-                            const y = parseFloat(tokens[j + 2]);
-                            const newX = isRelative ? currentPoint.x + x : x;
-                            const newY = isRelative ? currentPoint.y + y : y;
-                            currentPoint = { x: newX, y: newY };
-                            startPoint = { x: newX, y: newY };
-                            addCorner(newX, newY);
-                            j += 3;
-                        } else if (token === 'L' || token === 'l') {
-                            const isRelative = token === 'l';
-                            const x = parseFloat(tokens[j + 1]);
-                            const y = parseFloat(tokens[j + 2]);
-                            const newX = isRelative ? currentPoint.x + x : x;
-                            const newY = isRelative ? currentPoint.y + y : y;
-                            addSegment(currentPoint.x, currentPoint.y, newX, newY);
-                            currentPoint = { x: newX, y: newY };
-                            addCorner(newX, newY);
-                            j += 3;
-                        } else if (token === 'H' || token === 'h') {
-                            const isRelative = token === 'h';
-                            const x = parseFloat(tokens[j + 1]);
-                            const newX = isRelative ? currentPoint.x + x : x;
-                            addSegment(currentPoint.x, currentPoint.y, newX, currentPoint.y);
-                            currentPoint.x = newX;
-                            addCorner(newX, currentPoint.y);
-                            j += 2;
-                        } else if (token === 'V' || token === 'v') {
-                            const isRelative = token === 'v';
-                            const y = parseFloat(tokens[j + 1]);
-                            const newY = isRelative ? currentPoint.y + y : y;
-                            addSegment(currentPoint.x, currentPoint.y, currentPoint.x, newY);
-                            currentPoint.y = newY;
-                            addCorner(currentPoint.x, newY);
-                            j += 2;
-                        } else if (token === 'Z' || token === 'z') {
-                            addSegment(currentPoint.x, currentPoint.y, startPoint.x, startPoint.y);
-                            currentPoint = { ...startPoint };
-                            j += 1;
-                        } else if (/[a-zA-Z]/.test(token)) {
-                            let argCount = 0;
-                            const cmd = token.toUpperCase();
-                            if (cmd === 'C') argCount = 6;
-                            else if (cmd === 'S' || cmd === 'Q') argCount = 4;
-                            else if (cmd === 'T') argCount = 2;
-                            else if (cmd === 'A') argCount = 7;
-                            
-                            if (argCount > 0 && j + argCount < tokens.length) {
-                                const isRelative = token === token.toLowerCase();
-                                const x = parseFloat(tokens[j + argCount - 1]);
-                                const y = parseFloat(tokens[j + argCount]);
-                                const newX = isRelative ? currentPoint.x + x : x;
-                                const newY = isRelative ? currentPoint.y + y : y;
-                                addSegment(currentPoint.x, currentPoint.y, newX, newY);
-                                currentPoint = { x: newX, y: newY };
-                                addCorner(newX, newY);
-                                j += argCount + 1;
-                            } else {
-                                j += 1;
-                            }
-                        } else {
-                            const x = parseFloat(tokens[j]);
-                            const y = parseFloat(tokens[j + 1]);
-                            if (!isNaN(x) && !isNaN(y)) {
-                                addSegment(currentPoint.x, currentPoint.y, x, y);
-                                currentPoint = { x, y };
-                                addCorner(x, y);
-                                j += 2;
-                            } else {
-                                j += 1;
+                    } else if (fn === OPS.transform) {
+                        const [a1, b1, c1, d1, e1, f1] = ctm;
+                        const [a2, b2, c2, d2, e2, f2] = args;
+                        ctm = [
+                            a1 * a2 + c1 * b2,
+                            b1 * a2 + d1 * b2,
+                            a1 * c2 + c1 * d2,
+                            b1 * c2 + d1 * d2,
+                            a1 * e2 + c1 * f2 + e1,
+                            b1 * e2 + d1 * f2 + f1
+                        ];
+                    } else if (fn === OPS.constructPath) {
+                        const [pathOps, pathArgs] = args;
+                        let argIdx = 0;
+                        for (let j = 0; j < pathOps.length; j++) {
+                            const op = pathOps[j];
+                            if (op === OPS.moveTo) {
+                                const x = pathArgs[argIdx];
+                                const y = pathArgs[argIdx + 1];
+                                const [vx, vy] = transform(x, y);
+                                currentPoint = { x: vx, y: vy };
+                                pathStartPoint = { x: vx, y: vy };
+                                extractedCorners.push({ x: vx, y: vy });
+                                argIdx += 2;
+                            } else if (op === OPS.lineTo) {
+                                const x = pathArgs[argIdx];
+                                const y = pathArgs[argIdx + 1];
+                                const [vx, vy] = transform(x, y);
+                                const endPt = { x: vx, y: vy };
+                                extractedSegments.push({ a: { ...currentPoint }, b: endPt });
+                                currentPoint = endPt;
+                                extractedCorners.push(endPt);
+                                argIdx += 2;
+                            } else if (op === OPS.curveTo) {
+                                const x = pathArgs[argIdx + 4];
+                                const y = pathArgs[argIdx + 5];
+                                const [vx, vy] = transform(x, y);
+                                const endPt = { x: vx, y: vy };
+                                extractedSegments.push({ a: { ...currentPoint }, b: endPt });
+                                currentPoint = endPt;
+                                extractedCorners.push(endPt);
+                                argIdx += 6;
+                            } else if (op === OPS.curveTo2) {
+                                const x = pathArgs[argIdx + 2];
+                                const y = pathArgs[argIdx + 3];
+                                const [vx, vy] = transform(x, y);
+                                const endPt = { x: vx, y: vy };
+                                extractedSegments.push({ a: { ...currentPoint }, b: endPt });
+                                currentPoint = endPt;
+                                extractedCorners.push(endPt);
+                                argIdx += 4;
+                            } else if (op === OPS.curveTo3) {
+                                const x = pathArgs[argIdx + 2];
+                                const y = pathArgs[argIdx + 3];
+                                const [vx, vy] = transform(x, y);
+                                const endPt = { x: vx, y: vy };
+                                extractedSegments.push({ a: { ...currentPoint }, b: endPt });
+                                currentPoint = endPt;
+                                extractedCorners.push(endPt);
+                                argIdx += 4;
+                            } else if (op === OPS.closePath) {
+                                extractedSegments.push({ a: { ...currentPoint }, b: { ...pathStartPoint } });
+                                currentPoint = { ...pathStartPoint };
+                            } else if (op === OPS.rectangle) {
+                                const x = pathArgs[argIdx];
+                                const y = pathArgs[argIdx + 1];
+                                const w = pathArgs[argIdx + 2];
+                                const h = pathArgs[argIdx + 3];
+                                const [vx1, vy1] = transform(x, y);
+                                const [vx2, vy2] = transform(x + w, y);
+                                const [vx3, vy3] = transform(x + w, y + h);
+                                const [vx4, vy4] = transform(x, y + h);
+                                const p1 = { x: vx1, y: vy1 };
+                                const p2 = { x: vx2, y: vy2 };
+                                const p3 = { x: vx3, y: vy3 };
+                                const p4 = { x: vx4, y: vy4 };
+                                extractedCorners.push(p1, p2, p3, p4);
+                                extractedSegments.push(
+                                    { a: p1, b: p2 },
+                                    { a: p2, b: p3 },
+                                    { a: p3, b: p4 },
+                                    { a: p4, b: p1 }
+                                );
+                                argIdx += 4;
                             }
                         }
+                    } else if (fn === OPS.moveTo) {
+                        const x = args[0];
+                        const y = args[1];
+                        const [vx, vy] = transform(x, y);
+                        currentPoint = { x: vx, y: vy };
+                        pathStartPoint = { x: vx, y: vy };
+                        extractedCorners.push({ x: vx, y: vy });
+                    } else if (fn === OPS.lineTo) {
+                        const x = args[0];
+                        const y = args[1];
+                        const [vx, vy] = transform(x, y);
+                        const endPt = { x: vx, y: vy };
+                        extractedSegments.push({ a: { ...currentPoint }, b: endPt });
+                        currentPoint = endPt;
+                        extractedCorners.push(endPt);
+                    } else if (fn === OPS.rectangle) {
+                        const x = args[0];
+                        const y = args[1];
+                        const w = args[2];
+                        const h = args[3];
+                        const [vx1, vy1] = transform(x, y);
+                        const [vx2, vy2] = transform(x + w, y);
+                        const [vx3, vy3] = transform(x + w, y + h);
+                        const [vx4, vy4] = transform(x, y + h);
+                        const p1 = { x: vx1, y: vy1 };
+                        const p2 = { x: vx2, y: vy2 };
+                        const p3 = { x: vx3, y: vy3 };
+                        const p4 = { x: vx4, y: vy4 };
+                        extractedCorners.push(p1, p2, p3, p4);
+                        extractedSegments.push(
+                            { a: p1, b: p2 },
+                            { a: p2, b: p3 },
+                            { a: p3, b: p4 },
+                            { a: p4, b: p1 }
+                        );
                     }
-                });
+                }
 
                 // Deduplicate corners to speed up snapping lookup
                 const uniqueCorners = [];
@@ -633,7 +624,7 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
             } else {
                 // Check measurements
                 const meas = pageMeasurements.find(m => m.id === resizeId);
-                if (meas && (meas.type === 'text' || meas.type === 'callout' || meas.type === 'length' || meas.type === 'area')) {
+                if (meas && ['text', 'callout', 'length', 'area', 'perimeter', 'angle'].includes(meas.type)) {
                     pushHistory();
                     // Normalize to shape-like for resizing logic
                     const startShape = {
@@ -776,7 +767,7 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
         }
 
         // 4) Measurement tools
-        if (["length", "calibrate", "area", "perimeter", "count", "comment"].includes(activeTool)) {
+        if (["length", "calibrate", "area", "perimeter", "angle", "count", "comment"].includes(activeTool)) {
             if (activeTool === "count") {
                 addMeasurement({ id: crypto.randomUUID(), type: "count", pageIndex, point });
                 pushHistory();
@@ -831,6 +822,35 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                     setDrawingPoints((prev) => [...prev, { x: point.x, y: point.y }]);
                 }
             }
+
+            if (activeTool === "angle") {
+                if (!isDrawingRef.current) {
+                    setIsDrawing(true);
+                    setDrawingPoints([{ x: point.x, y: point.y }]);
+                } else if (drawingPoints.length === 1) {
+                    let endPoint = { x: point.x, y: point.y };
+                    if (e.shiftKey) {
+                        endPoint = snapTo45Degrees(drawingPoints[0], endPoint);
+                    }
+                    setDrawingPoints((prev) => [...prev, endPoint]);
+                } else if (drawingPoints.length === 2) {
+                    let endPoint = { x: point.x, y: point.y };
+                    if (e.shiftKey) {
+                        endPoint = snapTo45Degrees(drawingPoints[1], endPoint);
+                    }
+                    addMeasurement({
+                        id: crypto.randomUUID(),
+                        type: "angle",
+                        pageIndex,
+                        points: [drawingPoints[0], drawingPoints[1], endPoint],
+                    });
+                    pushHistory();
+                    setActiveTool("select");
+                    setIsDrawing(false);
+                    setDrawingPoints([]);
+                }
+                return;
+            }
         }
     };
 
@@ -855,6 +875,9 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                 cursorPt = snapTo45Degrees(shapeStart, cursorPt);
             } else if (["length", "calibrate"].includes(activeTool) && isDrawingRef.current && drawingPoints.length > 0) {
                 cursorPt = snapTo45Degrees(drawingPoints[0], cursorPt);
+            } else if (activeTool === "angle" && isDrawingRef.current && drawingPoints.length > 0) {
+                const referencePt = drawingPoints[drawingPoints.length - 1];
+                cursorPt = snapTo45Degrees(referencePt, cursorPt);
             } else if (["rectangle", "circle"].includes(activeTool) && shapeStart) {
                 const dx = cursorPt.x - shapeStart.x;
                 const dy = cursorPt.y - shapeStart.y;
@@ -979,14 +1002,21 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                 return;
             }
 
-            // Area measurement vertex dragging
-            if (startShape.type === "area" && handle.startsWith("vertex-")) {
+            // Area, perimeter, and angle measurement vertex dragging
+            if (["area", "perimeter", "angle"].includes(startShape.type) && handle.startsWith("vertex-")) {
                 const vertexIndex = parseInt(handle.split("-")[1]);
                 const newPoints = [...startShape.points];
-                newPoints[vertexIndex] = {
+                let targetPt = {
                     x: startShape.points[vertexIndex].x + dx,
                     y: startShape.points[vertexIndex].y + dy
                 };
+
+                if (startShape.type === "angle" && e.shiftKey) {
+                    const startPos = startShape.points[vertexIndex];
+                    targetPt = snapTo45Degrees(startPos, targetPt);
+                }
+
+                newPoints[vertexIndex] = targetPt;
                 updateMeasurement(id, { points: newPoints });
                 return;
             }
@@ -1619,7 +1649,7 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
 
         const w = s.width;
         const h = s.height;
-        const padding = 6 / Math.max(1e-6, viewScale);
+        const padding = 12 / Math.max(1e-6, viewScale);
 
         const getRotatedPoint = (xLocal, yLocal) => {
             const cx = s.x + w / 2;
@@ -1800,7 +1830,7 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                             style={{ cursor: "move", pointerEvents: "all" }}
                         />
                     )}
-                    <line x1={s.start.x} y1={s.start.y} x2={s.end.x} y2={s.end.y} {...commonProps} strokeLinecap="round" />
+                    <line x1={s.start.x} y1={s.start.y} x2={s.end.x} y2={s.end.y} {...commonProps} strokeLinecap="butt" />
                 </g>
             );
         }
@@ -1859,10 +1889,10 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
 
         // rect/circle: group transform
         const rotation = s.rotation || 0;
-
         let elem = null;
+
         if (s.type === "rectangle") {
-            elem = <rect x={0} y={0} width={s.width} height={s.height} {...commonProps} />;
+            elem = <rect x={0} y={0} width={s.width} height={s.height} {...commonProps} strokeLinejoin="miter" />;
         } else if (s.type === "circle") {
             elem = <ellipse cx={s.width / 2} cy={s.height / 2} rx={s.width / 2} ry={s.height / 2} {...commonProps} />;
         }
@@ -1923,6 +1953,7 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                         stroke={strokeColor}
                         strokeWidth={strokeWidth}
                         strokeDasharray={strokeDasharray}
+                        strokeLinecap="butt"
                         pointerEvents="none"
                     />
                     {!isShadow && (
@@ -1936,6 +1967,71 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                             style={{ cursor: "move" }}
                         >
                             {toUnits(dist).toFixed(2)} {unit}
+                        </text>
+                    )}
+                </g>
+            );
+        }
+
+        if (m.type === "angle" && m.points?.length === 3) {
+            const p0 = m.points[0];
+            const p1 = m.points[1]; // Vertex
+            const p2 = m.points[2];
+            const strokeColor = isShadow ? "#cbd5e1" : (m.stroke || "#3498db");
+            const strokeWidth = m.strokeWidth || 2;
+            const opacity = isShadow ? 0.7 : (m.opacity ?? 1);
+            const fontSize = m.fontSize || 14;
+            const textColor = isShadow ? "#94a3b8" : (m.textColor || strokeColor);
+
+            const v1 = { x: p0.x - p1.x, y: p0.y - p1.y };
+            const v2 = { x: p2.x - p1.x, y: p2.y - p1.y };
+            const d1 = Math.hypot(v1.x, v1.y);
+            const d2 = Math.hypot(v2.x, v2.y);
+            let angleDeg = 0;
+            let arcPath = "";
+            if (d1 > 1e-3 && d2 > 1e-3) {
+                const dot = v1.x * v2.x + v1.y * v2.y;
+                const angleRad = Math.acos(Math.max(-1, Math.min(1, dot / (d1 * d2))));
+                angleDeg = angleRad * 180 / Math.PI;
+
+                const a1 = Math.atan2(p0.y - p1.y, p0.x - p1.x);
+                const a2 = Math.atan2(p2.y - p1.y, p2.x - p1.x);
+                const r = 24 / Math.max(1e-6, viewScale);
+                const startX = p1.x + r * Math.cos(a1);
+                const startY = p1.y + r * Math.sin(a1);
+                const endX = p1.x + r * Math.cos(a2);
+                const endY = p1.y + r * Math.sin(a2);
+                let diff = a2 - a1;
+                while (diff < -Math.PI) diff += 2 * Math.PI;
+                while (diff > Math.PI) diff -= 2 * Math.PI;
+                const sweepFlag = diff > 0 ? 1 : 0;
+                arcPath = `M ${startX} ${startY} A ${r} ${r} 0 0 ${sweepFlag} ${endX} ${endY}`;
+            }
+
+            return (
+                <g key={m.id + (isShadow ? "-shadow" : "")} {...measCommon} style={{ ...measCommon.style, opacity }}>
+                    {!isShadow && (
+                        <>
+                            <line x1={p0.x} y1={p0.y} x2={p1.x} y2={p1.y} stroke="transparent" strokeWidth={15} pointerEvents="all" data-meas-id={m.id} style={{ cursor: "move" }} />
+                            <line x1={p1.x} y1={p1.y} x2={p2.x} y2={p2.y} stroke="transparent" strokeWidth={15} pointerEvents="all" data-meas-id={m.id} style={{ cursor: "move" }} />
+                        </>
+                    )}
+                    <line x1={p0.x} y1={p0.y} x2={p1.x} y2={p1.y} stroke={strokeColor} strokeWidth={strokeWidth} pointerEvents="none" />
+                    <line x1={p1.x} y1={p1.y} x2={p2.x} y2={p2.y} stroke={strokeColor} strokeWidth={strokeWidth} pointerEvents="none" />
+                    {arcPath && (
+                        <path d={arcPath} fill="none" stroke={strokeColor} strokeWidth={1.5} pointerEvents="none" />
+                    )}
+                    {!isShadow && (
+                        <text
+                            x={p1.x}
+                            y={p1.y - 12 - (fontSize / 2)}
+                            fill={textColor}
+                            fontSize={fontSize}
+                            textAnchor="middle"
+                            pointerEvents="all"
+                            style={{ cursor: "move" }}
+                        >
+                            {angleDeg.toFixed(1)}°
                         </text>
                     )}
                 </g>
@@ -2516,6 +2612,69 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                             <line x1={drawingPoints[0].x} y1={drawingPoints[0].y} x2={cursor.x} y2={cursor.y} stroke="var(--primary-color)" strokeWidth={2 / Math.max(1e-6, viewScale)} />
                         ) : null}
 
+                        {/* Render preview for angle tool */}
+                        {activeTool === "angle" && cursor && (
+                            <>
+                                {drawingPoints.length === 1 && (
+                                    <line
+                                        x1={drawingPoints[0].x}
+                                        y1={drawingPoints[0].y}
+                                        x2={cursor.x}
+                                        y2={cursor.y}
+                                        stroke="var(--primary-color)"
+                                        strokeWidth={2 / Math.max(1e-6, viewScale)}
+                                    />
+                                )}
+                                {drawingPoints.length === 2 && (() => {
+                                    const p0 = drawingPoints[0];
+                                    const p1 = drawingPoints[1];
+                                    const p2 = cursor;
+                                    const v1 = { x: p0.x - p1.x, y: p0.y - p1.y };
+                                    const v2 = { x: p2.x - p1.x, y: p2.y - p1.y };
+                                    const d1 = Math.hypot(v1.x, v1.y);
+                                    const d2 = Math.hypot(v2.x, v2.y);
+                                    let angleText = "";
+                                    if (d1 > 1e-3 && d2 > 1e-3) {
+                                        const dot = v1.x * v2.x + v1.y * v2.y;
+                                        const angleRad = Math.acos(Math.max(-1, Math.min(1, dot / (d1 * d2))));
+                                        angleText = `${(angleRad * 180 / Math.PI).toFixed(1)}°`;
+                                    }
+                                    return (
+                                        <>
+                                            <line
+                                                x1={p0.x}
+                                                y1={p0.y}
+                                                x2={p1.x}
+                                                y2={p1.y}
+                                                stroke="var(--primary-color)"
+                                                strokeWidth={2 / Math.max(1e-6, viewScale)}
+                                            />
+                                            <line
+                                                x1={p1.x}
+                                                y1={p1.y}
+                                                x2={p2.x}
+                                                y2={p2.y}
+                                                stroke="var(--primary-color)"
+                                                strokeWidth={2 / Math.max(1e-6, viewScale)}
+                                            />
+                                            {angleText && (
+                                                <text
+                                                    x={p1.x}
+                                                    y={p1.y - 12 / Math.max(1e-6, viewScale)}
+                                                    fill="var(--primary-color)"
+                                                    fontSize={14 / Math.max(1e-6, viewScale)}
+                                                    fontWeight="bold"
+                                                    textAnchor="middle"
+                                                >
+                                                    {angleText}
+                                                </text>
+                                            )}
+                                        </>
+                                    );
+                                })()}
+                            </>
+                        )}
+
                         {/* Comment preview */}
                         {activeTool === "comment" && drawingPoints.length > 0 && (
                             <rect
@@ -2580,14 +2739,7 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                             }
                         }
 
-                        if (measToRender.type === "length" && measToRender.points?.length === 2) {
-                            return (
-                                <g key={`handles-${m.id}`}>
-                                    {renderSelectionFrame({ id: m.id, type: "line", start: measToRender.points[0], end: measToRender.points[1] })}
-                                </g>
-                            );
-                        }
-                        if ((measToRender.type === "area" || measToRender.type === "perimeter") && measToRender.points?.length >= 2) {
+                        if (["area", "perimeter", "angle"].includes(measToRender.type) && measToRender.points?.length >= 2) {
                             return (
                                 <g key={`handles-${m.id}`}>
                                     {(!isDraggingItems && resizingState === null) && (() => {
@@ -2621,7 +2773,8 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                                             r={handleSize / 2}
                                             fill="#b4e6a0"
                                             stroke="#3a6b24"
-                                            strokeWidth={1}
+                                            strokeWidth={1 / Math.max(1e-6, viewScale)}
+                                            vectorEffect="non-scaling-stroke"
                                             cursor="default"
                                             data-resize-id={m.id}
                                             data-resize-handle={`vertex-${idx}`}

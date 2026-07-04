@@ -18,6 +18,7 @@ const TOOLS = [
     { type: 'separator' },
     { id: 'length', icon: RulerDimensionLine, label: 'Length' },
     { id: 'area', icon: AreaIcon, label: 'Area' },
+    { id: 'angle', icon: AngleIcon, label: 'Angle' },
     { id: 'count', icon: Tally5Icon, label: 'Count' },
     { type: 'separator' },
     { id: 'callout', icon: CalloutIcon, label: 'Callout' },
@@ -171,6 +172,25 @@ function AreaIcon({ size, ...props }) {
             <path d="M20 9v12" />
             <path d="M18 9h4" />
             <path d="M18 21h4" />
+        </svg>
+    );
+}
+
+function AngleIcon({ size, ...props }) {
+    return (
+        <svg
+            width={size}
+            height={size}
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            {...props}
+        >
+            <path d="M20 19H4V3" />
+            <path d="M4 11a8 8 0 0 1 8 8" />
         </svg>
     );
 }

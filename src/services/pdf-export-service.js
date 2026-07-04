@@ -122,8 +122,9 @@ const drawShape = (ctx, shape) => {
     ctx.save();
     applyStyle(ctx, shape);
 
-    // Arrow specific lineCap
-    if (shape.type === 'arrow') ctx.lineCap = 'butt';
+    // Arrow and line specific lineCap
+    if (shape.type === 'arrow' || shape.type === 'line') ctx.lineCap = 'butt';
+    if (shape.type === 'rectangle') ctx.lineJoin = 'miter';
 
     const hasFill = shape.fill && shape.fill !== "none" && shape.fill !== "transparent";
 
@@ -262,7 +263,7 @@ const drawMeasurement = (ctx, m, toUnits, toUnits2, unitLabel) => {
     ctx.lineWidth = strokeWidth;
     ctx.strokeStyle = strokeColor;
     ctx.fillStyle = fillColor;
-    ctx.lineCap = "round";
+    ctx.lineCap = m.type === "length" ? "butt" : "round";
     ctx.lineJoin = "round";
 
     // Text settings
@@ -335,6 +336,48 @@ const drawMeasurement = (ctx, m, toUnits, toUnits2, unitLabel) => {
         const textOffset = 8;
         const label = m.text ? m.text : `${toUnits(len).toFixed(2)} ${unitLabel}`;
         ctx.fillText(label, m.points[0].x, m.points[0].y - textOffset);
+
+    } else if (m.type === "angle" && m.points?.length === 3) {
+        const p0 = m.points[0];
+        const p1 = m.points[1]; // Vertex
+        const p2 = m.points[2];
+
+        ctx.beginPath();
+        ctx.moveTo(p0.x, p0.y);
+        ctx.lineTo(p1.x, p1.y);
+        ctx.lineTo(p2.x, p2.y);
+        ctx.stroke();
+
+        const v1 = { x: p0.x - p1.x, y: p0.y - p1.y };
+        const v2 = { x: p2.x - p1.x, y: p2.y - p1.y };
+        const d1 = Math.hypot(v1.x, v1.y);
+        const d2 = Math.hypot(v2.x, v2.y);
+        let angleDeg = 0;
+        if (d1 > 1e-3 && d2 > 1e-3) {
+            const dot = v1.x * v2.x + v1.y * v2.y;
+            const angleRad = Math.acos(Math.max(-1, Math.min(1, dot / (d1 * d2))));
+            angleDeg = angleRad * 180 / Math.PI;
+
+            // Draw dashed arc
+            const a1 = Math.atan2(p0.y - p1.y, p0.x - p1.x);
+            const a2 = Math.atan2(p2.y - p1.y, p2.x - p1.x);
+            const r = 24;
+            let diff = a2 - a1;
+            while (diff < -Math.PI) diff += 2 * Math.PI;
+            while (diff > Math.PI) diff -= 2 * Math.PI;
+
+            ctx.save();
+            ctx.beginPath();
+            ctx.arc(p1.x, p1.y, r, a1, a2, diff < 0);
+            ctx.stroke();
+            ctx.restore();
+        }
+
+        ctx.fillStyle = strokeColor;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "bottom";
+        const label = m.text ? m.text : `${angleDeg.toFixed(1)}°`;
+        ctx.fillText(label, p1.x, p1.y - 12);
 
     } else if (m.type === "count" && m.point) {
         const r = 8;
