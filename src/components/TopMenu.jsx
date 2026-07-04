@@ -443,6 +443,12 @@ const TopMenu = ({ setPdfDocument, setIsLoading, isDocumentLoaded, onNewPDF, pdf
                             >
                                 <FileText size={16} /> Document Properties
                             </button>
+                            <button
+                                className="bg-transparent border-none text-[var(--text-primary)] px-4 py-2 text-left cursor-pointer text-[13px] flex items-center gap-2 w-full hover:bg-[#b4e6a0] hover:text-[#1a1a1a] disabled:opacity-50 disabled:cursor-default whitespace-nowrap"
+                                onClick={() => { setShowShortcutsDialog(true); setActiveMenu(null); }}
+                            >
+                                <Keyboard size={16} /> Keyboard Shortcuts
+                            </button>
                         </div>
                     )}
                 </div>
@@ -489,35 +495,7 @@ const TopMenu = ({ setPdfDocument, setIsLoading, isDocumentLoaded, onNewPDF, pdf
                 </div>
             </div>
 
-            {/* Right side controls spacer */}
-            <div className="flex-1" />
 
-            <div className="flex items-center gap-2 mr-2">
-                {/* Snapping Toggle */}
-                {isDocumentLoaded && (
-                    <button
-                        onClick={() => setSnappingEnabled(!snappingEnabled)}
-                        className={`h-7 px-2.5 rounded text-[12px] font-medium border border-[var(--border-color)] bg-transparent flex items-center gap-1.5 transition-all duration-200 hover:bg-[var(--btn-hover)] ${
-                            snappingEnabled
-                                ? '!text-[var(--primary-color)] !border-[var(--primary-color)] !bg-[var(--primary-color)]/10'
-                                : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
-                        }`}
-                        title={snappingEnabled ? "Disable Snapping" : "Enable Snapping"}
-                    >
-                        <Magnet size={14} />
-                        <span>Snap</span>
-                    </button>
-                )}
-
-                {/* Keyboard Shortcuts Button */}
-                <button
-                    onClick={() => setShowShortcutsDialog(true)}
-                    className="h-7 w-7 rounded border border-[var(--border-color)] bg-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)] flex items-center justify-center transition-all duration-200 hover:bg-[var(--btn-hover)]"
-                    title="Keyboard Shortcuts"
-                >
-                    <Keyboard size={15} />
-                </button>
-            </div>
 
             {/* Hidden Input */}
             <input

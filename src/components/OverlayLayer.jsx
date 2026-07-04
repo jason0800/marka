@@ -3,6 +3,7 @@ import useAppStore from "../stores/useAppStore";
 import { calculateDistance, calculatePolygonArea } from "../geometry/transforms";
 import { findShapeAtPoint, findItemAtPoint } from "../geometry/hitTest";
 import OverlayCanvasLayer from "./OverlayCanvasLayer";
+import * as pdfjsLib from 'pdfjs-dist';
 
 // Helper: Calculate knee position from standard rules
 // Returns { x, y }
@@ -239,7 +240,207 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
         setDrawingPoints([]);
         setCursor(null);
         setSnapIndicator(null);
-    }, [activeTool, setIsDrawing]);
+
+        // Deselect everything when switching to any drawing tool
+        if (activeTool !== "select") {
+            setSelectedIds([]);
+        }
+    }, [activeTool, setIsDrawing, setSelectedIds]);
+
+    const [pdfVectors, setPdfVectors] = useState({ corners: [], segments: [] });
+
+    useEffect(() => {
+        let active = true;
+        const fetchVectors = async () => {
+            try {
+                const opList = await page.getOperatorList();
+                if (!active) return;
+
+                // Render page as SVG in memory to let PDF.js compute all CTM transformations
+                const svgGfx = new pdfjsLib.SVGGraphics(page.commonObjs, page.objs);
+                const svgElement = await svgGfx.getSVG(opList, unscaledViewport);
+                if (!active) return;
+
+                const extractedCorners = [];
+                const extractedSegments = [];
+
+                // Helper to add a corner
+                const addCorner = (x, y) => {
+                    if (!isNaN(x) && !isNaN(y)) {
+                        extractedCorners.push({ x, y });
+                    }
+                };
+
+                // Helper to add a segment
+                const addSegment = (x1, y1, x2, y2) => {
+                    if (!isNaN(x1) && !isNaN(y1) && !isNaN(x2) && !isNaN(y2)) {
+                        extractedSegments.push({ a: { x: x1, y: y1 }, b: { x: x2, y: y2 } });
+                    }
+                };
+
+                // 1. Lines
+                const lines = svgElement.querySelectorAll('line');
+                lines.forEach(l => {
+                    const x1 = parseFloat(l.getAttribute('x1') || 0);
+                    const y1 = parseFloat(l.getAttribute('y1') || 0);
+                    const x2 = parseFloat(l.getAttribute('x2') || 0);
+                    const y2 = parseFloat(l.getAttribute('y2') || 0);
+                    addCorner(x1, y1);
+                    addCorner(x2, y2);
+                    addSegment(x1, y1, x2, y2);
+                });
+
+                // 2. Rects
+                const rects = svgElement.querySelectorAll('rect');
+                rects.forEach(r => {
+                    const x = parseFloat(r.getAttribute('x') || 0);
+                    const y = parseFloat(r.getAttribute('y') || 0);
+                    const w = parseFloat(r.getAttribute('width') || 0);
+                    const h = parseFloat(r.getAttribute('height') || 0);
+                    const p1 = { x, y };
+                    const p2 = { x: x + w, y };
+                    const p3 = { x: x + w, y: y + h };
+                    const p4 = { x, y: y + h };
+                    addCorner(p1.x, p1.y);
+                    addCorner(p2.x, p2.y);
+                    addCorner(p3.x, p3.y);
+                    addCorner(p4.x, p4.y);
+                    addSegment(p1.x, p1.y, p2.x, p2.y);
+                    addSegment(p2.x, p2.y, p3.x, p3.y);
+                    addSegment(p3.x, p3.y, p4.x, p4.y);
+                    addSegment(p4.x, p4.y, p1.x, p1.y);
+                });
+
+                // 3. Polylines and Polygons
+                const polys = svgElement.querySelectorAll('polyline, polygon');
+                polys.forEach(p => {
+                    const pointsAttr = p.getAttribute('points') || '';
+                    const pts = pointsAttr.trim().split(/[\s,]+/).map(parseFloat).filter(n => !isNaN(n));
+                    const coords = [];
+                    for (let i = 0; i < pts.length; i += 2) {
+                        coords.push({ x: pts[i], y: pts[i + 1] });
+                    }
+                    for (let i = 0; i < coords.length; i++) {
+                        addCorner(coords[i].x, coords[i].y);
+                        if (i > 0) {
+                            addSegment(coords[i - 1].x, coords[i - 1].y, coords[i].x, coords[i].y);
+                        }
+                    }
+                    if (p.tagName.toLowerCase() === 'polygon' && coords.length >= 3) {
+                        addSegment(coords[coords.length - 1].x, coords[coords.length - 1].y, coords[0].x, coords[0].y);
+                    }
+                });
+
+                // 4. Paths (standard CAD PDFs draw everything as paths)
+                const paths = svgElement.querySelectorAll('path');
+                paths.forEach(p => {
+                    const d = p.getAttribute('d') || '';
+                    const tokens = d.match(/[a-df-zZ]|[-+]?[0-9]*\.?[0-9]+(?:[eE][-+]?[0-9]+)?/g) || [];
+                    
+                    let currentPoint = { x: 0, y: 0 };
+                    let startPoint = { x: 0, y: 0 };
+                    let j = 0;
+
+                    while (j < tokens.length) {
+                        let token = tokens[j];
+                        if (token === 'M' || token === 'm') {
+                            const isRelative = token === 'm';
+                            const x = parseFloat(tokens[j + 1]);
+                            const y = parseFloat(tokens[j + 2]);
+                            const newX = isRelative ? currentPoint.x + x : x;
+                            const newY = isRelative ? currentPoint.y + y : y;
+                            currentPoint = { x: newX, y: newY };
+                            startPoint = { x: newX, y: newY };
+                            addCorner(newX, newY);
+                            j += 3;
+                        } else if (token === 'L' || token === 'l') {
+                            const isRelative = token === 'l';
+                            const x = parseFloat(tokens[j + 1]);
+                            const y = parseFloat(tokens[j + 2]);
+                            const newX = isRelative ? currentPoint.x + x : x;
+                            const newY = isRelative ? currentPoint.y + y : y;
+                            addSegment(currentPoint.x, currentPoint.y, newX, newY);
+                            currentPoint = { x: newX, y: newY };
+                            addCorner(newX, newY);
+                            j += 3;
+                        } else if (token === 'H' || token === 'h') {
+                            const isRelative = token === 'h';
+                            const x = parseFloat(tokens[j + 1]);
+                            const newX = isRelative ? currentPoint.x + x : x;
+                            addSegment(currentPoint.x, currentPoint.y, newX, currentPoint.y);
+                            currentPoint.x = newX;
+                            addCorner(newX, currentPoint.y);
+                            j += 2;
+                        } else if (token === 'V' || token === 'v') {
+                            const isRelative = token === 'v';
+                            const y = parseFloat(tokens[j + 1]);
+                            const newY = isRelative ? currentPoint.y + y : y;
+                            addSegment(currentPoint.x, currentPoint.y, currentPoint.x, newY);
+                            currentPoint.y = newY;
+                            addCorner(currentPoint.x, newY);
+                            j += 2;
+                        } else if (token === 'Z' || token === 'z') {
+                            addSegment(currentPoint.x, currentPoint.y, startPoint.x, startPoint.y);
+                            currentPoint = { ...startPoint };
+                            j += 1;
+                        } else if (/[a-zA-Z]/.test(token)) {
+                            let argCount = 0;
+                            const cmd = token.toUpperCase();
+                            if (cmd === 'C') argCount = 6;
+                            else if (cmd === 'S' || cmd === 'Q') argCount = 4;
+                            else if (cmd === 'T') argCount = 2;
+                            else if (cmd === 'A') argCount = 7;
+                            
+                            if (argCount > 0 && j + argCount < tokens.length) {
+                                const isRelative = token === token.toLowerCase();
+                                const x = parseFloat(tokens[j + argCount - 1]);
+                                const y = parseFloat(tokens[j + argCount]);
+                                const newX = isRelative ? currentPoint.x + x : x;
+                                const newY = isRelative ? currentPoint.y + y : y;
+                                addSegment(currentPoint.x, currentPoint.y, newX, newY);
+                                currentPoint = { x: newX, y: newY };
+                                addCorner(newX, newY);
+                                j += argCount + 1;
+                            } else {
+                                j += 1;
+                            }
+                        } else {
+                            const x = parseFloat(tokens[j]);
+                            const y = parseFloat(tokens[j + 1]);
+                            if (!isNaN(x) && !isNaN(y)) {
+                                addSegment(currentPoint.x, currentPoint.y, x, y);
+                                currentPoint = { x, y };
+                                addCorner(x, y);
+                                j += 2;
+                            } else {
+                                j += 1;
+                            }
+                        }
+                    }
+                });
+
+                // Deduplicate corners to speed up snapping lookup
+                const uniqueCorners = [];
+                const seen = new Set();
+                extractedCorners.forEach(c => {
+                    const key = `${Math.round(c.x * 100)},${Math.round(c.y * 100)}`;
+                    if (!seen.has(key)) {
+                        seen.add(key);
+                        uniqueCorners.push(c);
+                    }
+                });
+
+                setPdfVectors({ corners: uniqueCorners, segments: extractedSegments });
+            } catch (err) {
+                console.error("Failed to extract vectors from PDF page:", err);
+            }
+        };
+
+        fetchVectors();
+        return () => {
+            active = false;
+        };
+    }, [page, unscaledViewport]);
 
     const pageMeasurements = useMemo(
         () => (measurements || []).filter((m) => m.pageIndex === pageIndex),
@@ -264,86 +465,17 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
 
     // Get snapped coordinates from a raw page point
     const getSnappedPoint = useCallback((rawPoint, excludeId = null) => {
-        if (!snappingEnabled) return { point: rawPoint, snapped: false, type: null };
+        if (!snappingEnabled || activeTool !== "length") {
+            return { point: rawPoint, snapped: false, type: null };
+        }
 
         const threshold = 16 / Math.max(1e-6, viewScale); // 16 screen pixels
-        const W = unscaledViewport.width;
-        const H = unscaledViewport.height;
-
         let closestPoint = null;
         let minDistance = Infinity;
         let snapType = null; // 'corner' or 'edge'
 
-        // 1. Collect all candidate corners/points
-        const corners = [];
-
-        // Page corners
-        corners.push({ x: 0, y: 0 });
-        corners.push({ x: W, y: 0 });
-        corners.push({ x: W, y: H });
-        corners.push({ x: 0, y: H });
-
-        // Helper for box shape corners
-        const addBoxCorners = (box, rot) => {
-            const cx = box.x + box.w / 2;
-            const cy = box.y + box.h / 2;
-            const rad = (rot * Math.PI) / 180;
-            const cos = Math.cos(rad);
-            const sin = Math.sin(rad);
-
-            const pts = [
-                { x: box.x, y: box.y },
-                { x: box.x + box.w, y: box.y },
-                { x: box.x + box.w, y: box.y + box.h },
-                { x: box.x, y: box.y + box.h },
-                { x: cx, y: cy } // center
-            ];
-
-            pts.forEach(p => {
-                const rx = cx + (p.x - cx) * cos - (p.y - cy) * sin;
-                const ry = cy + (p.x - cx) * sin + (p.y - cy) * cos;
-                corners.push({ x: rx, y: ry });
-            });
-        };
-
-        // Existing page shapes
-        pageShapes.forEach(s => {
-            if (s.id === excludeId) return;
-            if (s.type === 'line' || s.type === 'arrow') {
-                corners.push({ x: s.start.x, y: s.start.y });
-                corners.push({ x: s.end.x, y: s.end.y });
-            } else {
-                addBoxCorners({ x: s.x, y: s.y, w: s.width, h: s.height }, s.rotation || 0);
-            }
-        });
-
-        // Existing page measurements
-        pageMeasurements.forEach(m => {
-            if (m.id === excludeId) return;
-            if (m.points && m.points.length > 0) {
-                m.points.forEach(p => corners.push({ x: p.x, y: p.y }));
-            }
-            if (m.point) {
-                corners.push({ x: m.point.x, y: m.point.y });
-            }
-            if (m.box) {
-                addBoxCorners(m.box, m.rotation || 0);
-            }
-            if (m.tip) {
-                corners.push({ x: m.tip.x, y: m.tip.y });
-            }
-            if (m.knee) {
-                corners.push({ x: m.knee.x, y: m.knee.y });
-            }
-        });
-
-        // Current drawing points
-        if (drawingPoints && drawingPoints.length > 0) {
-            drawingPoints.forEach(p => corners.push({ x: p.x, y: p.y }));
-        }
-
-        // Check corner distances
-        corners.forEach(c => {
+        // 1. Check candidate corners parsed from PDF vectors
+        pdfVectors.corners.forEach(c => {
             const dist = Math.hypot(rawPoint.x - c.x, rawPoint.y - c.y);
             if (dist < minDistance && dist <= threshold) {
                 minDistance = dist;
@@ -356,74 +488,8 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
             return { point: closestPoint, snapped: true, type: snapType };
         }
 
-        // 2. Collect and check edges/segments
-        const segments = [];
-
-        // Helper for box segments
-        const addBoxSegments = (box, rot) => {
-            const cx = box.x + box.w / 2;
-            const cy = box.y + box.h / 2;
-            const rad = (rot * Math.PI) / 180;
-            const cos = Math.cos(rad);
-            const sin = Math.sin(rad);
-
-            const rotate = (p) => ({
-                x: cx + (p.x - cx) * cos - (p.y - cy) * sin,
-                y: cy + (p.x - cx) * sin + (p.y - cy) * cos
-            });
-
-            const p1 = rotate({ x: box.x, y: box.y });
-            const p2 = rotate({ x: box.x + box.w, y: box.y });
-            const p3 = rotate({ x: box.x + box.w, y: box.y + box.h });
-            const p4 = rotate({ x: box.x, y: box.y + box.h });
-
-            segments.push({ a: p1, b: p2 });
-            segments.push({ a: p2, b: p3 });
-            segments.push({ a: p3, b: p4 });
-            segments.push({ a: p4, b: p1 });
-        };
-
-        // Page boundary segments
-        segments.push({ a: { x: 0, y: 0 }, b: { x: W, y: 0 } });
-        segments.push({ a: { x: W, y: 0 }, b: { x: W, y: H } });
-        segments.push({ a: { x: W, y: H }, b: { x: 0, y: H } });
-        segments.push({ a: { x: 0, y: H }, b: { x: 0, y: 0 } });
-
-        // Existing page shapes segments
-        pageShapes.forEach(s => {
-            if (s.id === excludeId) return;
-            if (s.type === 'line' || s.type === 'arrow') {
-                segments.push({ a: s.start, b: s.end });
-            } else {
-                addBoxSegments({ x: s.x, y: s.y, w: s.width, h: s.height }, s.rotation || 0);
-            }
-        });
-
-        // Existing page measurements segments
-        pageMeasurements.forEach(m => {
-            if (m.id === excludeId) return;
-            if (m.points && m.points.length >= 2) {
-                for (let i = 0; i < m.points.length - 1; i++) {
-                    segments.push({ a: m.points[i], b: m.points[i + 1] });
-                }
-                if (m.type === 'area') {
-                    segments.push({ a: m.points[m.points.length - 1], b: m.points[0] });
-                }
-            }
-            if (m.box) {
-                addBoxSegments(m.box, m.rotation || 0);
-            }
-        });
-
-        // Current drawing points segments
-        if (drawingPoints && drawingPoints.length >= 2) {
-            for (let i = 0; i < drawingPoints.length - 1; i++) {
-                segments.push({ a: drawingPoints[i], b: drawingPoints[i + 1] });
-            }
-        }
-
-        // Check distance to segments
-        segments.forEach(seg => {
+        // 2. Check candidate segments parsed from PDF vectors
+        pdfVectors.segments.forEach(seg => {
             const { a, b } = seg;
             const abX = b.x - a.x;
             const abY = b.y - a.y;
@@ -454,7 +520,7 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
         }
 
         return { point: rawPoint, snapped: false, type: null };
-    }, [snappingEnabled, viewScale, unscaledViewport.width, unscaledViewport.height, pageShapes, pageMeasurements, drawingPoints]);
+    }, [snappingEnabled, viewScale, activeTool, pdfVectors]);
 
     const finishDrawing = useCallback(() => {
         if (!isDrawingRef.current) return;
@@ -519,6 +585,7 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                 setShapeStart(null);
                 setEditingId(null);
                 setSelectionStart(null);
+                setSelectedIds([]);
                 setActiveTool('select'); // Return to select mode
             }
         };
@@ -543,7 +610,7 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
         const rawPoint = getPagePoint(e);
         if (!rawPoint) return;
 
-        const shouldSnap = snappingEnabled && activeTool !== "select";
+        const shouldSnap = snappingEnabled && activeTool === "length";
         const snapResult = shouldSnap ? getSnappedPoint(rawPoint) : { point: rawPoint, snapped: false };
         const point = snapResult.point;
 
@@ -771,7 +838,7 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
         const rawPoint = getPagePoint(e);
         if (!rawPoint) return;
 
-        const shouldSnap = snappingEnabled && (activeTool !== "select" || resizingState !== null);
+        const shouldSnap = snappingEnabled && activeTool === "length";
         const excludeId = resizingState ? resizingState.id : null;
         const snapResult = shouldSnap ? getSnappedPoint(rawPoint, excludeId) : { point: rawPoint, snapped: false };
         const point = snapResult.point;
@@ -1144,7 +1211,7 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
         const rawPoint = getPagePoint(e);
         if (!rawPoint) return;
 
-        const shouldSnap = snappingEnabled && (activeTool !== "select" || resizingState !== null);
+        const shouldSnap = snappingEnabled && activeTool === "length";
         const excludeId = resizingState ? resizingState.id : null;
         const snapResult = shouldSnap ? getSnappedPoint(rawPoint, excludeId) : { point: rawPoint, snapped: false };
         const point = snapResult.point;
@@ -1734,7 +1801,6 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                         />
                     )}
                     <line x1={s.start.x} y1={s.start.y} x2={s.end.x} y2={s.end.y} {...commonProps} strokeLinecap="round" />
-                    {isSelected && renderSelectionFrame(s)}
                 </g>
             );
         }
@@ -1787,8 +1853,6 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                             style={{ cursor: "move", pointerEvents: "all" }}
                         />
                     )}
-
-                    {isSelected && renderSelectionFrame(s)}
                 </g>
             );
         }
@@ -1810,7 +1874,6 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                 >
                     {elem}
                 </g>
-                {isSelected && renderSelectionFrame(s)}
             </g>
         );
     };
@@ -1875,7 +1938,6 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                             {toUnits(dist).toFixed(2)} {unit}
                         </text>
                     )}
-                    {isSelected && renderSelectionFrame({ id: m.id, type: "line", start: a, end: b })}
                 </g>
             );
         }
@@ -1909,48 +1971,6 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                         >
                             {toUnits2(area).toFixed(2)} {unit}²
                         </text>
-                    )}
-                    {isSelected && (
-                        <>
-                            {(!isDraggingItems && resizingState === null) && (() => {
-                                const xs = m.points.map(p => p.x);
-                                const ys = m.points.map(p => p.y);
-                                const minX = Math.min(...xs);
-                                const maxX = Math.max(...xs);
-                                const minY = Math.min(...ys);
-                                const maxY = Math.max(...ys);
-                                const padding = 12 / Math.max(1e-6, viewScale);
-                                return (
-                                    <rect
-                                        x={minX - padding}
-                                        y={minY - padding}
-                                        width={maxX - minX + 2 * padding}
-                                        height={maxY - minY + 2 * padding}
-                                        fill="none"
-                                        stroke="var(--primary-color)"
-                                        strokeDasharray="4,4"
-                                        strokeWidth={1 / Math.max(1e-6, viewScale)}
-                                        vectorEffect="non-scaling-stroke"
-                                        pointerEvents="none"
-                                    />
-                                );
-                            })()}
-                            {/* Handles at each vertex */}
-                            {m.points.map((p, idx) => (
-                                <circle
-                                    key={idx}
-                                    cx={p.x}
-                                    cy={p.y}
-                                    r={handleSize / 2}
-                                    fill="#b4e6a0"
-                                    stroke="#3a6b24"
-                                    strokeWidth={1}
-                                    cursor="default"
-                                    data-resize-id={m.id}
-                                    data-resize-handle={`vertex-${idx}`}
-                                />
-                            ))}
-                        </>
                     )}
                 </g>
             );
@@ -2223,63 +2243,9 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                         )}
                     </g>
                 </g>
-
-                {/* Handles outside Opacity group */}
-                {
-                    isSelected && renderSelectionFrame({
-                        id: m.id,
-                        x: m.box.x,
-                        y: m.box.y,
-                        width: m.box.w,
-                        height: m.box.h,
-                        rotation: m.rotation || 0,
-                        type: "rectangle",
-                        isCallout: m.type === 'callout'
-                    })
-                }
-
-                {
-                    isSelected && m.type === 'callout' && (
-                        <>
-                            {/* Tip Handle - Outside Opacity Group */}
-                            {m.tip && (
-                                <circle
-                                    cx={m.tip.x}
-                                    cy={m.tip.y}
-                                    r={3.5 / Math.max(1e-6, viewScale)}
-                                    fill="#b4e6a0"
-                                    stroke="#3a6b24"
-                                    strokeWidth={1 / Math.max(1e-6, viewScale)}
-                                    data-resize-id={m.id}
-                                    data-resize-handle="callout-tip"
-                                    cursor="default"
-                                />
-                            )}
-
-                            {(() => {
-                                // Use helper to get current displayed knee
-                                const k = getCalloutKnee(m.box, m.tip, m.knee);
-
-                                return (
-                                    <circle
-                                        cx={k.x}
-                                        cy={k.y}
-                                        r={3.5 / Math.max(1e-6, viewScale)}
-                                        fill="#ffcc80"
-                                        stroke="#ef6c00"
-                                        strokeWidth={1 / Math.max(1e-6, viewScale)}
-                                        data-resize-id={m.id}
-                                        data-resize-handle="callout-knee"
-                                        cursor="default"
-                                    />
-                                );
-                            })()}
-                        </>
-                    )
-                }
-            </g >
+            </g>
         );
-    }
+    };
 
 
 
@@ -2566,6 +2532,156 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                         )}
                     </g>
                 )}
+
+                {/* 3️⃣ Selection Handles (Always at the very front of the SVG) */}
+                {selectedIds.map(id => {
+                    const s = pageShapes.find(x => x.id === id);
+                    if (s) {
+                        let shapeToRender = s;
+                        if (dragDelta.x !== 0 || dragDelta.y !== 0) {
+                            const dx = dragDelta.x, dy = dragDelta.y;
+                            if (s.type === "line" || s.type === "arrow") {
+                                shapeToRender = {
+                                    ...s,
+                                    start: { x: s.start.x + dx, y: s.start.y + dy },
+                                    end: { x: s.end.x + dx, y: s.end.y + dy },
+                                };
+                            } else {
+                                shapeToRender = { ...s, x: s.x + dx, y: s.y + dy };
+                            }
+                        }
+                        return (
+                            <g key={`handles-${s.id}`}>
+                                {renderSelectionFrame(shapeToRender)}
+                            </g>
+                        );
+                    }
+                    const m = pageMeasurements.find(x => x.id === id);
+                    if (m) {
+                        let measToRender = m;
+                        if (dragDelta.x !== 0 || dragDelta.y !== 0) {
+                            const dx = dragDelta.x, dy = dragDelta.y;
+                            if (m.type === "callout") {
+                                const newBox = { ...m.box, x: m.box.x + dx, y: m.box.y + dy };
+                                const changes = { box: newBox };
+                                const currentKnee = m.knee || getCalloutKnee(m.box, m.tip, null);
+                                changes.knee = { x: currentKnee.x + dx, y: currentKnee.y + dy };
+                                measToRender = {
+                                    ...m,
+                                    ...changes
+                                };
+                            } else if (m.box) {
+                                measToRender = { ...m, box: { ...m.box, x: m.box.x + dx, y: m.box.y + dy } };
+                            } else if (m.points) {
+                                measToRender = {
+                                    ...m,
+                                    points: m.points.map(p => ({ x: p.x + dx, y: p.y + dy }))
+                                };
+                            }
+                        }
+
+                        if (measToRender.type === "length" && measToRender.points?.length === 2) {
+                            return (
+                                <g key={`handles-${m.id}`}>
+                                    {renderSelectionFrame({ id: m.id, type: "line", start: measToRender.points[0], end: measToRender.points[1] })}
+                                </g>
+                            );
+                        }
+                        if ((measToRender.type === "area" || measToRender.type === "perimeter") && measToRender.points?.length >= 2) {
+                            return (
+                                <g key={`handles-${m.id}`}>
+                                    {(!isDraggingItems && resizingState === null) && (() => {
+                                        const xs = measToRender.points.map(p => p.x);
+                                        const ys = measToRender.points.map(p => p.y);
+                                        const minX = Math.min(...xs);
+                                        const maxX = Math.max(...xs);
+                                        const minY = Math.min(...ys);
+                                        const maxY = Math.max(...ys);
+                                        const padding = 12 / Math.max(1e-6, viewScale);
+                                        return (
+                                            <rect
+                                                x={minX - padding}
+                                                y={minY - padding}
+                                                width={maxX - minX + 2 * padding}
+                                                height={maxY - minY + 2 * padding}
+                                                fill="none"
+                                                stroke="var(--primary-color)"
+                                                strokeDasharray="4,4"
+                                                strokeWidth={1 / Math.max(1e-6, viewScale)}
+                                                vectorEffect="non-scaling-stroke"
+                                                pointerEvents="none"
+                                            />
+                                        );
+                                    })()}
+                                    {measToRender.points.map((p, idx) => (
+                                        <circle
+                                            key={idx}
+                                            cx={p.x}
+                                            cy={p.y}
+                                            r={handleSize / 2}
+                                            fill="#b4e6a0"
+                                            stroke="#3a6b24"
+                                            strokeWidth={1}
+                                            cursor="default"
+                                            data-resize-id={m.id}
+                                            data-resize-handle={`vertex-${idx}`}
+                                        />
+                                    ))}
+                                </g>
+                            );
+                        }
+                        if (measToRender.box) {
+                            return (
+                                <g key={`handles-${m.id}`}>
+                                    {renderSelectionFrame({
+                                        id: m.id,
+                                        x: measToRender.box.x,
+                                        y: measToRender.box.y,
+                                        width: measToRender.box.w,
+                                        height: measToRender.box.h,
+                                        rotation: measToRender.rotation || 0,
+                                        type: "rectangle",
+                                        isCallout: measToRender.type === 'callout'
+                                    })}
+                                    {measToRender.type === 'callout' && (
+                                        <>
+                                            {measToRender.tip && (
+                                                <circle
+                                                    cx={measToRender.tip.x}
+                                                    cy={measToRender.tip.y}
+                                                    r={3.5 / Math.max(1e-6, viewScale)}
+                                                    fill="#b4e6a0"
+                                                    stroke="#3a6b24"
+                                                    strokeWidth={1 / Math.max(1e-6, viewScale)}
+                                                    data-resize-id={m.id}
+                                                    data-resize-handle="callout-tip"
+                                                    cursor="default"
+                                                />
+                                            )}
+                                            {(() => {
+                                                const k = getCalloutKnee(measToRender.box, measToRender.tip, measToRender.knee);
+                                                return (
+                                                    <circle
+                                                        cx={k.x}
+                                                        cy={k.y}
+                                                        r={3.5 / Math.max(1e-6, viewScale)}
+                                                        fill="#ffcc80"
+                                                        stroke="#ef6c00"
+                                                        strokeWidth={1 / Math.max(1e-6, viewScale)}
+                                                        data-resize-id={m.id}
+                                                        data-resize-handle="callout-knee"
+                                                        cursor="default"
+                                                    />
+                                                );
+                                            })()}
+                                        </>
+                                    )}
+                                </g>
+                            );
+                        }
+                    }
+                    return null;
+                })}
 
                 {/* Selection Box */}
                 {selectionStart && cursor && (
