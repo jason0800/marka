@@ -67,7 +67,7 @@ function App() {
       )}
 
       {isDocumentLoaded && (
-        <BottomBar totalPages={pdfDocument ? pdfDocument.numPages : 0} />
+        <BottomBar />
       )}
 
       {showNewPDFDialog && (

@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import useAppStore from '../stores/useAppStore';
+import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
 
-const BottomBar = ({ totalPages }) => {
+const BottomBar = () => {
     const {
         currentPage,
         setCurrentPage,
@@ -11,21 +12,38 @@ const BottomBar = ({ totalPages }) => {
         calibrationDetails,
         setPageScale,
         setJumpToPage,
-        pdfDocument
+        pdfDocument,
+        sheets
     } = useAppStore();
 
+    const totalPages = sheets.length;
     const [pageInput, setPageInput] = useState(currentPage);
     const [scaleDisplay, setScaleDisplay] = useState('');
     const [pageSizeDisplay, setPageSizeDisplay] = useState('');
 
     useEffect(() => {
-        if (!pdfDocument) {
+        if (!pdfDocument && sheets.length === 0) {
             setPageSizeDisplay('');
             return;
         }
 
+        const sheet = sheets[currentPage - 1];
+        if (!sheet) {
+            setPageSizeDisplay('');
+            return;
+        }
+
+        if (sheet.type === 'blank') {
+            const widthMm = Math.round(sheet.width * 25.4 / 72);
+            const heightMm = Math.round(sheet.height * 25.4 / 72);
+            setPageSizeDisplay(`${widthMm} x ${heightMm} mm`);
+            return;
+        }
+
+        if (!pdfDocument) return;
+
         let cancelled = false;
-        pdfDocument.getPage(currentPage).then((page) => {
+        pdfDocument.getPage(sheet.pdfPageNumber).then((page) => {
             if (cancelled) return;
             const rotation = page.rotation || 0;
             const vp = page.getViewport({ scale: 1, rotation });
@@ -40,7 +58,7 @@ const BottomBar = ({ totalPages }) => {
         return () => {
             cancelled = true;
         };
-    }, [currentPage, pdfDocument]);
+    }, [currentPage, pdfDocument, sheets]);
 
     useEffect(() => {
         setPageInput(currentPage);
@@ -119,7 +137,7 @@ const BottomBar = ({ totalPages }) => {
                         disabled={currentPage <= 1}
                         title="First Page"
                     >
-                        <span className="text-xl font-bold leading-none">«</span>
+                        <ChevronsLeft size={16} />
                     </button>
                     <button
                         className="bg-transparent border border-transparent text-[var(--text-secondary)] p-1.5 rounded-md flex items-center justify-center transition-all duration-200 hover:bg-[var(--btn-hover)] hover:text-[var(--text-primary)] disabled:opacity-30 disabled:cursor-default h-8 w-8"
@@ -127,7 +145,7 @@ const BottomBar = ({ totalPages }) => {
                         disabled={currentPage <= 1}
                         title="Previous Page"
                     >
-                        <span className="text-xl font-bold leading-none">‹</span>
+                        <ChevronLeft size={16} />
                     </button>
                 </div>
 
@@ -151,7 +169,7 @@ const BottomBar = ({ totalPages }) => {
                         disabled={currentPage >= totalPages}
                         title="Next Page"
                     >
-                        <span className="text-xl font-bold leading-none">›</span>
+                        <ChevronRight size={16} />
                     </button>
                     <button
                         className="bg-transparent border border-transparent text-[var(--text-secondary)] p-1.5 rounded-md flex items-center justify-center transition-all duration-200 hover:bg-[var(--btn-hover)] hover:text-[var(--text-primary)] disabled:opacity-30 disabled:cursor-default h-8 w-8"
@@ -159,16 +177,16 @@ const BottomBar = ({ totalPages }) => {
                         disabled={currentPage >= totalPages}
                         title="Last Page"
                     >
-                        <span className="text-xl font-bold leading-none">»</span>
+                        <ChevronsRight size={16} />
                     </button>
                 </div>
             </div>
 
             <div className="flex items-center gap-1.5 justify-self-end">
                 <button
-                    className={`border border-[var(--border-color)] p-1.5 rounded-md text-[13px] cursor-pointer transition-all duration-200 min-w-[36px] h-[36px] flex items-center justify-center ${viewMode === 'single'
-                            ? '!bg-[var(--primary-color)] !text-[var(--text-active)] border-[var(--primary-color)] font-medium shadow-[0_0_10px_rgba(var(--primary-color-rgb),0.25)]'
-                            : 'bg-[var(--bg-color)] text-[var(--text-primary)] hover:bg-[var(--btn-hover)]'
+                    className={`relative border border-transparent p-1.5 rounded-t-md rounded-b-none text-[13px] cursor-pointer transition-all duration-200 min-w-[36px] h-[36px] flex items-center justify-center ${viewMode === 'single'
+                            ? 'bg-gray-100 text-[var(--text-primary)] font-medium'
+                            : 'bg-transparent text-[var(--text-primary)] hover:bg-[var(--btn-hover)]'
                         }`}
                     onClick={() => setViewMode('single')}
                     title="Single Page View"
@@ -177,11 +195,21 @@ const BottomBar = ({ totalPages }) => {
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                         <rect x="5" y="4" width="14" height="16" rx="2" />
                     </svg>
+                    {viewMode === 'single' && (
+                        <span style={{
+                            position: 'absolute',
+                            bottom: 0,
+                            left: 0,
+                            right: 0,
+                            height: 3,
+                            background: 'var(--primary-color)',
+                        }} />
+                    )}
                 </button>
                 <button
-                    className={`border border-[var(--border-color)] p-1.5 rounded-md text-[13px] cursor-pointer transition-all duration-200 min-w-[36px] h-[36px] flex items-center justify-center ${viewMode === 'continuous'
-                            ? '!bg-[var(--primary-color)] !text-[var(--text-active)] border-[var(--primary-color)] font-medium shadow-[0_0_10px_rgba(var(--primary-color-rgb),0.25)]'
-                            : 'bg-[var(--bg-color)] text-[var(--text-primary)] hover:bg-[var(--btn-hover)]'
+                    className={`relative border border-transparent p-1.5 rounded-t-md rounded-b-none text-[13px] cursor-pointer transition-all duration-200 min-w-[36px] h-[36px] flex items-center justify-center ${viewMode === 'continuous'
+                            ? 'bg-gray-100 text-[var(--text-primary)] font-medium'
+                            : 'bg-transparent text-[var(--text-primary)] hover:bg-[var(--btn-hover)]'
                         }`}
                     onClick={() => setViewMode('continuous')}
                     title="Continuous Scroll View"
@@ -191,6 +219,16 @@ const BottomBar = ({ totalPages }) => {
                         <rect x="4" y="2" width="16" height="8" rx="1" />
                         <rect x="4" y="14" width="16" height="8" rx="1" />
                     </svg>
+                    {viewMode === 'continuous' && (
+                        <span style={{
+                            position: 'absolute',
+                            bottom: 0,
+                            left: 0,
+                            right: 0,
+                            height: 3,
+                            background: 'var(--primary-color)',
+                        }} />
+                    )}
                 </button>
             </div>
         </div>

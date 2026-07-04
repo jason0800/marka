@@ -297,7 +297,7 @@ const TopMenu = ({ setPdfDocument, setIsLoading, isDocumentLoaded, onNewPDF, pdf
 
         try {
             // Get current store state
-            const { shapes, measurements, calibrationScales, fileName } = useAppStore.getState();
+            const { shapes, measurements, calibrationScales, fileName, sheets } = useAppStore.getState();
 
             await exportFlattenedPDF(
                 pdfDocument,
@@ -305,7 +305,8 @@ const TopMenu = ({ setPdfDocument, setIsLoading, isDocumentLoaded, onNewPDF, pdf
                 measurements,
                 calibrationScales,
                 fileName,
-                (progress) => setLoadingProgress(progress)
+                (progress) => setLoadingProgress(progress),
+                sheets
             );
 
         } catch (e) {

@@ -146,7 +146,7 @@ const Toolbar = () => {
 
     // ── Style helpers ─────────────────────────────────────────────────────────
     const btnBase = [
-        'relative w-[36px] h-[36px] rounded-l-md border-none bg-transparent',
+        'relative w-[36px] h-[36px] rounded-l-md border-none',
         'text-[var(--text-secondary)] flex items-center justify-center',
         'transition-all duration-150 hover:bg-[var(--btn-hover)]',
         'hover:text-[var(--text-primary)] shrink-0 cursor-pointer overflow-hidden',
@@ -171,7 +171,7 @@ const Toolbar = () => {
                     return (
                         <button
                             key={item.id}
-                            className={`${btnBase} ${isActive ? 'bg-gray-100' : ''}`}
+                            className={`${btnBase} ${isActive ? 'bg-gray-100' : 'bg-transparent'}`}
                             onClick={() => handleToolSelect(item.id)}
                             title={title}
                         >
@@ -201,7 +201,7 @@ const Toolbar = () => {
                     return (
                         <button
                             key={item.groupId}
-                            className={btnBase}
+                            className={`${btnBase} ${isGroupActive ? 'bg-gray-100' : 'bg-transparent'}`}
                             onClick={() => handleGroupClick(item)}
                             onContextMenu={(e) => handleGroupRightClick(e, item.groupId)}
                             title={`${displayChild.label} — right-click for more`}

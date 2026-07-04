@@ -33,6 +33,7 @@ const PDFViewer = ({ document }) => {
         viewMode,
         pageRotations,
         setNumPages: setStoreNumPages,
+        sheets,
     } = useAppStore();
 
     // --- DOM refs ---
@@ -106,34 +107,60 @@ const PDFViewer = ({ document }) => {
     const effectiveRenderScale = (isZooming || dragging) ? 1 : debouncedRenderScale;
 
     // ---- document + caches ----
-    const [numPages, setNumPages] = useState(0);
+    const numPages = sheets.length;
     const pageCacheRef = useRef(new Map()); // pageNumber -> PDFPageProxy
     const loadingRef = useRef(new Set()); // pageNumber strings in-flight
     const baseHeightsRef = useRef([]); // scale=1 heights
     const [layoutVersion, bumpLayout] = useState(0);
 
-    const getMaxPages = useCallback(() => {
-        return document?.numPages ?? numPages;
-    }, [document, numPages]);
-
     const ensurePageLoaded = useCallback(
-        async (pageNumber) => {
-            if (!document) return;
+        async (sheetNumber) => {
+            if (!document && sheets.length === 0) return;
 
-            const maxPages = getMaxPages();
-            if (pageNumber < 1 || pageNumber > maxPages) return;
-            if (pageCacheRef.current.has(pageNumber)) return;
+            const maxPages = sheets.length;
+            if (sheetNumber < 1 || sheetNumber > maxPages) return;
+            if (pageCacheRef.current.has(sheetNumber)) return;
 
-            const key = String(pageNumber);
+            const sheet = sheets[sheetNumber - 1];
+            if (!sheet) return;
+
+            if (sheet.type === 'blank') {
+                const mockPage = {
+                    isBlank: true,
+                    pageNumber: sheetNumber,
+                    rotate: 0,
+                    getViewport: ({ scale, rotation }) => {
+                        const r = rotation || 0;
+                        const isRotated = (r % 180) !== 0;
+                        const w = isRotated ? sheet.height : sheet.width;
+                        const h = isRotated ? sheet.width : sheet.height;
+                        return {
+                            width: w * scale,
+                            height: h * scale,
+                        };
+                    }
+                };
+                pageCacheRef.current.set(sheetNumber, mockPage);
+                const idx = sheetNumber - 1;
+                const nextH = sheet.height || DEFAULT_PAGE_H;
+                if (baseHeightsRef.current[idx] !== nextH) {
+                    baseHeightsRef.current[idx] = nextH;
+                    bumpLayout((x) => x + 1);
+                }
+                scheduleTick();
+                return;
+            }
+
+            const key = String(sheetNumber);
             if (loadingRef.current.has(key)) return;
             loadingRef.current.add(key);
 
             try {
-                const page = await document.getPage(pageNumber);
-                pageCacheRef.current.set(pageNumber, page);
+                const page = await document.getPage(sheet.pdfPageNumber);
+                pageCacheRef.current.set(sheetNumber, page);
 
                 const vp = page.getViewport({ scale: 1 });
-                const idx = pageNumber - 1;
+                const idx = sheetNumber - 1;
                 const nextH = vp?.height || DEFAULT_PAGE_H;
 
                 if (baseHeightsRef.current[idx] !== nextH) {
@@ -145,24 +172,25 @@ const PDFViewer = ({ document }) => {
                 scheduleTick(); // ✅ not immediate rerender storm
             }
         },
-        [document, getMaxPages, scheduleTick]
+        [document, sheets, scheduleTick]
     );
 
     useEffect(() => {
-        if (!document) return;
-
-        const n = document.numPages || 0;
-        setNumPages(n);
-        setStoreNumPages(n); // Sync to store
-
         pageCacheRef.current = new Map();
         loadingRef.current = new Set();
-        baseHeightsRef.current = Array.from({ length: n }, () => DEFAULT_PAGE_H);
+        baseHeightsRef.current = Array.from({ length: sheets.length }, (_, idx) => {
+            const sheet = sheets[idx];
+            return sheet ? (sheet.height || DEFAULT_PAGE_H) : DEFAULT_PAGE_H;
+        });
 
-        ensurePageLoaded(1);
+        if (sheets.length > 0) {
+            ensurePageLoaded(currentPage);
+        }
+
+        bumpLayout((x) => x + 1);
         scheduleTick();
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [document]);
+    }, [sheets, document]);
 
     // ---- bounds ----
     const boundsRef = useRef({ minY: PADDING, maxY: PADDING });
@@ -427,7 +455,7 @@ const PDFViewer = ({ document }) => {
         }
 
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [viewMode, jumpToPage, numPages]);
+    }, [viewMode, jumpToPage, numPages, layoutVersion]);
 
     // ---- keyboard zoom ----
     useEffect(() => {

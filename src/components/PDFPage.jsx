@@ -100,6 +100,17 @@ const PDFPage = memo(function PDFPage({
         const canvas = canvasRef.current;
         const textLayerDiv = textLayerRef.current;
 
+        if (page.isBlank) {
+            const dpr = Math.min(MAX_DPR, window.devicePixelRatio || 1);
+            canvas.width = Math.max(1, Math.floor(width * dpr));
+            canvas.height = Math.max(1, Math.floor(height * dpr));
+            const ctx = canvas.getContext("2d", { alpha: false });
+            ctx.fillStyle = "#ffffff";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            textLayerDiv.innerHTML = "";
+            return;
+        }
+
         // Cancel any scheduled/ongoing work on changes
         if (idleRef.current) cancelIdle(idleRef.current);
         idleRef.current = 0;

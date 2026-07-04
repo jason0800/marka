@@ -3,6 +3,7 @@ import React, { useEffect, useRef, useState, memo, useCallback } from "react";
 const PDFThumbnail = memo(function PDFThumbnail({
     document,
     pageNumber,
+    sheet,
     width = 180,
     isActive,
     onSelect, // (pageNumber) => void
@@ -40,11 +41,32 @@ const PDFThumbnail = memo(function PDFThumbnail({
 
     // Fetch page when visible
     useEffect(() => {
-        if (!isVisible || !document) return;
+        if (!isVisible) return;
+
+        if (sheet && sheet.type === 'blank') {
+            setPage({
+                isBlank: true,
+                pageNumber,
+                rotate: 0,
+                getViewport: ({ scale, rotation }) => {
+                    const r = rotation || 0;
+                    const isRotated = (r % 180) !== 0;
+                    const w = isRotated ? sheet.height : sheet.width;
+                    const h = isRotated ? sheet.width : sheet.height;
+                    return {
+                        width: w * scale,
+                        height: h * scale,
+                    };
+                }
+            });
+            return;
+        }
+
+        if (!document) return;
 
         let cancelled = false;
         document
-            .getPage(pageNumber)
+            .getPage(sheet ? sheet.pdfPageNumber : pageNumber)
             .then((p) => {
                 if (!cancelled) setPage(p);
             })
@@ -53,7 +75,7 @@ const PDFThumbnail = memo(function PDFThumbnail({
         return () => {
             cancelled = true;
         };
-    }, [isVisible, document, pageNumber]);
+    }, [isVisible, document, pageNumber, sheet]);
 
     // Render page to canvas
     useEffect(() => {
@@ -83,6 +105,12 @@ const PDFThumbnail = memo(function PDFThumbnail({
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
         ctx.clearRect(0, 0, vp.width, vp.height);
 
+        if (page.isBlank) {
+            ctx.fillStyle = "#ffffff";
+            ctx.fillRect(0, 0, vp.width, vp.height);
+            return;
+        }
+
         const task = page.render({
             canvasContext: ctx,
             viewport: vp,
@@ -103,6 +131,8 @@ const PDFThumbnail = memo(function PDFThumbnail({
         };
     }, [page, width]);
 
+    const aspect = sheet ? (sheet.height / sheet.width) : 1.4;
+
     return (
         <button
             ref={containerRef}
@@ -120,14 +150,14 @@ const PDFThumbnail = memo(function PDFThumbnail({
             >
                 {!page && (
                     <div
-                        style={{ width: Math.max(30, width - 16), height: Math.max(30, width - 16) * 1.4 }}
+                        style={{ width: Math.max(30, width - 16), height: Math.max(30, width - 16) * aspect }}
                         className="flex items-center justify-center bg-[var(--bg-secondary)] text-[var(--text-secondary)] text-xs"
                     >
                         Loading...
                     </div>
                 )}
 
-                <canvas ref={canvasRef} className="block" />
+                <canvas ref={canvasRef} className="block" style={{ display: page ? 'block' : 'none' }} />
             </div>
 
             <span className="text-xs text-[var(--text-secondary)] font-medium">

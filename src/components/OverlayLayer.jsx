@@ -226,6 +226,7 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
 
     const resizingStateRef = useRef(null);
     const isDraggingItemsRef = useRef(false);
+    const isDraggingTextRef = useRef(false);
     useEffect(() => {
         resizingStateRef.current = resizingState;
     }, [resizingState]);
@@ -713,6 +714,12 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                 });
                 setDragStartItems(snapshot);
 
+                const isClickingText = e.target.tagName === "text";
+                isDraggingTextRef.current = isShift && isClickingText && newSelection.some(id => {
+                    const m = pageMeasurements.find(x => x.id === id);
+                    return m && ['length', 'angle', 'area', 'perimeter'].includes(m.type);
+                });
+
                 setDragStart({ x: point.x, y: point.y });
                 setDragDelta({ x: 0, y: 0 }); // Fix shifting
                 setIsDraggingItems(true);
@@ -751,6 +758,12 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                         }
                     });
                     setDragStartItems(snapshot);
+
+                    const isClickingTextCanvas = e.target.tagName === "text";
+                    isDraggingTextRef.current = isShift && isClickingTextCanvas && newSelection.some(id => {
+                        const m = pageMeasurements.find(x => x.id === id);
+                        return m && ['length', 'angle', 'area', 'perimeter'].includes(m.type);
+                    });
 
                     setDragStart({ x: point.x, y: point.y });
                     setDragDelta({ x: 0, y: 0 }); // Fix shifting
@@ -1252,7 +1265,7 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
         // Dragging selected items
         if (activeTool === "select" && isDraggingItems && dragStart && selectedIds.length > 0) {
             let targetPt = point;
-            if (e.shiftKey) {
+            if (e.shiftKey && !isDraggingTextRef.current) {
                 targetPt = snapTo45Degrees(dragStart, point);
             }
             const dx = targetPt.x - dragStart.x;
@@ -1352,6 +1365,7 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                 const hasDragged = dragDelta.x !== 0 || dragDelta.y !== 0;
                 if (hasDragged) {
                     const { x: dx, y: dy } = dragDelta;
+                    const isTextDrag = isDraggingTextRef.current;
 
                     selectedIds.forEach((id) => {
                         const shape = pageShapes.find((s) => s.id === id);
@@ -1371,7 +1385,12 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                         } else {
                             const meas = pageMeasurements.find(m => m.id === id);
                             if (meas) {
-                                if (meas.box) {
+                                if (isTextDrag && ['length', 'angle', 'area', 'perimeter'].includes(meas.type)) {
+                                    const currentOffset = meas.textOffset || { x: 0, y: 0 };
+                                    updateMeasurement(id, {
+                                        textOffset: { x: currentOffset.x + dx, y: currentOffset.y + dy }
+                                    });
+                                } else if (meas.box) {
                                     // If dragging a callout, we want to move ONLY the box, keeping the tip stationary.
                                     if (meas.type === 'callout') {
                                         // Only move the BOX. Tip stays.
@@ -1406,6 +1425,7 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                     }
                 }
                 pendingDeselectIdRef.current = null;
+                isDraggingTextRef.current = false;
             }
 
             setIsDraggingItems(false);
@@ -2019,8 +2039,8 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                     />
                     {!isShadow && (
                         <text
-                            x={(a.x + b.x) / 2}
-                            y={(a.y + b.y) / 2 - 6}
+                            x={(a.x + b.x) / 2 + (m.textOffset?.x || 0)}
+                            y={(a.y + b.y) / 2 - 6 + (m.textOffset?.y || 0)}
                             fill={textColor}
                             fontSize={fontSize}
                             textAnchor="middle"
@@ -2098,8 +2118,8 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                     )}
                     {!isShadow && (
                         <text
-                            x={p1.x}
-                            y={p1.y - 12 - (fontSize / 2)}
+                            x={p1.x + (m.textOffset?.x || 0)}
+                            y={p1.y - 12 - (fontSize / 2) + (m.textOffset?.y || 0)}
                             fill={textColor}
                             fontSize={fontSize}
                             textAnchor="middle"
@@ -2135,10 +2155,12 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                     />
                     {!isShadow && (
                         <text
-                            x={m.points[0].x}
-                            y={m.points[0].y - 8}
+                            x={m.points[0].x + (m.textOffset?.x || 0)}
+                            y={m.points[0].y - 8 + (m.textOffset?.y || 0)}
                             fill={textColor}
                             fontSize={fontSize}
+                            pointerEvents="all"
+                            style={{ cursor: "move" }}
                         >
                             {toUnits2(area).toFixed(2)} {unit}²
                         </text>
@@ -2167,10 +2189,12 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                     />
                     {!isShadow && (
                         <text
-                            x={m.points[0].x}
-                            y={m.points[0].y - 8}
+                            x={m.points[0].x + (m.textOffset?.x || 0)}
+                            y={m.points[0].y - 8 + (m.textOffset?.y || 0)}
                             fill="#9b59b6"
                             fontSize={14}
+                            pointerEvents="all"
+                            style={{ cursor: "move" }}
                         >
                             {toUnits(len).toFixed(2)} {unit}
                         </text>
@@ -2538,13 +2562,13 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                             if (selectedIds.includes(m.id)) {
                                 const dx = dragDelta.x, dy = dragDelta.y;
 
-                                // IMPORTANT: when dragging callout, only box moves
-                                // User request update: "leader should also be able to attach..." & "moving the textbox should only move the textbox"
-                                // BUT if we have a manual knee, that knee is usually relative to the box-tip relationship.
-                                // If we just move the box and keep the knee absolute, the leader shape distorts awkwardly.
-                                // Usually if I drag the box, I want the whole "assembly" (stub) to move with it?
-                                // Let's move the knee by delta too if it exists.
-                                if (m.type === "callout") {
+                                if (isDraggingTextRef.current && ['length', 'angle', 'area', 'perimeter'].includes(m.type)) {
+                                    const currentOffset = m.textOffset || { x: 0, y: 0 };
+                                    measToRender = {
+                                        ...m,
+                                        textOffset: { x: currentOffset.x + dx, y: currentOffset.y + dy }
+                                    };
+                                } else if (m.type === "callout") {
                                     const newBox = { ...m.box, x: m.box.x + dx, y: m.box.y + dy };
                                     const changes = { box: newBox };
 
@@ -2831,7 +2855,13 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                         let measToRender = m;
                         if (dragDelta.x !== 0 || dragDelta.y !== 0) {
                             const dx = dragDelta.x, dy = dragDelta.y;
-                            if (m.type === "callout") {
+                            if (isDraggingTextRef.current && ['length', 'angle', 'area', 'perimeter'].includes(m.type)) {
+                                const currentOffset = m.textOffset || { x: 0, y: 0 };
+                                measToRender = {
+                                    ...m,
+                                    textOffset: { x: currentOffset.x + dx, y: currentOffset.y + dy }
+                                };
+                            } else if (m.type === "callout") {
                                 const newBox = { ...m.box, x: m.box.x + dx, y: m.box.y + dy };
                                 const changes = { box: newBox };
                                 const currentKnee = m.knee || getCalloutKnee(m.box, m.tip, null);

@@ -180,14 +180,19 @@ const useAppStore = create((set, get) => ({
     setJumpToPage: (page) => set({ jumpToPage: page }),
 
     // --- History (NOTE: snapshots must be copies, not references) ---
-    history: [{ shapes: [], measurements: [] }], // Start with empty state
+    history: [{ sheets: [], shapes: [], measurements: [], calibrationScales: {}, pageUnits: {}, pageRotations: {}, calibrationDetails: {} }], // Start with empty state
     historyIndex: 0,
 
     pushHistory: () =>
         set((state) => {
             const snapshot = {
+                sheets: state.sheets.map((s) => ({ ...s })),
                 shapes: state.shapes.map((s) => ({ ...s })),
                 measurements: state.measurements.map((m) => ({ ...m })),
+                calibrationScales: { ...state.calibrationScales },
+                pageUnits: { ...state.pageUnits },
+                calibrationDetails: { ...state.calibrationDetails },
+                pageRotations: { ...state.pageRotations },
             };
             const history = state.history.slice(0, state.historyIndex + 1);
             history.push(snapshot);
@@ -200,8 +205,13 @@ const useAppStore = create((set, get) => ({
             const newIndex = state.historyIndex - 1;
             const snap = state.history[newIndex];
             return {
+                sheets: snap.sheets ? snap.sheets.map((s) => ({ ...s })) : state.sheets,
                 shapes: snap.shapes.map((s) => ({ ...s })),
                 measurements: snap.measurements.map((m) => ({ ...m })),
+                calibrationScales: snap.calibrationScales || state.calibrationScales,
+                pageUnits: snap.pageUnits || state.pageUnits,
+                calibrationDetails: snap.calibrationDetails || state.calibrationDetails,
+                pageRotations: snap.pageRotations || state.pageRotations,
                 historyIndex: newIndex,
             };
         }),
@@ -212,8 +222,13 @@ const useAppStore = create((set, get) => ({
             const newIndex = state.historyIndex + 1;
             const snap = state.history[newIndex];
             return {
+                sheets: snap.sheets ? snap.sheets.map((s) => ({ ...s })) : state.sheets,
                 shapes: snap.shapes.map((s) => ({ ...s })),
                 measurements: snap.measurements.map((m) => ({ ...m })),
+                calibrationScales: snap.calibrationScales || state.calibrationScales,
+                pageUnits: snap.pageUnits || state.pageUnits,
+                calibrationDetails: snap.calibrationDetails || state.calibrationDetails,
+                pageRotations: snap.pageRotations || state.pageRotations,
                 historyIndex: newIndex,
             };
         }),
@@ -231,16 +246,31 @@ const useAppStore = create((set, get) => ({
     setPremiumStatus: (status) => set({ isPremium: status }),
 
     setProjectData: (data) =>
-        set({
-            measurements: data.measurements || [],
-            shapes: data.shapes || [], // Also restore shapes
-            calibrationScales: data.calibrationScales || {},
-            pageUnits: data.pageUnits || {},
-            pageRotations: data.pageRotations || {}, // Restore rotations
-            // We might want to restore viewport too, but maybe better to reset it? 
-            // Let's reset viewport for now to avoid being lost
-            viewport: initialViewport,
-            zoom: 1,
+        set((state) => {
+            let sheets = data.sheets || [];
+            if (sheets.length === 0 && state.pdfDocument) {
+                const n = state.pdfDocument.numPages || 0;
+                for (let i = 1; i <= n; i++) {
+                    sheets.push({
+                        id: (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `sheet-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+                        type: 'pdf',
+                        pdfPageNumber: i,
+                        width: 800,
+                        height: 1100,
+                    });
+                }
+            }
+            return {
+                measurements: data.measurements || [],
+                shapes: data.shapes || [], // Also restore shapes
+                calibrationScales: data.calibrationScales || {},
+                pageUnits: data.pageUnits || {},
+                pageRotations: data.pageRotations || {}, // Restore rotations
+                sheets,
+                numPages: sheets.length || state.numPages,
+                viewport: initialViewport,
+                zoom: 1,
+            };
         }),
 
     // Helper to get project data for saving (not a state setter, so just a getter is fine, 
@@ -465,6 +495,19 @@ const useAppStore = create((set, get) => ({
             );
         }
 
+        const sheets = [];
+        if (pdfDoc) {
+            for (let i = 1; i <= pdfDoc.numPages; i++) {
+                sheets.push({
+                    id: (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `sheet-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+                    type: 'pdf',
+                    pdfPageNumber: i,
+                    width: 800,
+                    height: 1100,
+                });
+            }
+        }
+
         // Create new tab entry
         const newTab = {
             id: newTabId,
@@ -472,6 +515,7 @@ const useAppStore = create((set, get) => ({
             pdfDocument: pdfDoc,
             state: {
                 ...initialStateSnapshot,
+                sheets,
                 fileName: fileName || "Untitled.pdf",
                 fileSize: fileSize || 0,
             }
@@ -483,9 +527,11 @@ const useAppStore = create((set, get) => ({
             pdfDocument: pdfDoc,
             // Reset workspace to clean state
             ...initialStateSnapshot,
+            sheets,
+            numPages: sheets.length,
             fileName: fileName || "Untitled.pdf",
             fileSize: fileSize || 0,
-            history: [{ shapes: [], measurements: [] }], // Explicitly reset history structure
+            history: [{ sheets: sheets.map(s => ({ ...s })), shapes: [], measurements: [], calibrationScales: {}, pageUnits: {}, pageRotations: {}, calibrationDetails: {} }], // Explicitly reset history structure
             historyIndex: 0
         };
     }),
@@ -552,10 +598,182 @@ const useAppStore = create((set, get) => ({
         return { tabs: newTabs };
     }),
 
-    updateTabTitle: (tabId, newTitle) => set((state) => ({
-        tabs: state.tabs.map(t => t.id === tabId ? { ...t, title: newTitle } : t)
-    })),
+    // --- Sheets state ---
+    sheets: [],
+    addSheet: (insertAtIndex, width = 800, height = 1100) =>
+        set((state) => {
+            const newSheet = {
+                id: (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `sheet-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+                type: 'blank',
+                width,
+                height,
+            };
+            const newSheets = [...state.sheets];
+            const index = insertAtIndex === undefined ? newSheets.length : insertAtIndex;
+            newSheets.splice(index, 0, newSheet);
 
+            const targetPageIndex = index + 1; // 1-based index where sheet is inserted
+            const newMeasurements = state.measurements.map(m => {
+                if (m.pageIndex >= targetPageIndex) {
+                    return { ...m, pageIndex: m.pageIndex + 1 };
+                }
+                return m;
+            });
+            const newShapes = state.shapes.map(s => {
+                if (s.pageIndex >= targetPageIndex) {
+                    return { ...s, pageIndex: s.pageIndex + 1 };
+                }
+                return s;
+            });
+
+            // Shift calibration properties: calibrationScales, pageUnits, calibrationDetails, pageRotations
+            const shiftKeys = (obj) => {
+                const newObj = {};
+                Object.keys(obj).forEach(key => {
+                    const k = parseInt(key);
+                    if (k >= index) {
+                        newObj[k + 1] = obj[key];
+                    } else {
+                        newObj[k] = obj[key];
+                    }
+                });
+                return newObj;
+            };
+
+            return {
+                sheets: newSheets,
+                numPages: newSheets.length,
+                measurements: newMeasurements,
+                shapes: newShapes,
+                calibrationScales: shiftKeys(state.calibrationScales),
+                pageUnits: shiftKeys(state.pageUnits),
+                calibrationDetails: shiftKeys(state.calibrationDetails),
+                pageRotations: shiftKeys(state.pageRotations),
+                currentPage: targetPageIndex,
+                jumpToPage: targetPageIndex
+            };
+        }),
+
+    deleteSheet: (index) =>
+        set((state) => {
+            if (state.sheets.length <= 1) {
+                return {};
+            }
+            const newSheets = state.sheets.filter((_, idx) => idx !== index);
+            const targetPageIndex = index + 1;
+
+            const newMeasurements = state.measurements
+                .filter(m => m.pageIndex !== targetPageIndex)
+                .map(m => {
+                    if (m.pageIndex > targetPageIndex) {
+                        return { ...m, pageIndex: m.pageIndex - 1 };
+                    }
+                    return m;
+                });
+            const newShapes = state.shapes
+                .filter(s => s.pageIndex !== targetPageIndex)
+                .map(s => {
+                    if (s.pageIndex > targetPageIndex) {
+                        return { ...s, pageIndex: s.pageIndex - 1 };
+                    }
+                    return s;
+                });
+
+            // Shift calibration down
+            const shiftKeysDown = (obj) => {
+                const newObj = {};
+                Object.keys(obj).forEach(key => {
+                    const k = parseInt(key);
+                    if (k > index) {
+                        newObj[k - 1] = obj[key];
+                    } else if (k < index) {
+                        newObj[k] = obj[key];
+                    }
+                });
+                return newObj;
+            };
+
+            let newCurrentPage = state.currentPage;
+            if (state.currentPage === targetPageIndex) {
+                newCurrentPage = Math.max(1, targetPageIndex - 1);
+            } else if (state.currentPage > targetPageIndex) {
+                newCurrentPage = state.currentPage - 1;
+            }
+
+            return {
+                sheets: newSheets,
+                numPages: newSheets.length,
+                measurements: newMeasurements,
+                shapes: newShapes,
+                calibrationScales: shiftKeysDown(state.calibrationScales),
+                pageUnits: shiftKeysDown(state.pageUnits),
+                calibrationDetails: shiftKeysDown(state.calibrationDetails),
+                pageRotations: shiftKeysDown(state.pageRotations),
+                currentPage: newCurrentPage,
+                jumpToPage: newCurrentPage
+            };
+        }),
+
+    moveSheet: (fromIndex, toIndex) =>
+        set((state) => {
+            if (fromIndex === toIndex || fromIndex < 0 || toIndex < 0 || fromIndex >= state.sheets.length || toIndex >= state.sheets.length) return {};
+            const newSheets = [...state.sheets];
+            const [movedSheet] = newSheets.splice(fromIndex, 1);
+            newSheets.splice(toIndex, 0, movedSheet);
+
+            const fromPageIndex = fromIndex + 1;
+            const toPageIndex = toIndex + 1;
+
+            const getNewPageIndex = (oldIndex) => {
+                if (oldIndex === fromPageIndex) return toPageIndex;
+                if (fromIndex < toIndex) {
+                    if (oldIndex > fromPageIndex && oldIndex <= toPageIndex) {
+                        return oldIndex - 1;
+                    }
+                } else {
+                    if (oldIndex >= toPageIndex && oldIndex < fromPageIndex) {
+                        return oldIndex + 1;
+                    }
+                }
+                return oldIndex;
+            };
+
+            const newMeasurements = state.measurements.map(m => ({
+                ...m,
+                pageIndex: getNewPageIndex(m.pageIndex)
+            }));
+
+            const newShapes = state.shapes.map(s => ({
+                ...s,
+                pageIndex: getNewPageIndex(s.pageIndex)
+            }));
+
+            const moveKeys = (obj) => {
+                const newObj = {};
+                Object.keys(obj).forEach(key => {
+                    const k = parseInt(key);
+                    const oldPageIndex = k + 1;
+                    const newPageIndex = getNewPageIndex(oldPageIndex);
+                    newObj[newPageIndex - 1] = obj[key];
+                });
+                return newObj;
+            };
+
+            const oldCurrentPage = state.currentPage;
+            const newCurrentPage = getNewPageIndex(oldCurrentPage);
+
+            return {
+                sheets: newSheets,
+                measurements: newMeasurements,
+                shapes: newShapes,
+                calibrationScales: moveKeys(state.calibrationScales),
+                pageUnits: moveKeys(state.pageUnits),
+                calibrationDetails: moveKeys(state.calibrationDetails),
+                pageRotations: moveKeys(state.pageRotations),
+                currentPage: newCurrentPage,
+                jumpToPage: newCurrentPage
+            };
+        }),
 }));
 
 // Helper to capture workspace state
@@ -575,6 +793,7 @@ const getSnapshot = (state) => ({
     fileName: state.fileName,
     fileSize: state.fileSize,
     pageRotations: state.pageRotations,
+    sheets: state.sheets.map(s => ({ ...s })),
 });
 
 const initialStateSnapshot = {
@@ -585,11 +804,12 @@ const initialStateSnapshot = {
     selectedIds: [],
     currentPage: 1,
     viewMode: 'continuous',
-    history: [{ shapes: [], measurements: [] }],
+    history: [{ sheets: [], shapes: [], measurements: [], calibrationScales: {}, pageUnits: {}, pageRotations: {}, calibrationDetails: {} }],
     historyIndex: 0,
     calibrationScales: {},
     pageUnits: {},
     pageRotations: {},
+    sheets: [],
 };
 
 export default useAppStore;

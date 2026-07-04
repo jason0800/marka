@@ -16,11 +16,12 @@ export const exportFlattenedPDF = async (
     measurements,
     calibrationScales,
     fileName,
-    onProgress
+    onProgress,
+    sheets = []
 ) => {
-    if (!pdfDocument) throw new Error("No PDF loaded");
+    if (!pdfDocument && sheets.length === 0) throw new Error("No document loaded");
 
-    const numPages = pdfDocument.numPages;
+    const numPages = sheets.length || (pdfDocument ? pdfDocument.numPages : 0);
     const pdf = new jsPDF({
         orientation: "p",
         unit: "px",
@@ -33,32 +34,47 @@ export const exportFlattenedPDF = async (
     for (let i = 1; i <= numPages; i++) {
         if (onProgress) onProgress(Math.round(((i - 1) / numPages) * 100));
 
-        const page = await pdfDocument.getPage(i);
-        const viewport = page.getViewport({ scale: 2.0 }); // Render at 2x for quality
-
-        // Create off-screen canvas
+        const sheet = sheets[i - 1];
+        let width = 800;
+        let height = 1100;
         const canvas = document.createElement("canvas");
-        canvas.width = viewport.width;
-        canvas.height = viewport.height;
+        const scale = 4.0; // Render at 4x for high-resolution vector sharpness
 
-        // Render PDF content
-        await renderPageToCanvas(page, canvas, 2.0);
+        if (sheet && sheet.type === 'blank') {
+            width = sheet.width;
+            height = sheet.height;
+            canvas.width = width * scale;
+            canvas.height = height * scale;
+            const ctx = canvas.getContext("2d");
+            ctx.fillStyle = "#ffffff";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+        } else if (pdfDocument) {
+            const pdfPageNum = sheet ? sheet.pdfPageNumber : i;
+            const page = await pdfDocument.getPage(pdfPageNum);
+            const viewport = page.getViewport({ scale });
+            canvas.width = viewport.width;
+            canvas.height = viewport.height;
+
+            // Render PDF content
+            await renderPageToCanvas(page, canvas, scale);
+            const originalVp = page.getViewport({ scale: 1.0 });
+            width = originalVp.width;
+            height = originalVp.height;
+            page.cleanup();
+        }
 
         const ctx = canvas.getContext("2d");
 
-        // Scale context to match the 2x render
+        // Scale context to match the 4x render
         ctx.save();
-        ctx.scale(2.0, 2.0);
+        ctx.scale(scale, scale);
 
         // Filter items for this page
-        // Note: shapes/measurements store 1-based pageIndex usually?
-        // Let's verify store usage. PDFViewer uses 1-based. Store uses 1-based (currentPage).
-        // Let's assume store items use 1-based 'pageIndex'.
         const pageShapes = shapes.filter((s) => s.pageIndex === i);
         const pageMeasurements = measurements.filter((m) => m.pageIndex === i);
 
         // Helpers for units
-        const calibrationScale = calibrationScales[i] || 1.0;
+        const calibrationScale = calibrationScales[i - 1] || 1.0; // 0-based indexing for scales mapping
         const toUnits = (pdfPoints) => pdfPoints / Math.max(1e-9, calibrationScale);
         const toUnits2 = (pdfPoints2) => pdfPoints2 / Math.max(1e-9, calibrationScale * calibrationScale);
         const unitLabel = "units";
@@ -71,22 +87,18 @@ export const exportFlattenedPDF = async (
 
         ctx.restore();
 
-        // Add to PDF
-        // jsPDF adds page with dimensions. 
-        // We want the PDF page size to match the original PDF page size (at scale 1).
-        const originalVp = page.getViewport({ scale: 1.0 });
+        // Add to PDF using original size
         pdf.addPage(
-            [originalVp.width, originalVp.height],
-            originalVp.width > originalVp.height ? "l" : "p"
+            [width, height],
+            width > height ? "l" : "p"
         );
 
-        const imgData = canvas.toDataURL("image/jpeg", 0.8); // JPEG is faster/smaller for photos/scans
-        pdf.addImage(imgData, "JPEG", 0, 0, originalVp.width, originalVp.height);
+        const imgData = canvas.toDataURL("image/jpeg", 0.95); // High quality 0.95 (sharp and compression artifact free)
+        pdf.addImage(imgData, "JPEG", 0, 0, width, height);
 
         // Cleanup to save memory
         canvas.width = 1;
         canvas.height = 1;
-        page.cleanup();
     }
 
     if (onProgress) onProgress(100);
@@ -303,7 +315,9 @@ const drawMeasurement = (ctx, m, toUnits, toUnits2, unitLabel) => {
         ctx.textBaseline = "bottom";
         const textOffset = 8;
         const label = m.text ? m.text : `${toUnits(dist).toFixed(2)} ${unitLabel}`;
-        ctx.fillText(label, midX, midY - textOffset);
+        const dx = m.textOffset ? m.textOffset.x : 0;
+        const dy = m.textOffset ? m.textOffset.y : 0;
+        ctx.fillText(label, midX + dx, midY - textOffset + dy);
 
     } else if (m.type === "area" && m.points?.length >= 3) {
         let area = 0;
@@ -332,7 +346,9 @@ const drawMeasurement = (ctx, m, toUnits, toUnits2, unitLabel) => {
         ctx.textBaseline = "bottom";
         const textOffset = 8;
         const label = m.text ? m.text : `${toUnits2(area).toFixed(2)} ${unitLabel}²`;
-        ctx.fillText(label, m.points[0].x, m.points[0].y - textOffset);
+        const dx = m.textOffset ? m.textOffset.x : 0;
+        const dy = m.textOffset ? m.textOffset.y : 0;
+        ctx.fillText(label, m.points[0].x + dx, m.points[0].y - textOffset + dy);
 
     } else if (m.type === "perimeter" && m.points?.length >= 2) {
         let len = 0;
@@ -351,7 +367,9 @@ const drawMeasurement = (ctx, m, toUnits, toUnits2, unitLabel) => {
         ctx.textBaseline = "bottom";
         const textOffset = 8;
         const label = m.text ? m.text : `${toUnits(len).toFixed(2)} ${unitLabel}`;
-        ctx.fillText(label, m.points[0].x, m.points[0].y - textOffset);
+        const dx = m.textOffset ? m.textOffset.x : 0;
+        const dy = m.textOffset ? m.textOffset.y : 0;
+        ctx.fillText(label, m.points[0].x + dx, m.points[0].y - textOffset + dy);
 
     } else if (m.type === "angle" && m.points?.length === 3) {
         const p0 = m.points[0];
@@ -393,7 +411,9 @@ const drawMeasurement = (ctx, m, toUnits, toUnits2, unitLabel) => {
         ctx.textAlign = "center";
         ctx.textBaseline = "bottom";
         const label = m.text ? m.text : `${angleDeg.toFixed(1)}°`;
-        ctx.fillText(label, p1.x, p1.y - 12);
+        const dx = m.textOffset ? m.textOffset.x : 0;
+        const dy = m.textOffset ? m.textOffset.y : 0;
+        ctx.fillText(label, p1.x + dx, p1.y - 12 + dy);
 
     } else if (m.type === "count" && m.point) {
         const r = 8;
