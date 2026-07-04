@@ -174,9 +174,9 @@ const NewPDFDialog = ({ onClose, onCreated }) => {
 
             const blob = doc.output('blob');
             const file = new File([blob], "New Document.pdf", { type: "application/pdf" });
-
+            const arrayBuffer = await blob.arrayBuffer();
             const pdfDoc = await loadPDF(file);
-            onCreated(pdfDoc, "New Document.pdf");
+            onCreated(pdfDoc, "New Document.pdf", arrayBuffer);
             onClose();
 
         } catch (e) {

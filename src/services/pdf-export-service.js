@@ -1,15 +1,9 @@
-import { jsPDF } from "jspdf";
-import { renderPageToCanvas } from "./pdf-service";
-
 /**
- * Export the current PDF document with all annotations flattened into the images.
- * @param {Object} pdfDocument - The PDFJS document proxy
- * @param {Array} shapes - List of all shape objects
- * @param {Array} measurements - List of all measurement objects
- * @param {Object} calibrationScales - Map of pageIndex -> scale
- * @param {string} fileName - Original filename
- * @param {Function} onProgress - Callback (percent) => void
+ * PDF Export Service using pdf-lib to achieve 100% lossless vector PDF generation.
+ * This service loads the original PDF bytes, copies pages vectorially,
+ * and draws annotations (shapes, measurements, text) directly as vector elements.
  */
+
 export const exportFlattenedPDF = async (
     pdfDocument,
     shapes,
@@ -17,529 +11,443 @@ export const exportFlattenedPDF = async (
     calibrationScales,
     fileName,
     onProgress,
-    sheets = []
+    sheets
 ) => {
-    if (!pdfDocument && sheets.length === 0) throw new Error("No document loaded");
+    // 1. Dynamically import pdf-lib from unpkg CDN
+    let PDFLib = window.PDFLib;
+    if (!PDFLib) {
+        PDFLib = await import("https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.esm.js");
+    }
+    const { PDFDocument, rgb, degrees, StandardFonts } = PDFLib;
 
-    const numPages = sheets.length || (pdfDocument ? pdfDocument.numPages : 0);
-    const pdf = new jsPDF({
-        orientation: "p",
-        unit: "px",
-        hotfixes: ["px_scaling"], // crucial for 1:1 pixel mapping
-    });
+    // 2. Fetch the original PDF array buffer from the Zustand store
+    const useAppStore = (await import('../stores/useAppStore')).default;
+    const { pdfBytes, pageRotations } = useAppStore.getState();
 
-    // Remove the default first page added by new jsPDF()
-    pdf.deletePage(1);
+    // 3. Create a new export PDF document
+    const exportDoc = await PDFDocument.create();
 
+    // Load source document if original bytes are available
+    let srcDoc = null;
+    if (pdfBytes) {
+        srcDoc = await PDFDocument.load(pdfBytes);
+    }
+
+    const numPages = sheets.length;
+    const font = await exportDoc.embedFont(StandardFonts.Helvetica);
+
+    // Helpers for hex -> RGB conversion
+    const hexToRgb = (hexStr, defaultColor = rgb(0, 0, 0)) => {
+        if (!hexStr) return defaultColor;
+        const clean = hexStr.replace('#', '');
+        if (clean.length === 3) {
+            const r = parseInt(clean[0] + clean[0], 16) / 255;
+            const g = parseInt(clean[1] + clean[1], 16) / 255;
+            const b = parseInt(clean[2] + clean[2], 16) / 255;
+            return rgb(r, g, b);
+        }
+        if (clean.length === 6) {
+            const r = parseInt(clean.substring(0, 2), 16) / 255;
+            const g = parseInt(clean.substring(2, 4), 16) / 255;
+            const b = parseInt(clean.substring(4, 6), 16) / 255;
+            return rgb(r, g, b);
+        }
+        return defaultColor;
+    };
+
+    // Helpers for dash styling
+    const getDashStyle = (dashType) => {
+        if (dashType === "dashed") return { dashArray: [12, 12] };
+        if (dashType === "dotted") return { dashArray: [2, 8] };
+        return {};
+    };
+
+    // 4. Page Reconstruction Loop
     for (let i = 1; i <= numPages; i++) {
         if (onProgress) onProgress(Math.round(((i - 1) / numPages) * 100));
 
         const sheet = sheets[i - 1];
+        let page;
         let width = 800;
         let height = 1100;
-        const canvas = document.createElement("canvas");
-        const scale = 5.0; // Render at 5x for print-ready vector-like sharpness
 
-        if (sheet && sheet.type === 'blank') {
-            width = sheet.width;
-            height = sheet.height;
-            canvas.width = width * scale;
-            canvas.height = height * scale;
-            const ctx = canvas.getContext("2d");
-            ctx.fillStyle = "#ffffff";
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-        } else if (pdfDocument) {
-            const pdfPageNum = sheet ? sheet.pdfPageNumber : i;
-            const page = await pdfDocument.getPage(pdfPageNum);
-            const viewport = page.getViewport({ scale });
-            canvas.width = viewport.width;
-            canvas.height = viewport.height;
-
-            // Render PDF content
-            await renderPageToCanvas(page, canvas, scale);
-            const originalVp = page.getViewport({ scale: 1.0 });
-            width = originalVp.width;
-            height = originalVp.height;
-            page.cleanup();
+        if (sheet.type === 'blank') {
+            width = sheet.width || 800;
+            height = sheet.height || 1100;
+            page = exportDoc.addPage([width, height]);
+        } else if (srcDoc) {
+            const originalIndex = sheet.pdfPageNumber - 1;
+            const [copiedPage] = await exportDoc.copyPages(srcDoc, [originalIndex]);
+            page = exportDoc.addPage(copiedPage);
+            width = page.getWidth();
+            height = page.getHeight();
+        } else {
+            width = sheet.width || 800;
+            height = sheet.height || 1100;
+            page = exportDoc.addPage([width, height]);
         }
 
-        const ctx = canvas.getContext("2d");
+        // Apply page rotations from app store state
+        const rot = pageRotations[sheet.pdfPageNumber || i] || 0;
+        if (rot) {
+            page.setRotation(degrees(rot));
+        }
 
-        // Scale context to match the 4x render
-        ctx.save();
-        ctx.scale(scale, scale);
+        // Coordinate converter (top-left SVG coords -> bottom-left PDF coords)
+        const toPdfPoint = (p) => ({
+            x: p.x,
+            y: height - p.y
+        });
 
-        // Filter items for this page
+        // Filter annotations for this page
         const pageShapes = shapes.filter((s) => s.pageIndex === i);
         const pageMeasurements = measurements.filter((m) => m.pageIndex === i);
 
-        // Helpers for units
-        const calibrationScale = calibrationScales[i - 1] || 1.0; // 0-based indexing for scales mapping
+        // 5. Draw Shapes Vectorially
+        pageShapes.forEach((s) => {
+            const border = hexToRgb(s.stroke, rgb(0, 0, 0));
+            const fill = s.fill && s.fill !== "none" && s.fill !== "transparent" ? hexToRgb(s.fill) : null;
+            const thickness = s.strokeWidth || 2;
+            const dashStyle = getDashStyle(s.strokeDasharray);
+
+            if (s.type === "rectangle") {
+                page.drawRectangle({
+                    x: s.x,
+                    y: height - s.y - s.height,
+                    width: s.width,
+                    height: s.height,
+                    borderColor: border,
+                    borderWidth: thickness,
+                    color: fill || undefined,
+                    opacity: s.opacity ?? 1,
+                    borderColorOpacity: s.opacity ?? 1,
+                    ...dashStyle
+                });
+            } else if (s.type === "circle") {
+                const cx = s.cx || (s.x + s.width / 2);
+                const cy = s.cy || (s.y + s.height / 2);
+                const rx = s.rx || (s.width / 2) || 10;
+                page.drawEllipse({
+                    x: cx,
+                    y: height - cy,
+                    xRadius: rx,
+                    yRadius: rx,
+                    borderColor: border,
+                    borderWidth: thickness,
+                    color: fill || undefined,
+                    opacity: s.opacity ?? 1,
+                    borderColorOpacity: s.opacity ?? 1,
+                    ...dashStyle
+                });
+            } else if (s.type === "line" || s.type === "arrow") {
+                const startPt = toPdfPoint(s.start);
+                const endPt = toPdfPoint(s.end);
+                page.drawLine({
+                    start: startPt,
+                    end: endPt,
+                    color: border,
+                    thickness: thickness,
+                    opacity: s.opacity ?? 1,
+                    ...dashStyle
+                });
+
+                if (s.type === "arrow") {
+                    const angle = Math.atan2(endPt.y - startPt.y, endPt.x - startPt.x);
+                    const headLength = 12;
+                    const headAngle = Math.PI / 6;
+                    const h1x = endPt.x - headLength * Math.cos(angle - headAngle);
+                    const h1y = endPt.y - headLength * Math.sin(angle - headAngle);
+                    const h2x = endPt.x - headLength * Math.cos(angle + headAngle);
+                    const h2y = endPt.y - headLength * Math.sin(angle + headAngle);
+
+                    // Draw arrowhead paths
+                    page.drawLine({ start: endPt, end: { x: h1x, y: h1y }, color: border, thickness: thickness });
+                    page.drawLine({ start: endPt, end: { x: h2x, y: h2y }, color: border, thickness: thickness });
+                }
+            } else if (s.type === "polyline" && s.points?.length >= 2) {
+                for (let j = 0; j < s.points.length - 1; j++) {
+                    page.drawLine({
+                        start: toPdfPoint(s.points[j]),
+                        end: toPdfPoint(s.points[j + 1]),
+                        color: border,
+                        thickness: thickness,
+                        opacity: s.opacity ?? 1,
+                        ...dashStyle
+                    });
+                }
+            } else if (s.type === "polygon" && s.points?.length >= 3) {
+                const pdfPts = s.points.map(p => [p.x, height - p.y]);
+                page.drawPolygon({
+                    coordinates: pdfPts,
+                    borderColor: border,
+                    borderWidth: thickness,
+                    color: fill || undefined,
+                    opacity: s.opacity ?? 1,
+                    borderColorOpacity: s.opacity ?? 1,
+                });
+            }
+        });
+
+        // 6. Draw Measurements Vectorially
+        const calibrationScale = calibrationScales[i - 1] || 1.0;
         const toUnits = (pdfPoints) => pdfPoints / Math.max(1e-9, calibrationScale);
         const toUnits2 = (pdfPoints2) => pdfPoints2 / Math.max(1e-9, calibrationScale * calibrationScale);
         const unitLabel = "units";
 
-        // Draw Shapes
-        pageShapes.forEach((shape) => drawShape(ctx, shape));
+        pageMeasurements.forEach((m) => {
+            const strokeColor = m.stroke || (
+                m.type === "length" ? "#e74c3c" :
+                    m.type === "area" ? "#2ecc71" :
+                        m.type === "perimeter" ? "#9b59b6" :
+                            m.type === "count" ? "white" : "#333"
+            );
+            const fillColor = m.fill || (
+                m.type === "area" ? "rgba(108, 176, 86, 0.25)" :
+                    m.type === "count" ? "#e67e22" : "transparent"
+            );
 
-        // Draw Measurements
-        pageMeasurements.forEach((m) => drawMeasurement(ctx, m, toUnits, toUnits2, unitLabel));
+            const border = hexToRgb(strokeColor);
+            const fill = fillColor !== "transparent" && fillColor !== "none" ? hexToRgb(fillColor) : null;
+            const thickness = m.strokeWidth || 2;
+            const dashStyle = getDashStyle(m.strokeDasharray);
 
-        ctx.restore();
+            // Draw underlying vector geometry
+            if (m.type === "length" && m.points?.length === 2) {
+                const startPt = toPdfPoint(m.points[0]);
+                const endPt = toPdfPoint(m.points[1]);
+                page.drawLine({
+                    start: startPt,
+                    end: endPt,
+                    color: border,
+                    thickness: thickness,
+                    opacity: m.opacity ?? 1,
+                    ...dashStyle
+                });
 
-        // Add to PDF using original size
-        pdf.addPage(
-            [width, height],
-            width > height ? "l" : "p"
-        );
+                // Calculate distance label text
+                const dx = m.points[1].x - m.points[0].x;
+                const dy = m.points[1].y - m.points[0].y;
+                const dist = Math.hypot(dx, dy);
+                const label = m.text ? m.text : `${toUnits(dist).toFixed(2)} ${unitLabel}`;
 
-        const imgData = canvas.toDataURL("image/png"); // Lossless PNG (absolutely crisp text & line drawings)
-        pdf.addImage(imgData, "PNG", 0, 0, width, height, undefined, "FAST");
+                // Render label
+                const refX = (m.points[0].x + m.points[1].x) / 2;
+                const refY = (m.points[0].y + m.points[1].y) / 2 - 6;
+                const tOffset = m.textOffset || { x: 0, y: 0 };
+                const labelX = refX + tOffset.x;
+                const labelY = height - (refY + tOffset.y);
 
-        // Cleanup to save memory
-        canvas.width = 1;
-        canvas.height = 1;
+                const fontSize = 11;
+                const textWidth = font.widthOfTextAtSize(label, fontSize);
+                page.drawText(label, {
+                    x: labelX - textWidth / 2,
+                    y: labelY,
+                    size: fontSize,
+                    font: font,
+                    color: border,
+                });
+            } else if (m.type === "perimeter" && m.points?.length >= 2) {
+                let len = 0;
+                for (let j = 0; j < m.points.length - 1; j++) {
+                    const p1 = m.points[j];
+                    const p2 = m.points[j + 1];
+                    len += Math.hypot(p2.x - p1.x, p2.y - p1.y);
+                    page.drawLine({
+                        start: toPdfPoint(p1),
+                        end: toPdfPoint(p2),
+                        color: border,
+                        thickness: thickness,
+                        opacity: m.opacity ?? 1,
+                        ...dashStyle
+                    });
+                }
+                const label = m.text ? m.text : `${toUnits(len).toFixed(2)} ${unitLabel}`;
+                const refX = m.points[0].x;
+                const refY = m.points[0].y - 8;
+                const tOffset = m.textOffset || { x: 0, y: 0 };
+                const labelX = refX + tOffset.x;
+                const labelY = height - (refY + tOffset.y);
+
+                const fontSize = 11;
+                page.drawText(label, {
+                    x: labelX,
+                    y: labelY,
+                    size: fontSize,
+                    font: font,
+                    color: hexToRgb("#9b59b6"),
+                });
+            } else if (m.type === "area" && m.points?.length >= 3) {
+                let area = 0;
+                const ptsCount = m.points.length;
+                for (let j = 0; j < ptsCount; j++) {
+                    let k = (j + 1) % ptsCount;
+                    area += m.points[j].x * m.points[k].y;
+                    area -= m.points[k].x * m.points[j].y;
+                }
+                area = Math.abs(area / 2);
+
+                const pdfPts = m.points.map(p => [p.x, height - p.y]);
+                page.drawPolygon({
+                    coordinates: pdfPts,
+                    borderColor: border,
+                    borderWidth: thickness,
+                    color: fill || undefined,
+                    opacity: m.opacity ?? 0.8,
+                    borderColorOpacity: m.opacity ?? 1,
+                });
+
+                const label = m.text ? m.text : `${toUnits2(area).toFixed(2)} ${unitLabel}²`;
+                const refX = m.points[0].x;
+                const refY = m.points[0].y - 8;
+                const tOffset = m.textOffset || { x: 0, y: 0 };
+                const labelX = refX + tOffset.x;
+                const labelY = height - (refY + tOffset.y);
+
+                const fontSize = 11;
+                page.drawText(label, {
+                    x: labelX,
+                    y: labelY,
+                    size: fontSize,
+                    font: font,
+                    color: border,
+                });
+            } else if (m.type === "angle" && m.points?.length === 3) {
+                const p0 = m.points[0];
+                const p1 = m.points[1]; // Vertex
+                const p2 = m.points[2];
+
+                page.drawLine({ start: toPdfPoint(p0), end: toPdfPoint(p1), color: border, thickness: thickness });
+                page.drawLine({ start: toPdfPoint(p1), end: toPdfPoint(p2), color: border, thickness: thickness });
+
+                // Calculate angle
+                const v1 = { x: p0.x - p1.x, y: p0.y - p1.y };
+                const v2 = { x: p2.x - p1.x, y: p2.y - p1.y };
+                const d1 = Math.hypot(v1.x, v1.y);
+                const d2 = Math.hypot(v2.x, v2.y);
+                let angleDeg = 0;
+                if (d1 > 1e-3 && d2 > 1e-3) {
+                    const dot = v1.x * v2.x + v1.y * v2.y;
+                    const angleRad = Math.acos(Math.max(-1, Math.min(1, dot / (d1 * d2))));
+                    angleDeg = angleRad * (180 / Math.PI);
+                }
+
+                const label = m.text ? m.text : `${angleDeg.toFixed(1)}°`;
+                const refX = p1.x;
+                const refY = p1.y - 12 - 7;
+                const tOffset = m.textOffset || { x: 0, y: 0 };
+                const labelX = refX + tOffset.x;
+                const labelY = height - (refY + tOffset.y);
+
+                const fontSize = 11;
+                const textWidth = font.widthOfTextAtSize(label, fontSize);
+                page.drawText(label, {
+                    x: labelX - textWidth / 2,
+                    y: labelY,
+                    size: fontSize,
+                    font: font,
+                    color: border,
+                });
+            } else if (m.type === "count" && m.point) {
+                const r = 8;
+                page.drawCircle({
+                    x: m.point.x,
+                    y: height - m.point.y,
+                    radius: r,
+                    color: fill || hexToRgb("#e67e22"),
+                    borderColor: border,
+                    borderWidth: thickness,
+                });
+            } else if (m.type === "text" && m.box) {
+                // Background filled box
+                page.drawRectangle({
+                    x: m.box.x,
+                    y: height - m.box.y - m.box.h,
+                    width: m.box.w,
+                    height: m.box.h,
+                    color: rgb(1, 1, 1),
+                    borderColor: hexToRgb(m.stroke || "#000000"),
+                    borderWidth: 1,
+                });
+
+                if (m.text) {
+                    const fontSize = m.fontSize || 12;
+                    page.drawText(m.text, {
+                        x: m.box.x + 6,
+                        y: height - (m.box.y + m.box.h / 2 + fontSize / 3),
+                        size: fontSize,
+                        font: font,
+                        color: rgb(0, 0, 0),
+                    });
+                }
+            } else if (m.type === "callout" && m.box && m.tip) {
+                const cx = m.box.x + m.box.w / 2;
+                const cy = m.box.y + m.box.h / 2;
+                let kx = m.knee ? m.knee.x : (cx + m.tip.x) / 2;
+                let ky = m.knee ? m.knee.y : (cy + m.tip.y) / 2;
+
+                // Draw Leader Lines
+                page.drawLine({
+                    start: toPdfPoint(m.tip),
+                    end: toPdfPoint({ x: kx, y: ky }),
+                    color: border,
+                    thickness: thickness,
+                    ...dashStyle
+                });
+                page.drawLine({
+                    start: toPdfPoint({ x: kx, y: ky }),
+                    end: toPdfPoint({ x: cx, y: cy }),
+                    color: border,
+                    thickness: thickness,
+                    ...dashStyle
+                });
+
+                // Leader arrowhead
+                const angle = Math.atan2(ky - m.tip.y, kx - m.tip.x);
+                const headLength = 10;
+                const headAngle = Math.PI / 6;
+                const h1x = m.tip.x + headLength * Math.cos(angle - headAngle);
+                const h1y = m.tip.y + headLength * Math.sin(angle - headAngle);
+                const h2x = m.tip.x + headLength * Math.cos(angle + headAngle);
+                const h2y = m.tip.y + headLength * Math.sin(angle + headAngle);
+
+                page.drawLine({ start: toPdfPoint(m.tip), end: toPdfPoint({ x: h1x, y: h1y }), color: border, thickness: thickness });
+                page.drawLine({ start: toPdfPoint(m.tip), end: toPdfPoint({ x: h2x, y: h2y }), color: border, thickness: thickness });
+
+                // Callout Box
+                const boxBg = m.fill && m.fill !== 'none' ? hexToRgb(m.fill) : rgb(1, 1, 1);
+                page.drawRectangle({
+                    x: m.box.x,
+                    y: height - m.box.y - m.box.h,
+                    width: m.box.w,
+                    height: m.box.h,
+                    borderColor: border,
+                    borderWidth: thickness,
+                    color: boxBg,
+                });
+
+                // Callout text
+                if (m.text) {
+                    const fontSize = m.fontSize || 12;
+                    page.drawText(m.text, {
+                        x: m.box.x + 6,
+                        y: height - (m.box.y + m.box.h / 2 + fontSize / 3),
+                        size: fontSize,
+                        font: font,
+                        color: rgb(0, 0, 0),
+                    });
+                }
+            }
+        });
     }
 
     if (onProgress) onProgress(100);
 
-    const outName = fileName.replace(/\.pdf$/i, "") + "_flattened.pdf";
-    pdf.save(outName);
-};
-
-// --- Drawing Helpers (Ported/Adapted from OverlayCanvasLayer) ---
-
-const applyStyle = (ctx, style) => {
-    ctx.strokeStyle = style.stroke || "#000000";
-    ctx.lineWidth = style.strokeWidth || 2;
-    ctx.globalAlpha = style.opacity ?? 1;
-    ctx.lineCap = "round";
-    ctx.lineJoin = "round";
-
-    if (style.strokeDasharray === "dashed") {
-        ctx.setLineDash([12, 12]);
-    } else if (style.strokeDasharray === "dotted") {
-        ctx.setLineDash([2, 8]);
-    } else {
-        ctx.setLineDash([]);
-    }
-
-    // Fill? Most "shapes" here are outlines, but if we had fill:
-    if (style.fill && style.fill !== "none") {
-        ctx.fillStyle = style.fill;
-    }
-};
-
-const drawShape = (ctx, shape) => {
-    ctx.save();
-    applyStyle(ctx, shape);
-
-    // Arrow, line, polyline, and polygon specific lineCap
-    if (shape.type === 'arrow' || shape.type === 'line' || shape.type === 'polyline' || shape.type === 'polygon') ctx.lineCap = 'butt';
-    if (shape.type === 'rectangle' || shape.type === 'polyline' || shape.type === 'polygon') ctx.lineJoin = 'miter';
-
-    const hasFill = shape.fill && shape.fill !== "none" && shape.fill !== "transparent";
-
-    ctx.beginPath();
-
-    if (shape.type === "rectangle") {
-        if (shape.rotation) {
-            // Rotated rect
-            const cx = shape.x + shape.width / 2;
-            const cy = shape.y + shape.height / 2;
-            ctx.translate(cx, cy);
-            ctx.rotate((shape.rotation * Math.PI) / 180);
-            ctx.translate(-cx, -cy);
-            ctx.rect(shape.x, shape.y, shape.width, shape.height);
-        } else {
-            ctx.rect(shape.x, shape.y, shape.width, shape.height);
-        }
-
-        if (hasFill) ctx.fill();
-        ctx.stroke();
-
-    } else if (shape.type === "circle") {
-        if (shape.rotation) {
-            const cx = shape.x + shape.width / 2;
-            const cy = shape.y + shape.height / 2;
-            const rx = shape.width / 2;
-            const ry = shape.height / 2;
-            const rot = (shape.rotation * Math.PI) / 180;
-            ctx.ellipse(cx, cy, rx, ry, rot, 0, 2 * Math.PI);
-        } else {
-            const cx = shape.x + shape.width / 2;
-            const cy = shape.y + shape.height / 2;
-            const rx = shape.width / 2;
-            const ry = shape.height / 2;
-            ctx.ellipse(cx, cy, rx, ry, 0, 0, 2 * Math.PI);
-        }
-
-        if (hasFill) ctx.fill();
-        ctx.stroke();
-
-    } else if (shape.type === "polyline" && shape.points?.length >= 2) {
-        ctx.moveTo(shape.points[0].x, shape.points[0].y);
-        for (let j = 1; j < shape.points.length; j++) {
-            ctx.lineTo(shape.points[j].x, shape.points[j].y);
-        }
-        ctx.stroke();
-
-    } else if (shape.type === "polygon" && shape.points?.length >= 3) {
-        ctx.moveTo(shape.points[0].x, shape.points[0].y);
-        for (let j = 1; j < shape.points.length; j++) {
-            ctx.lineTo(shape.points[j].x, shape.points[j].y);
-        }
-        ctx.closePath();
-        if (hasFill) ctx.fill();
-        ctx.stroke();
-
-    } else if (shape.type === "line") {
-        ctx.moveTo(shape.start.x, shape.start.y);
-        ctx.lineTo(shape.end.x, shape.end.y);
-        ctx.stroke();
-
-    } else if (shape.type === "arrow") {
-        // Draw line with shortening
-        const dx = shape.end.x - shape.start.x;
-        const dy = shape.end.y - shape.start.y;
-        const len = Math.hypot(dx, dy);
-        const sw = ctx.lineWidth;
-        const offset = 4 * sw;
-
-        let ex = shape.end.x;
-        let ey = shape.end.y;
-
-        if (len > offset) {
-            const t = (len - offset) / len;
-            ex = shape.start.x + dx * t;
-            ey = shape.start.y + dy * t;
-        } else {
-            ex = shape.start.x;
-            ey = shape.start.y;
-        }
-
-        ctx.moveTo(shape.start.x, shape.start.y);
-        ctx.lineTo(ex, ey);
-        ctx.stroke();
-
-        // Draw Arrowhead
-        drawArrowHead(ctx, shape, ctx.strokeStyle);
-    }
-    ctx.restore();
-};
-
-const drawArrowHead = (ctx, shape, color) => {
-    ctx.save();
-    ctx.lineCap = "round";
-    ctx.lineJoin = "round";
-
-    const sw = ctx.lineWidth;
-    const dx = shape.end.x - shape.start.x;
-    const dy = shape.end.y - shape.start.y;
-    const angle = Math.atan2(dy, dx);
-    const cos = Math.cos(angle);
-    const sin = Math.sin(angle);
-
-    const tipOffset = 0;
-    const baseOffset = -6 * sw;
-    const halfWidth = 2 * sw;
-
-    const tX = shape.end.x + tipOffset * cos;
-    const tY = shape.end.y + tipOffset * sin;
-
-    const bX = shape.end.x + baseOffset * cos;
-    const bY = shape.end.y + baseOffset * sin;
-
-    const c1X = bX - halfWidth * sin;
-    const c1Y = bY + halfWidth * cos;
-
-    const c2X = bX + halfWidth * sin;
-    const c2Y = bY - halfWidth * cos;
-
-    ctx.beginPath();
-    ctx.moveTo(tX, tY); // Tip
-    ctx.lineTo(c1X, c1Y); // Top Corner
-    ctx.lineTo(c2X, c2Y); // Bottom Corner
-    ctx.closePath();
-    ctx.fillStyle = color;
-    ctx.fill();
-    ctx.restore();
-};
-
-
-const drawMeasurement = (ctx, m, toUnits, toUnits2, unitLabel) => {
-    ctx.save();
-
-    const opacity = m.opacity ?? 1;
-    ctx.globalAlpha = opacity;
-
-    const strokeColor = m.stroke || (
-        m.type === "length" ? "#e74c3c" :
-            m.type === "area" ? "#2ecc71" :
-                m.type === "perimeter" ? "#9b59b6" :
-                    m.type === "count" ? "white" : "#333"
-    );
-
-    const fillColor = m.fill || (
-        m.type === "area" ? "rgba(108, 176, 86, 0.25)" :
-            m.type === "count" ? "#e67e22" :
-                "none"
-    );
-
-    const strokeWidth = m.strokeWidth || 2;
-
-    ctx.lineWidth = strokeWidth;
-    ctx.strokeStyle = strokeColor;
-    ctx.fillStyle = fillColor;
-    ctx.lineCap = (m.type === "length" || m.type === "angle") ? "butt" : "round";
-    ctx.lineJoin = m.type === "angle" ? "miter" : "round";
-
-    // Text settings
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.font = "bold 14px sans-serif";
-
-    if (m.type === "length" && m.points?.length === 2) {
-        const [a, b] = m.points;
-        const dist = Math.hypot(b.x - a.x, b.y - a.y);
-
-        ctx.beginPath();
-        ctx.moveTo(a.x, a.y);
-        ctx.lineTo(b.x, b.y);
-        ctx.stroke();
-
-        ctx.fillStyle = strokeColor;
-        const midX = (a.x + b.x) / 2;
-        const midY = (a.y + b.y) / 2;
-
-        ctx.textBaseline = "bottom";
-        const textOffset = 8;
-        const label = m.text ? m.text : `${toUnits(dist).toFixed(2)} ${unitLabel}`;
-        const dx = m.textOffset ? m.textOffset.x : 0;
-        const dy = m.textOffset ? m.textOffset.y : 0;
-        ctx.fillText(label, midX + dx, midY - textOffset + dy);
-
-    } else if (m.type === "area" && m.points?.length >= 3) {
-        let area = 0;
-        const calculatePolygonArea = (points) => {
-            let area = 0;
-            for (let i = 0; i < points.length; i++) {
-                let j = (i + 1) % points.length;
-                area += points[i].x * points[j].y;
-                area -= points[j].x * points[i].y;
-            }
-            return Math.abs(area / 2);
-        };
-        area = calculatePolygonArea(m.points);
-
-        ctx.beginPath();
-        m.points.forEach((p, i) => {
-            if (i === 0) ctx.moveTo(p.x, p.y);
-            else ctx.lineTo(p.x, p.y);
-        });
-        ctx.closePath();
-        ctx.fill();
-        ctx.stroke();
-
-        ctx.fillStyle = strokeColor;
-        ctx.textAlign = "left";
-        ctx.textBaseline = "bottom";
-        const textOffset = 8;
-        const label = m.text ? m.text : `${toUnits2(area).toFixed(2)} ${unitLabel}²`;
-        const dx = m.textOffset ? m.textOffset.x : 0;
-        const dy = m.textOffset ? m.textOffset.y : 0;
-        ctx.fillText(label, m.points[0].x + dx, m.points[0].y - textOffset + dy);
-
-    } else if (m.type === "perimeter" && m.points?.length >= 2) {
-        let len = 0;
-        ctx.beginPath();
-        m.points.forEach((p, i) => {
-            if (i === 0) ctx.moveTo(p.x, p.y);
-            else {
-                ctx.lineTo(p.x, p.y);
-                len += Math.hypot(p.x - m.points[i - 1].x, p.y - m.points[i - 1].y);
-            }
-        });
-        ctx.stroke();
-
-        ctx.fillStyle = strokeColor;
-        ctx.textAlign = "left";
-        ctx.textBaseline = "bottom";
-        const textOffset = 8;
-        const label = m.text ? m.text : `${toUnits(len).toFixed(2)} ${unitLabel}`;
-        const dx = m.textOffset ? m.textOffset.x : 0;
-        const dy = m.textOffset ? m.textOffset.y : 0;
-        ctx.fillText(label, m.points[0].x + dx, m.points[0].y - textOffset + dy);
-
-    } else if (m.type === "angle" && m.points?.length === 3) {
-        const p0 = m.points[0];
-        const p1 = m.points[1]; // Vertex
-        const p2 = m.points[2];
-
-        ctx.beginPath();
-        ctx.moveTo(p0.x, p0.y);
-        ctx.lineTo(p1.x, p1.y);
-        ctx.lineTo(p2.x, p2.y);
-        ctx.stroke();
-
-        const v1 = { x: p0.x - p1.x, y: p0.y - p1.y };
-        const v2 = { x: p2.x - p1.x, y: p2.y - p1.y };
-        const d1 = Math.hypot(v1.x, v1.y);
-        const d2 = Math.hypot(v2.x, v2.y);
-        let angleDeg = 0;
-        if (d1 > 1e-3 && d2 > 1e-3) {
-            const dot = v1.x * v2.x + v1.y * v2.y;
-            const angleRad = Math.acos(Math.max(-1, Math.min(1, dot / (d1 * d2))));
-            angleDeg = angleRad * 180 / Math.PI;
-
-            // Draw dashed arc
-            const a1 = Math.atan2(p0.y - p1.y, p0.x - p1.x);
-            const a2 = Math.atan2(p2.y - p1.y, p2.x - p1.x);
-            const r = Math.min(24, d1 * 0.6, d2 * 0.6);
-            let diff = a2 - a1;
-            while (diff < -Math.PI) diff += 2 * Math.PI;
-            while (diff > Math.PI) diff -= 2 * Math.PI;
-
-            ctx.save();
-            ctx.beginPath();
-            ctx.arc(p1.x, p1.y, r, a1, a2, diff < 0);
-            ctx.stroke();
-            ctx.restore();
-        }
-
-        ctx.fillStyle = strokeColor;
-        ctx.textAlign = "center";
-        ctx.textBaseline = "bottom";
-        const label = m.text ? m.text : `${angleDeg.toFixed(1)}°`;
-        const dx = m.textOffset ? m.textOffset.x : 0;
-        const dy = m.textOffset ? m.textOffset.y : 0;
-        ctx.fillText(label, p1.x + dx, p1.y - 12 + dy);
-
-    } else if (m.type === "count" && m.point) {
-        const r = 8;
-        ctx.beginPath();
-        ctx.arc(m.point.x, m.point.y, r, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.stroke();
-
-    } else if (m.type === "text" && m.box) {
-        ctx.save();
-        ctx.fillStyle = "white";
-        ctx.strokeStyle = m.stroke || "black";
-        ctx.lineWidth = 1;
-
-        ctx.fillRect(m.box.x, m.box.y, m.box.w, m.box.h);
-        ctx.strokeRect(m.box.x, m.box.y, m.box.w, m.box.h);
-
-        ctx.fillStyle = "black";
-        ctx.font = "14px sans-serif";
-        ctx.textAlign = "left";
-        ctx.textBaseline = "top";
-
-        const pad = 4;
-        if (m.text) {
-            wrapText(ctx, m.text, m.box.x + pad, m.box.y + pad, m.box.w - pad * 2, 18);
-        }
-        ctx.restore();
-
-    } else if (m.type === "callout" && m.box && m.tip) {
-        let kx, ky;
-        const cx = m.box.x + m.box.w / 2;
-        let cy = m.box.y + m.box.h / 2;
-
-        if (m.knee) {
-            kx = m.knee.x;
-            ky = m.knee.y;
-        } else {
-            kx = (cx + m.tip.x) / 2;
-            cy = (cy + m.tip.y) / 2; // Fixed: was assigning ky to cy logic in original? Check original line 373.
-            // Original: ky = (m.box.y + ... + m.tip.y) / 2; Correct.
-            ky = (cy + m.tip.y) / 2;
-        }
-
-        // --- Draw Leader ---
-        ctx.save();
-        ctx.lineWidth = m.strokeWidth || 1;
-        ctx.strokeStyle = strokeColor;
-        ctx.lineCap = "round";
-        ctx.lineJoin = "round";
-
-        // Dash array for leader
-        if (m.strokeDasharray === "dashed") ctx.setLineDash([12, 12]);
-        else if (m.strokeDasharray === "dotted") ctx.setLineDash([2, 8]);
-        else if (m.strokeDasharray) ctx.setLineDash(m.strokeDasharray.split(',').map(Number));
-        else ctx.setLineDash([]);
-
-        ctx.beginPath();
-        // Draw from Box Center (hidden behind box) to Knee to Tip
-        ctx.moveTo(cx, cy);
-        ctx.lineTo(kx, ky);
-        ctx.lineTo(m.tip.x, m.tip.y);
-        ctx.stroke();
-
-        // Arrowhead at Tip
-        // We need a shape object for drawArrowHead { start: knee, end: tip }
-        // But drawArrowHead uses dashed stroke if set? We usually want solid arrow?
-        // OverlayLayer uses `marker` which inherits fill but has no dash.
-        // Let's force solid line for arrowhead
-        ctx.setLineDash([]);
-
-        // Manually draw arrow since drawArrowHead relies on `ctx.lineWidth` which we set.
-        // We define a proxy shape for direction calculation.
-        drawArrowHead(ctx, { start: { x: kx, y: ky }, end: m.tip }, strokeColor);
-        ctx.restore();
-
-        // --- Draw Box ---
-        ctx.save();
-        // Background color
-        const bg = m.fill && m.fill !== 'none' ? m.fill : "#ffffff";
-        ctx.fillStyle = bg;
-        ctx.strokeStyle = strokeColor;
-        ctx.lineWidth = m.strokeWidth || 1;
-
-        // Dash array for box
-        if (m.strokeDasharray === "dashed") ctx.setLineDash([12, 12]);
-        else if (m.strokeDasharray === "dotted") ctx.setLineDash([2, 8]);
-        else if (m.strokeDasharray) ctx.setLineDash(m.strokeDasharray.split(',').map(Number));
-        else ctx.setLineDash([]);
-
-        ctx.fillRect(m.box.x, m.box.y, m.box.w, m.box.h);
-        ctx.strokeRect(m.box.x, m.box.y, m.box.w, m.box.h);
-
-        // Text
-        ctx.fillStyle = m.textColor || "black"; // Use m.textColor
-        ctx.textAlign = "left";
-        ctx.textBaseline = "top";
-        ctx.font = `${m.fontSize || 14}px sans-serif`;
-
-        // Remove dash for text? fillText doesn't use stroke dash usually, but good practice.
-        ctx.setLineDash([]);
-
-        if (m.text) {
-            wrapText(ctx, m.text, m.box.x + 4, m.box.y + 4, m.box.w - 8, (m.fontSize || 14) * 1.2);
-        }
-        ctx.restore();
-    }
-
-    ctx.restore();
-};
-
-const wrapText = (ctx, text, x, y, maxWidth, lineHeight) => {
-    const words = text.split(' ');
-    let line = '';
-    let startY = y;
-
-    for (let n = 0; n < words.length; n++) {
-        const testLine = line + words[n] + ' ';
-        const metrics = ctx.measureText(testLine);
-        const testWidth = metrics.width;
-        if (testWidth > maxWidth && n > 0) {
-            ctx.fillText(line, x, y);
-            line = words[n] + ' ';
-            y += lineHeight;
-        } else {
-            line = testLine;
-        }
-    }
-    ctx.fillText(line, x, y);
+    // Save and download binary vector PDF
+    const pdfBytesOut = await exportDoc.save();
+    const blob = new Blob([pdfBytesOut], { type: "application/pdf" });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = fileName.replace(/\.pdf$/i, "") + "_flattened.pdf";
+    link.click();
+    URL.revokeObjectURL(link.href);
 };

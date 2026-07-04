@@ -476,13 +476,17 @@ const useAppStore = create((set, get) => ({
         }),
 
     // --- Tabs & Multi-Document Support ---
-    tabs: [], // { id, title, pdfDocument, state: { ...snapshot } }
+    tabs: [], // { id, title, pdfDocument, pdfBytes, state: { ...snapshot } }
     activeTabId: null,
     pdfDocument: null, // Current active PDF proxy
+    pdfBytes: null,    // Original PDF ArrayBuffer bytes
 
-    setPdfDocument: (doc) => set({ pdfDocument: doc }),
+    setPdfDocument: (doc, fileName, fileSize, pdfBytes) => set({ 
+        pdfDocument: doc,
+        pdfBytes: pdfBytes || null 
+    }),
 
-    addTab: (pdfDoc, fileName, fileSize) => set((state) => {
+    addTab: (pdfDoc, fileName, fileSize, pdfBytes) => set((state) => {
         const newTabId = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `tab-${Date.now()}`;
 
         // Snapshot current tab if exists
@@ -513,6 +517,7 @@ const useAppStore = create((set, get) => ({
             id: newTabId,
             title: fileName || "Untitled",
             pdfDocument: pdfDoc,
+            pdfBytes: pdfBytes || null,
             state: {
                 ...initialStateSnapshot,
                 sheets,
@@ -525,6 +530,7 @@ const useAppStore = create((set, get) => ({
             tabs: [...newTabs, newTab],
             activeTabId: newTabId,
             pdfDocument: pdfDoc,
+            pdfBytes: pdfBytes || null,
             // Reset workspace to clean state
             ...initialStateSnapshot,
             sheets,
@@ -553,6 +559,7 @@ const useAppStore = create((set, get) => ({
             tabs: tabsWithSnapshot,
             activeTabId: tabId,
             pdfDocument: targetTab.pdfDocument,
+            pdfBytes: targetTab.pdfBytes || null,
             ...targetTab.state
         };
     }),
@@ -578,6 +585,7 @@ const useAppStore = create((set, get) => ({
                     tabs: newTabs,
                     activeTabId: nextTab.id,
                     pdfDocument: nextTab.pdfDocument,
+                    pdfBytes: nextTab.pdfBytes || null,
                     ...nextTab.state
                 };
             } else {
@@ -586,6 +594,7 @@ const useAppStore = create((set, get) => ({
                     tabs: [],
                     activeTabId: null,
                     pdfDocument: null,
+                    pdfBytes: null,
                     ...initialStateSnapshot,
                     fileName: "Untitled.pdf",
                     fileSize: 0,

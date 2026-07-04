@@ -162,10 +162,11 @@ const TopMenu = ({ setPdfDocument, setIsLoading, isDocumentLoaded, onNewPDF, pdf
         if (file) {
             setIsLoading(true);
             try {
+                const arrayBuffer = await file.arrayBuffer();
                 const doc = await loadPDF(file);
                 // Reset store for new file if needed, but for now just load doc
                 // Ideally we should reset shapes/measurements here too or allow "Close"
-                setPdfDocument(doc, file.name, file.size);
+                setPdfDocument(doc, file.name, file.size, arrayBuffer);
                 setFileInfo(file.name, file.size);
             } catch (err) {
                 console.error("Failed to load PDF", err);
@@ -206,8 +207,9 @@ const TopMenu = ({ setPdfDocument, setIsLoading, isDocumentLoaded, onNewPDF, pdf
 
             // Load the PDF first
             setIsLoading(true);
+            const arrayBuffer = await result.pdfFile.arrayBuffer();
             const doc = await loadPDF(result.pdfFile);
-            setPdfDocument(doc, result.pdfFile.name, result.pdfFile.size);
+            setPdfDocument(doc, result.pdfFile.name, result.pdfFile.size, arrayBuffer);
             setFileInfo(result.pdfFile.name, result.pdfFile.size);
 
             // Then apply the project data (annotations, calibrations, etc.)
@@ -257,8 +259,9 @@ const TopMenu = ({ setPdfDocument, setIsLoading, isDocumentLoaded, onNewPDF, pdf
 
             // Load the PDF first
             setIsLoading(true);
+            const arrayBuffer = await pdfFile.arrayBuffer();
             const doc = await loadPDF(pdfFile);
-            setPdfDocument(doc, pdfFile.name, pdfFile.size);
+            setPdfDocument(doc, pdfFile.name, pdfFile.size, arrayBuffer);
             setFileInfo(pdfFile.name, pdfFile.size);
 
             // Then apply the project data (annotations, calibrations, etc.)

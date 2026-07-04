@@ -28,8 +28,8 @@ function App() {
   const isDocumentLoaded = tabs.length > 0;
 
   // Wrapper to adapt legacy components calling setPdfDocument
-  const handleSetPdfDocument = (doc, name = "Untitled.pdf", size = 0) => {
-    addTab(doc, name, size);
+  const handleSetPdfDocument = (doc, name = "Untitled.pdf", size = 0, pdfBytes = null) => {
+    addTab(doc, name, size, pdfBytes);
     setIsLoading(false);
   };
 
@@ -73,10 +73,10 @@ function App() {
       {showNewPDFDialog && (
         <NewPDFDialog
           onClose={() => setShowNewPDFDialog(false)}
-          onCreated={(doc, name) => {
+          onCreated={(doc, name, pdfBytes) => {
             // NewPDFDialog updated to return doc
             if (doc) {
-              addTab(doc, name || "New PDF", 0);
+              addTab(doc, name || "New PDF", 0, pdfBytes);
             }
             setShowNewPDFDialog(false);
           }}

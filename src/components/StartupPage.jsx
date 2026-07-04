@@ -23,8 +23,9 @@ const StartupPage = ({ setPdfDocument, setIsLoading, onNewPDF }) => {
 
         setIsLoading(true);
         try {
+            const arrayBuffer = await file.arrayBuffer();
             const doc = await loadPDF(file);
-            setPdfDocument(doc);
+            setPdfDocument(doc, file.name, file.size, arrayBuffer);
             setFileInfo(file.name, file.size);
         } catch (err) {
             console.error("Failed to load PDF", err);
@@ -98,8 +99,9 @@ const StartupPage = ({ setPdfDocument, setIsLoading, onNewPDF }) => {
             }
 
             // Load the PDF first
+            const arrayBuffer = await validPdfFile.arrayBuffer();
             const doc = await loadPDF(validPdfFile);
-            setPdfDocument(doc); // setPdfDocument takes only the doc, file info is set separately
+            setPdfDocument(doc, validPdfFile.name, validPdfFile.size, arrayBuffer);
             setFileInfo(validPdfFile.name, validPdfFile.size);
 
             // Then apply the project data (annotations, calibrations, etc.)
