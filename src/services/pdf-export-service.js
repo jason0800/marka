@@ -122,9 +122,9 @@ const drawShape = (ctx, shape) => {
     ctx.save();
     applyStyle(ctx, shape);
 
-    // Arrow and line specific lineCap
-    if (shape.type === 'arrow' || shape.type === 'line') ctx.lineCap = 'butt';
-    if (shape.type === 'rectangle') ctx.lineJoin = 'miter';
+    // Arrow, line, and polyline specific lineCap
+    if (shape.type === 'arrow' || shape.type === 'line' || shape.type === 'polyline') ctx.lineCap = 'butt';
+    if (shape.type === 'rectangle' || shape.type === 'polyline') ctx.lineJoin = 'miter';
 
     const hasFill = shape.fill && shape.fill !== "none" && shape.fill !== "transparent";
 
@@ -163,6 +163,13 @@ const drawShape = (ctx, shape) => {
         }
 
         if (hasFill) ctx.fill();
+        ctx.stroke();
+
+    } else if (shape.type === "polyline" && shape.points?.length >= 2) {
+        ctx.moveTo(shape.points[0].x, shape.points[0].y);
+        for (let j = 1; j < shape.points.length; j++) {
+            ctx.lineTo(shape.points[j].x, shape.points[j].y);
+        }
         ctx.stroke();
 
     } else if (shape.type === "line") {
@@ -263,8 +270,8 @@ const drawMeasurement = (ctx, m, toUnits, toUnits2, unitLabel) => {
     ctx.lineWidth = strokeWidth;
     ctx.strokeStyle = strokeColor;
     ctx.fillStyle = fillColor;
-    ctx.lineCap = m.type === "length" ? "butt" : "round";
-    ctx.lineJoin = "round";
+    ctx.lineCap = (m.type === "length" || m.type === "angle") ? "butt" : "round";
+    ctx.lineJoin = m.type === "angle" ? "miter" : "round";
 
     // Text settings
     ctx.textAlign = "center";
@@ -361,7 +368,7 @@ const drawMeasurement = (ctx, m, toUnits, toUnits2, unitLabel) => {
             // Draw dashed arc
             const a1 = Math.atan2(p0.y - p1.y, p0.x - p1.x);
             const a2 = Math.atan2(p2.y - p1.y, p2.x - p1.x);
-            const r = 24;
+            const r = Math.min(24, d1 * 0.6, d2 * 0.6);
             let diff = a2 - a1;
             while (diff < -Math.PI) diff += 2 * Math.PI;
             while (diff > Math.PI) diff -= 2 * Math.PI;

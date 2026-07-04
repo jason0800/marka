@@ -47,6 +47,15 @@ export const isPointInShape = (point, shape, tolerance = 5) => {
         return dist <= Math.max(tolerance, (shape.strokeWidth || 2) / 2 + 5);
     }
 
+    // Polyline
+    if (shape.type === "polyline" && shape.points?.length >= 2) {
+        for (let i = 0; i < shape.points.length - 1; i++) {
+            const dist = distanceToSegment(point, shape.points[i], shape.points[i + 1]);
+            if (dist <= Math.max(tolerance, (shape.strokeWidth || 2) / 2 + 5)) return true;
+        }
+        return false;
+    }
+
     // 2. Rectangle / Circle (assume usage of x, y, width, height)
     const { x, y, width, height, rotation = 0 } = shape;
 

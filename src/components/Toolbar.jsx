@@ -25,6 +25,7 @@ const TOOLS = [
     { id: 'text', icon: Type, label: 'Text Box' },
     { id: 'rectangle', icon: RectangleHorizontal, label: 'Rectangle' },
     { id: 'circle', icon: Circle, label: 'Circle' },
+    { id: 'polyline', icon: PolylineIcon, label: 'Polyline' },
     { id: 'line', icon: Minus, label: 'Line' },
     { id: 'arrow', icon: ArrowRight, label: 'Arrow' },
 ];
@@ -191,6 +192,24 @@ function AngleIcon({ size, ...props }) {
         >
             <path d="M20 19H4V3" />
             <path d="M4 11a8 8 0 0 1 8 8" />
+        </svg>
+    );
+}
+
+function PolylineIcon({ size, ...props }) {
+    return (
+        <svg
+            width={size}
+            height={size}
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            {...props}
+        >
+            <path d="m3 16 7-7 6 6 5-7" />
         </svg>
     );
 }

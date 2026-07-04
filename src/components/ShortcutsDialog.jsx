@@ -14,6 +14,7 @@ const TOOL_LABELS = {
     text: 'Text Box',
     rectangle: 'Rectangle Shape',
     circle: 'Ellipse / Circle Shape',
+    polyline: 'Polyline Shape',
     line: 'Line Shape',
     arrow: 'Arrow Shape',
 };

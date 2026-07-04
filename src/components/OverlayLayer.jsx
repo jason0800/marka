@@ -532,6 +532,15 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                 points: [...drawingPoints],
             });
             pushHistory();
+        } else if (activeTool === "polyline" && drawingPoints.length >= 2) {
+            addShape({
+                id: crypto.randomUUID(),
+                type: "polyline",
+                pageIndex,
+                points: [...drawingPoints],
+                ...defaultShapeStyle,
+            });
+            pushHistory();
         }
 
         setIsDrawing(false);
@@ -540,7 +549,7 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
 
         // Auto-switch to select mode after drawing
         setActiveTool("select");
-    }, [activeTool, drawingPoints, addMeasurement, pageIndex, pushHistory, setActiveTool, setIsDrawing]);
+    }, [activeTool, drawingPoints, addMeasurement, addShape, defaultShapeStyle, pageIndex, pushHistory, setActiveTool, setIsDrawing]);
 
     // Keyboard shortcuts
     useEffect(() => {
@@ -767,7 +776,7 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
         }
 
         // 4) Measurement tools
-        if (["length", "calibrate", "area", "perimeter", "angle", "count", "comment"].includes(activeTool)) {
+        if (["length", "calibrate", "area", "perimeter", "angle", "polyline", "count", "comment"].includes(activeTool)) {
             if (activeTool === "count") {
                 addMeasurement({ id: crypto.randomUUID(), type: "count", pageIndex, point });
                 pushHistory();
@@ -814,12 +823,16 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                 return;
             }
 
-            if (activeTool === "area" || activeTool === "perimeter") {
+            if (activeTool === "area" || activeTool === "perimeter" || activeTool === "polyline") {
                 if (!isDrawingRef.current) {
                     setIsDrawing(true);
                     setDrawingPoints([{ x: point.x, y: point.y }]);
                 } else {
-                    setDrawingPoints((prev) => [...prev, { x: point.x, y: point.y }]);
+                    let nextPoint = { x: point.x, y: point.y };
+                    if (activeTool === "polyline" && e.shiftKey && drawingPoints.length > 0) {
+                        nextPoint = snapTo45Degrees(drawingPoints[drawingPoints.length - 1], nextPoint);
+                    }
+                    setDrawingPoints((prev) => [...prev, nextPoint]);
                 }
             }
 
@@ -875,7 +888,7 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                 cursorPt = snapTo45Degrees(shapeStart, cursorPt);
             } else if (["length", "calibrate"].includes(activeTool) && isDrawingRef.current && drawingPoints.length > 0) {
                 cursorPt = snapTo45Degrees(drawingPoints[0], cursorPt);
-            } else if (activeTool === "angle" && isDrawingRef.current && drawingPoints.length > 0) {
+            } else if (["angle", "polyline"].includes(activeTool) && isDrawingRef.current && drawingPoints.length > 0) {
                 const referencePt = drawingPoints[drawingPoints.length - 1];
                 cursorPt = snapTo45Degrees(referencePt, cursorPt);
             } else if (["rectangle", "circle"].includes(activeTool) && shapeStart) {
@@ -1002,8 +1015,8 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                 return;
             }
 
-            // Area, perimeter, and angle measurement vertex dragging
-            if (["area", "perimeter", "angle"].includes(startShape.type) && handle.startsWith("vertex-")) {
+            // Area, perimeter, angle, and polyline measurement/shape vertex dragging
+            if (["area", "perimeter", "angle", "polyline"].includes(startShape.type) && handle.startsWith("vertex-")) {
                 const vertexIndex = parseInt(handle.split("-")[1]);
                 const newPoints = [...startShape.points];
                 let targetPt = {
@@ -1011,13 +1024,17 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                     y: startShape.points[vertexIndex].y + dy
                 };
 
-                if (startShape.type === "angle" && e.shiftKey) {
+                if (["angle", "polyline"].includes(startShape.type) && e.shiftKey) {
                     const startPos = startShape.points[vertexIndex];
                     targetPt = snapTo45Degrees(startPos, targetPt);
                 }
 
                 newPoints[vertexIndex] = targetPt;
-                updateMeasurement(id, { points: newPoints });
+                if (startShape.type === "polyline") {
+                    updateShape(id, { points: newPoints });
+                } else {
+                    updateMeasurement(id, { points: newPoints });
+                }
                 return;
             }
 
@@ -1335,6 +1352,10 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                                     start: { x: shape.start.x + dx, y: shape.start.y + dy },
                                     end: { x: shape.end.x + dx, y: shape.end.y + dy },
                                 });
+                            } else if (shape.type === "polyline") {
+                                updateShape(id, {
+                                    points: shape.points.map(p => ({ x: p.x + dx, y: p.y + dy }))
+                                });
                             } else {
                                 updateShape(id, { x: shape.x + dx, y: shape.y + dy });
                             }
@@ -1618,29 +1639,8 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
         );
 
         if (isLine) {
-            const minX = Math.min(s.start.x, s.end.x);
-            const maxX = Math.max(s.start.x, s.end.x);
-            const minY = Math.min(s.start.y, s.end.y);
-            const maxY = Math.max(s.start.y, s.end.y);
-            const padding = 12 / Math.max(1e-6, viewScale);
-            const isAdjusting = isDraggingItems || resizingState !== null;
-
             return (
                 <g>
-                    {!isAdjusting && (
-                        <rect
-                            x={minX - padding}
-                            y={minY - padding}
-                            width={maxX - minX + 2 * padding}
-                            height={maxY - minY + 2 * padding}
-                            fill="none"
-                            stroke="var(--primary-color)"
-                            strokeDasharray="4,4"
-                            strokeWidth={1 / Math.max(1e-6, viewScale)}
-                            vectorEffect="non-scaling-stroke"
-                            pointerEvents="none"
-                        />
-                    )}
                     {renderCircleHandle(s.start.x, s.start.y, "default", "start")}
                     {renderCircleHandle(s.end.x, s.end.y, "default", "end")}
                 </g>
@@ -1812,6 +1812,32 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
             strokeLinecap: "round",
             strokeLinejoin: "round",
         };
+
+        if (s.type === "polyline" && s.points?.length >= 2) {
+            const pointsStr = s.points.map((p) => `${p.x},${p.y}`).join(" ");
+            return (
+                <g key={s.id + (isShadow ? "-shadow" : "")}>
+                    {!isShadow && (
+                        <polyline
+                            points={pointsStr}
+                            stroke="transparent"
+                            strokeWidth={15}
+                            fill="none"
+                            pointerEvents="stroke"
+                            data-shape-id={s.id}
+                            style={{ cursor: "move" }}
+                        />
+                    )}
+                    <polyline
+                        points={pointsStr}
+                        {...commonProps}
+                        fill="none"
+                        strokeLinecap="butt"
+                        strokeLinejoin="miter"
+                    />
+                </g>
+            );
+        }
 
         if (s.type === "line") {
             return (
@@ -1996,7 +2022,7 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
 
                 const a1 = Math.atan2(p0.y - p1.y, p0.x - p1.x);
                 const a2 = Math.atan2(p2.y - p1.y, p2.x - p1.x);
-                const r = 24 / Math.max(1e-6, viewScale);
+                const r = Math.min(24, d1 * 0.6, d2 * 0.6);
                 const startX = p1.x + r * Math.cos(a1);
                 const startY = p1.y + r * Math.sin(a1);
                 const endX = p1.x + r * Math.cos(a2);
@@ -2012,14 +2038,28 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                 <g key={m.id + (isShadow ? "-shadow" : "")} {...measCommon} style={{ ...measCommon.style, opacity }}>
                     {!isShadow && (
                         <>
-                            <line x1={p0.x} y1={p0.y} x2={p1.x} y2={p1.y} stroke="transparent" strokeWidth={15} pointerEvents="all" data-meas-id={m.id} style={{ cursor: "move" }} />
-                            <line x1={p1.x} y1={p1.y} x2={p2.x} y2={p2.y} stroke="transparent" strokeWidth={15} pointerEvents="all" data-meas-id={m.id} style={{ cursor: "move" }} />
+                            <polyline
+                                points={`${p0.x},${p0.y} ${p1.x},${p1.y} ${p2.x},${p2.y}`}
+                                stroke="transparent"
+                                strokeWidth={15}
+                                fill="none"
+                                pointerEvents="stroke"
+                                data-meas-id={m.id}
+                                style={{ cursor: "move" }}
+                            />
                         </>
                     )}
-                    <line x1={p0.x} y1={p0.y} x2={p1.x} y2={p1.y} stroke={strokeColor} strokeWidth={strokeWidth} pointerEvents="none" />
-                    <line x1={p1.x} y1={p1.y} x2={p2.x} y2={p2.y} stroke={strokeColor} strokeWidth={strokeWidth} pointerEvents="none" />
+                    <polyline
+                        points={`${p0.x},${p0.y} ${p1.x},${p1.y} ${p2.x},${p2.y}`}
+                        fill="none"
+                        stroke={strokeColor}
+                        strokeWidth={strokeWidth}
+                        strokeLinecap="butt"
+                        strokeLinejoin="miter"
+                        pointerEvents="none"
+                    />
                     {arcPath && (
-                        <path d={arcPath} fill="none" stroke={strokeColor} strokeWidth={1.5} pointerEvents="none" />
+                        <path d={arcPath} fill="none" stroke={strokeColor} strokeWidth={strokeWidth} pointerEvents="none" />
                     )}
                     {!isShadow && (
                         <text
@@ -2439,6 +2479,11 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                                         start: { x: s.start.x + dx, y: s.start.y + dy },
                                         end: { x: s.end.x + dx, y: s.end.y + dy },
                                     };
+                                } else if (s.type === "polyline") {
+                                    shapeToRender = {
+                                        ...s,
+                                        points: s.points.map(p => ({ x: p.x + dx, y: p.y + dy }))
+                                    };
                                 } else {
                                     shapeToRender = { ...s, x: s.x + dx, y: s.y + dy };
                                 }
@@ -2585,7 +2630,7 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                 {isDrawingRef.current && drawingPoints.length > 0 && (
                     <g pointerEvents="none">
                         {/* Render partial polyline */}
-                        {activeTool === "area" || activeTool === "perimeter" ? (
+                        {["area", "perimeter", "polyline"].includes(activeTool) ? (
                             <>
                                 <polyline
                                     points={[...drawingPoints, cursor].map(p => p ? `${p.x},${p.y}` : "").join(" ")}
@@ -2641,21 +2686,13 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                                     }
                                     return (
                                         <>
-                                            <line
-                                                x1={p0.x}
-                                                y1={p0.y}
-                                                x2={p1.x}
-                                                y2={p1.y}
+                                            <polyline
+                                                points={`${p0.x},${p0.y} ${p1.x},${p1.y} ${p2.x},${p2.y}`}
+                                                fill="none"
                                                 stroke="var(--primary-color)"
                                                 strokeWidth={2 / Math.max(1e-6, viewScale)}
-                                            />
-                                            <line
-                                                x1={p1.x}
-                                                y1={p1.y}
-                                                x2={p2.x}
-                                                y2={p2.y}
-                                                stroke="var(--primary-color)"
-                                                strokeWidth={2 / Math.max(1e-6, viewScale)}
+                                                strokeLinecap="butt"
+                                                strokeLinejoin="miter"
                                             />
                                             {angleText && (
                                                 <text
@@ -2705,9 +2742,35 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                                     start: { x: s.start.x + dx, y: s.start.y + dy },
                                     end: { x: s.end.x + dx, y: s.end.y + dy },
                                 };
+                            } else if (s.type === "polyline") {
+                                shapeToRender = {
+                                    ...s,
+                                    points: s.points.map(p => ({ x: p.x + dx, y: p.y + dy }))
+                                };
                             } else {
                                 shapeToRender = { ...s, x: s.x + dx, y: s.y + dy };
                             }
+                        }
+                        if (s.type === "polyline" && shapeToRender.points?.length >= 2) {
+                            return (
+                                <g key={`handles-${s.id}`}>
+                                    {shapeToRender.points.map((p, idx) => (
+                                        <circle
+                                            key={idx}
+                                            cx={p.x}
+                                            cy={p.y}
+                                            r={handleSize / 2}
+                                            fill="#b4e6a0"
+                                            stroke="#3a6b24"
+                                            strokeWidth={1 / Math.max(1e-6, viewScale)}
+                                            vectorEffect="non-scaling-stroke"
+                                            cursor="default"
+                                            data-resize-id={s.id}
+                                            data-resize-handle={`vertex-${idx}`}
+                                        />
+                                    ))}
+                                </g>
+                            );
                         }
                         return (
                             <g key={`handles-${s.id}`}>
@@ -2739,32 +2802,9 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                             }
                         }
 
-                        if (["area", "perimeter", "angle"].includes(measToRender.type) && measToRender.points?.length >= 2) {
+                        if (["area", "perimeter", "angle", "length", "calibrate"].includes(measToRender.type) && measToRender.points?.length >= 2) {
                             return (
                                 <g key={`handles-${m.id}`}>
-                                    {(!isDraggingItems && resizingState === null) && (() => {
-                                        const xs = measToRender.points.map(p => p.x);
-                                        const ys = measToRender.points.map(p => p.y);
-                                        const minX = Math.min(...xs);
-                                        const maxX = Math.max(...xs);
-                                        const minY = Math.min(...ys);
-                                        const maxY = Math.max(...ys);
-                                        const padding = 12 / Math.max(1e-6, viewScale);
-                                        return (
-                                            <rect
-                                                x={minX - padding}
-                                                y={minY - padding}
-                                                width={maxX - minX + 2 * padding}
-                                                height={maxY - minY + 2 * padding}
-                                                fill="none"
-                                                stroke="var(--primary-color)"
-                                                strokeDasharray="4,4"
-                                                strokeWidth={1 / Math.max(1e-6, viewScale)}
-                                                vectorEffect="non-scaling-stroke"
-                                                pointerEvents="none"
-                                            />
-                                        );
-                                    })()}
                                     {measToRender.points.map((p, idx) => (
                                         <circle
                                             key={idx}

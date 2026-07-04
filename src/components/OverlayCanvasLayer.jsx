@@ -87,7 +87,7 @@ const OverlayCanvasLayer = ({
                 const maxY = Math.max(...pts.map(p => p.y));
                 return minX < 0 || minY < 0 || maxX > width || maxY > height;
             }
-            if ((item.type === "area" || item.type === "perimeter") && item.points) {
+            if ((item.type === "area" || item.type === "perimeter" || item.type === "polyline") && item.points) {
                 const minX = Math.min(...item.points.map(p => p.x));
                 const maxX = Math.max(...item.points.map(p => p.x));
                 const minY = Math.min(...item.points.map(p => p.y));
@@ -133,8 +133,8 @@ const OverlayCanvasLayer = ({
             ctx.globalAlpha = opacity;
             ctx.strokeStyle = stroke;
             ctx.lineWidth = strokeWidth;
-            ctx.lineCap = (shape.type === "arrow" || shape.type === "line") ? "butt" : "round";
-            ctx.lineJoin = shape.type === "rectangle" ? "miter" : "round";
+            ctx.lineCap = (shape.type === "arrow" || shape.type === "line" || shape.type === "polyline") ? "butt" : "round";
+            ctx.lineJoin = (shape.type === "rectangle" || shape.type === "polyline") ? "miter" : "round";
 
             if (dash && dash !== "none") {
                 ctx.setLineDash(dash.split(",").map(Number));
@@ -184,6 +184,11 @@ const OverlayCanvasLayer = ({
 
                 ctx.moveTo(shape.start.x, shape.start.y);
                 ctx.lineTo(ex, ey);
+            } else if (shape.type === "polyline" && shape.points?.length >= 2) {
+                ctx.moveTo(shape.points[0].x, shape.points[0].y);
+                for (let j = 1; j < shape.points.length; j++) {
+                    ctx.lineTo(shape.points[j].x, shape.points[j].y);
+                }
             }
 
             if (hasFill) {
@@ -236,8 +241,8 @@ const OverlayCanvasLayer = ({
             ctx.lineWidth = strokeWidth;
             ctx.strokeStyle = strokeColor;
             ctx.fillStyle = fillColor;
-            ctx.lineCap = m.type === "length" ? "butt" : "round";
-            ctx.lineJoin = "round";
+            ctx.lineCap = (m.type === "length" || m.type === "angle") ? "butt" : "round";
+            ctx.lineJoin = m.type === "angle" ? "miter" : "round";
 
             if (m.type === "length" && m.points?.length === 2) {
                 const [a, b] = m.points;
@@ -309,7 +314,7 @@ const OverlayCanvasLayer = ({
                     // Draw dashed arc
                     const a1 = Math.atan2(p0.y - p1.y, p0.x - p1.x);
                     const a2 = Math.atan2(p2.y - p1.y, p2.x - p1.x);
-                    const r = 24 / safeScale;
+                    const r = Math.min(24, d1 * 0.6, d2 * 0.6);
                     let diff = a2 - a1;
                     while (diff < -Math.PI) diff += 2 * Math.PI;
                     while (diff > Math.PI) diff -= 2 * Math.PI;
