@@ -21,8 +21,8 @@ const ALL_TOOL_IDS = [
 const TOOLBAR = [
     { type: 'tool', id: 'select', icon: MousePointer2, label: 'Select' },
     { type: 'tool', id: 'pan', icon: Hand, label: 'Pan' },
-    { type: 'tool', id: 'calibrate', icon: PencilRuler, label: 'Set Scale' },
     { type: 'separator' },
+    { type: 'tool', id: 'calibrate', icon: PencilRuler, label: 'Set Scale' },
     { type: 'tool', id: 'length', icon: RulerDimensionLine, label: 'Length' },
     { type: 'tool', id: 'area', icon: AreaIcon, label: 'Area' },
     { type: 'tool', id: 'angle', icon: AngleIcon, label: 'Angle' },
@@ -256,10 +256,10 @@ const Toolbar = () => {
                             return (
                                 <button
                                     key={child.id}
-                                    className={`bg-transparent border-none text-[var(--text-primary)] px-4 py-2 text-left cursor-pointer text-[13px] flex items-center gap-2 w-full whitespace-nowrap
+                                    className={`border-none text-[var(--text-primary)] px-4 py-2 text-left cursor-pointer text-[13px] flex items-center gap-2 w-full whitespace-nowrap hover:bg-[var(--btn-hover)]
                                         ${isChildActive
-                                            ? 'bg-[#b4e6a0] !text-[#1a1a1a]'
-                                            : 'hover:bg-[#b4e6a0] hover:!text-[#1a1a1a]'
+                                            ? 'bg-gray-100'
+                                            : 'bg-transparent'
                                         }`}
                                     onMouseDown={e => {
                                         e.stopPropagation();

@@ -481,9 +481,9 @@ const useAppStore = create((set, get) => ({
     pdfDocument: null, // Current active PDF proxy
     pdfBytes: null,    // Original PDF ArrayBuffer bytes
 
-    setPdfDocument: (doc, fileName, fileSize, pdfBytes) => set({ 
+    setPdfDocument: (doc, fileName, fileSize, pdfBytes) => set({
         pdfDocument: doc,
-        pdfBytes: pdfBytes || null 
+        pdfBytes: pdfBytes || null
     }),
 
     addTab: (pdfDoc, fileName, fileSize, pdfBytes) => set((state) => {

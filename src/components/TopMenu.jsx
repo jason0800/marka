@@ -7,7 +7,7 @@ import {
     FileText, FolderOpen, Save, Printer, Loader2,
     Undo, Redo, ZoomIn, ZoomOut, Sun, Moon,
     ChevronDown, RotateCw, RotateCcw, Clipboard, Scissors, Copy,
-    Magnet, Keyboard
+    Magnet, Keyboard, Settings
 } from 'lucide-react';
 import DocumentPropertiesDialog from './DocumentPropertiesDialog';
 import { exportFlattenedPDF } from '../services/pdf-export-service';
@@ -15,6 +15,7 @@ import { toast } from 'sonner';
 import { confirmToast } from '../utils/confirm-toast';
 import { saveProject, loadProject, promptForProjectFiles, promptForPDF } from '../services/project-service';
 import ShortcutsDialog from './ShortcutsDialog';
+import PreferencesDialog from './PreferencesDialog';
 
 // ... (existing imports)
 
@@ -35,6 +36,7 @@ const TopMenu = ({ setPdfDocument, setIsLoading, isDocumentLoaded, onNewPDF, pdf
     const [isPrinting, setIsPrinting] = useState(false);
     const [loadingProgress, setLoadingProgress] = useState(0);
     const [showShortcutsDialog, setShowShortcutsDialog] = useState(false);
+    const [showPreferences, setShowPreferences] = useState(false);
 
     // Global Key Handlers (Undo/Redo/Delete/Cut/Copy/Paste)
     useEffect(() => {
@@ -321,6 +323,35 @@ const TopMenu = ({ setPdfDocument, setIsLoading, isDocumentLoaded, onNewPDF, pdf
             <div className="font-semibold mr-6 text-white hidden">Marka</div>
 
             <div className="flex gap-0.5 z-[100] relative">
+                {/* MARKA MENU */}
+                <div className="relative">
+                    <button
+                        className="bg-transparent border-none text-[var(--text-primary)] px-1.5 py-1 rounded cursor-pointer text-[13px] flex items-center gap-1 hover:bg-[var(--btn-hover)] hover:text-[var(--text-primary)]"
+                        onClick={() => setActiveMenu(activeMenu === 'marka' ? null : 'marka')}
+                        onMouseEnter={() => {
+                            if (activeMenu) setActiveMenu('marka');
+                        }}
+                    >
+                        Marka
+                    </button>
+                    {activeMenu === 'marka' && (
+                        <div className="absolute top-full left-0 bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-none min-w-[180px] shadow-[0_4px_12px_rgba(0,0,0,0.08)] py-0 z-[101] flex flex-col">
+                            <button
+                                className="bg-transparent border-none text-[var(--text-primary)] px-4 py-2 text-left cursor-pointer text-[13px] flex items-center gap-2 w-full hover:bg-[var(--btn-hover)] disabled:opacity-50 disabled:cursor-default whitespace-nowrap"
+                                onClick={() => { setShowShortcutsDialog(true); setActiveMenu(null); }}
+                            >
+                                <Keyboard size={16} /> Keyboard Shortcuts
+                            </button>
+                            <button
+                                className="bg-transparent border-none text-[var(--text-primary)] px-4 py-2 text-left cursor-pointer text-[13px] flex items-center gap-2 w-full hover:bg-[var(--btn-hover)] disabled:opacity-50 disabled:cursor-default whitespace-nowrap"
+                                onClick={() => { setShowPreferences(true); setActiveMenu(null); }}
+                            >
+                                <Settings size={16} /> Preferences
+                            </button>
+                        </div>
+                    )}
+                </div>
+
                 {/* FILE MENU */}
                 <div className="relative">
                     <button
@@ -334,15 +365,15 @@ const TopMenu = ({ setPdfDocument, setIsLoading, isDocumentLoaded, onNewPDF, pdf
                     </button>
                     {activeMenu === 'file' && (
                         <div className="absolute top-full left-0 bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-none min-w-[180px] shadow-[0_4px_12px_rgba(0,0,0,0.08)] py-0 z-[101] flex flex-col">
-                            <button className="bg-transparent border-none text-[var(--text-primary)] px-4 py-2 text-left cursor-pointer text-[13px] flex items-center gap-2 w-full hover:bg-[#b4e6a0] hover:text-[#1a1a1a] disabled:opacity-50 disabled:cursor-default whitespace-nowrap" onClick={handleNew}><FileText size={16} /> New PDF</button>
-                            <button className="bg-transparent border-none text-[var(--text-primary)] px-4 py-2 text-left cursor-pointer text-[13px] flex items-center gap-2 w-full hover:bg-[#b4e6a0] hover:text-[#1a1a1a] disabled:opacity-50 disabled:cursor-default whitespace-nowrap" onClick={handleOpen}><FolderOpen size={16} /> Open PDF</button>
+                            <button className="bg-transparent border-none text-[var(--text-primary)] px-4 py-2 text-left cursor-pointer text-[13px] flex items-center gap-2 w-full hover:bg-[var(--btn-hover)] disabled:opacity-50 disabled:cursor-default whitespace-nowrap" onClick={handleNew}><FileText size={16} /> New PDF</button>
+                            <button className="bg-transparent border-none text-[var(--text-primary)] px-4 py-2 text-left cursor-pointer text-[13px] flex items-center gap-2 w-full hover:bg-[var(--btn-hover)] disabled:opacity-50 disabled:cursor-default whitespace-nowrap" onClick={handleOpen}><FolderOpen size={16} /> Open PDF</button>
 
                             <div className="h-px bg-[var(--border-color)] my-1" />
-                            <button className="bg-transparent border-none text-[var(--text-primary)] px-4 py-2 text-left cursor-pointer text-[13px] flex items-center gap-2 w-full hover:bg-[#b4e6a0] hover:text-[#1a1a1a] disabled:opacity-50 disabled:cursor-default whitespace-nowrap" onClick={handleOpenProject}><FolderOpen size={16} /> Open Project</button>
-                            <button className={`bg-transparent border-none text-[var(--text-primary)] px-4 py-2 text-left cursor-pointer text-[13px] flex items-center gap-2 w-full hover:bg-[#b4e6a0] hover:text-[#1a1a1a] disabled:opacity-50 disabled:cursor-default whitespace-nowrap ${!isDocumentLoaded ? 'opacity-50 cursor-default' : ''}`} onClick={handleSaveProject} disabled={!isDocumentLoaded}><Save size={16} /> Save Project</button>
+                            <button className="bg-transparent border-none text-[var(--text-primary)] px-4 py-2 text-left cursor-pointer text-[13px] flex items-center gap-2 w-full hover:bg-[var(--btn-hover)] disabled:opacity-50 disabled:cursor-default whitespace-nowrap" onClick={handleOpenProject}><FolderOpen size={16} /> Open Project</button>
+                            <button className={`bg-transparent border-none text-[var(--text-primary)] px-4 py-2 text-left cursor-pointer text-[13px] flex items-center gap-2 w-full hover:bg-[var(--btn-hover)] disabled:opacity-50 disabled:cursor-default whitespace-nowrap ${!isDocumentLoaded ? 'opacity-50 cursor-default' : ''}`} onClick={handleSaveProject} disabled={!isDocumentLoaded}><Save size={16} /> Save Project</button>
 
                             <div className="h-px bg-[var(--border-color)] my-1" />
-                            <button className={`bg-transparent border-none text-[var(--text-primary)] px-4 py-2 text-left cursor-pointer text-[13px] flex items-center gap-2 w-full hover:bg-[#b4e6a0] hover:text-[#1a1a1a] disabled:opacity-50 disabled:cursor-default whitespace-nowrap ${!isDocumentLoaded || isPrinting ? 'opacity-50 cursor-default' : ''}`} onClick={handleSave} disabled={!isDocumentLoaded || isPrinting}>
+                            <button className={`bg-transparent border-none text-[var(--text-primary)] px-4 py-2 text-left cursor-pointer text-[13px] flex items-center gap-2 w-full hover:bg-[var(--btn-hover)] disabled:opacity-50 disabled:cursor-default whitespace-nowrap ${!isDocumentLoaded || isPrinting ? 'opacity-50 cursor-default' : ''}`} onClick={handleSave} disabled={!isDocumentLoaded || isPrinting}>
                                 {isPrinting ? <Loader2 size={16} className="animate-spin text-[var(--primary-color)]" /> : <Printer size={16} />} Print PDF
                             </button>
                         </div>
@@ -364,14 +395,14 @@ const TopMenu = ({ setPdfDocument, setIsLoading, isDocumentLoaded, onNewPDF, pdf
                     {activeMenu === 'edit' && (
                         <div className="absolute top-full left-0 bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-none min-w-[200px] shadow-[0_4px_12px_rgba(0,0,0,0.08)] py-0 z-[101] flex flex-col">
                             <button
-                                className="bg-transparent border-none text-[var(--text-primary)] px-4 py-2 text-left cursor-pointer text-[13px] flex items-center gap-2 w-full hover:bg-[#b4e6a0] hover:text-[#1a1a1a] disabled:opacity-50 disabled:cursor-default whitespace-nowrap"
+                                className="bg-transparent border-none text-[var(--text-primary)] px-4 py-2 text-left cursor-pointer text-[13px] flex items-center gap-2 w-full hover:bg-[var(--btn-hover)] disabled:opacity-50 disabled:cursor-default whitespace-nowrap"
                                 onClick={() => { undo(); setActiveMenu(null); }}
                                 disabled={historyIndex <= 0}
                             >
                                 <Undo size={16} /> Undo <span className="ml-auto text-xs text-[#888] pl-4">Ctrl+Z</span>
                             </button>
                             <button
-                                className="bg-transparent border-none text-[var(--text-primary)] px-4 py-2 text-left cursor-pointer text-[13px] flex items-center gap-2 w-full hover:bg-[#b4e6a0] hover:text-[#1a1a1a] disabled:opacity-50 disabled:cursor-default whitespace-nowrap"
+                                className="bg-transparent border-none text-[var(--text-primary)] px-4 py-2 text-left cursor-pointer text-[13px] flex items-center gap-2 w-full hover:bg-[var(--btn-hover)] disabled:opacity-50 disabled:cursor-default whitespace-nowrap"
                                 onClick={() => { redo(); setActiveMenu(null); }}
                                 disabled={historyIndex >= history.length - 1}
                             >
@@ -379,19 +410,19 @@ const TopMenu = ({ setPdfDocument, setIsLoading, isDocumentLoaded, onNewPDF, pdf
                             </button>
                             <div className="h-px bg-[var(--border-color)] my-1" />
                             <button
-                                className="bg-transparent border-none text-[var(--text-primary)] px-4 py-2 text-left cursor-pointer text-[13px] flex items-center gap-2 w-full hover:bg-[#b4e6a0] hover:text-[#1a1a1a] disabled:opacity-50 disabled:cursor-default whitespace-nowrap"
+                                className="bg-transparent border-none text-[var(--text-primary)] px-4 py-2 text-left cursor-pointer text-[13px] flex items-center gap-2 w-full hover:bg-[var(--btn-hover)] disabled:opacity-50 disabled:cursor-default whitespace-nowrap"
                                 onClick={() => { cut(); pushHistory(); setActiveMenu(null); }}
                             >
                                 <Scissors size={16} /> Cut
                             </button>
                             <button
-                                className="bg-transparent border-none text-[var(--text-primary)] px-4 py-2 text-left cursor-pointer text-[13px] flex items-center gap-2 w-full hover:bg-[#b4e6a0] hover:text-[#1a1a1a] disabled:opacity-50 disabled:cursor-default whitespace-nowrap"
+                                className="bg-transparent border-none text-[var(--text-primary)] px-4 py-2 text-left cursor-pointer text-[13px] flex items-center gap-2 w-full hover:bg-[var(--btn-hover)] disabled:opacity-50 disabled:cursor-default whitespace-nowrap"
                                 onClick={() => { copy(); setActiveMenu(null); }}
                             >
                                 <Copy size={16} /> Copy <span className="ml-auto text-xs text-[#888] pl-4">Ctrl+C</span>
                             </button>
                             <button
-                                className="bg-transparent border-none text-[var(--text-primary)] px-4 py-2 text-left cursor-pointer text-[13px] flex items-center gap-2 w-full hover:bg-[#b4e6a0] hover:text-[#1a1a1a] disabled:opacity-50 disabled:cursor-default whitespace-nowrap"
+                                className="bg-transparent border-none text-[var(--text-primary)] px-4 py-2 text-left cursor-pointer text-[13px] flex items-center gap-2 w-full hover:bg-[var(--btn-hover)] disabled:opacity-50 disabled:cursor-default whitespace-nowrap"
                                 onClick={() => { paste(); pushHistory(); setActiveMenu(null); }}
                                 disabled={clipboard.length === 0}
                             >
@@ -416,16 +447,10 @@ const TopMenu = ({ setPdfDocument, setIsLoading, isDocumentLoaded, onNewPDF, pdf
                     {activeMenu === 'document' && (
                         <div className="absolute top-full left-0 bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-none min-w-[190px] shadow-[0_4px_12px_rgba(0,0,0,0.08)] py-0 z-[101] flex flex-col">
                             <button
-                                className="bg-transparent border-none text-[var(--text-primary)] px-4 py-2 text-left cursor-pointer text-[13px] flex items-center gap-2 w-full hover:bg-[#b4e6a0] hover:text-[#1a1a1a] disabled:opacity-50 disabled:cursor-default whitespace-nowrap"
+                                className="bg-transparent border-none text-[var(--text-primary)] px-4 py-2 text-left cursor-pointer text-[13px] flex items-center gap-2 w-full hover:bg-[var(--btn-hover)] disabled:opacity-50 disabled:cursor-default whitespace-nowrap"
                                 onClick={() => { setShowDocProps(true); setActiveMenu(null); }}
                             >
                                 <FileText size={16} /> Document Properties
-                            </button>
-                            <button
-                                className="bg-transparent border-none text-[var(--text-primary)] px-4 py-2 text-left cursor-pointer text-[13px] flex items-center gap-2 w-full hover:bg-[#b4e6a0] hover:text-[#1a1a1a] disabled:opacity-50 disabled:cursor-default whitespace-nowrap"
-                                onClick={() => { setShowShortcutsDialog(true); setActiveMenu(null); }}
-                            >
-                                <Keyboard size={16} /> Keyboard Shortcuts
                             </button>
                         </div>
                     )}
@@ -445,24 +470,24 @@ const TopMenu = ({ setPdfDocument, setIsLoading, isDocumentLoaded, onNewPDF, pdf
                     </button>
                     {activeMenu === 'view' && (
                         <div className="absolute top-full left-0 bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-none min-w-[290px] shadow-[0_4px_12px_rgba(0,0,0,0.08)] py-0 z-[101] flex flex-col">
-                            <button className="bg-transparent border-none text-[var(--text-primary)] px-4 py-2 text-left cursor-pointer text-[13px] flex items-center gap-2 w-full hover:bg-[#b4e6a0] hover:text-[#1a1a1a] disabled:opacity-50 disabled:cursor-default whitespace-nowrap" onClick={() => setZoom(zoom * 1.2)}><ZoomIn size={16} /> Zoom In <span className="ml-auto text-xs text-[#888] pl-4">Ctrl + +</span></button>
-                            <button className="bg-transparent border-none text-[var(--text-primary)] px-4 py-2 text-left cursor-pointer text-[13px] flex items-center gap-2 w-full hover:bg-[#b4e6a0] hover:text-[#1a1a1a] disabled:opacity-50 disabled:cursor-default whitespace-nowrap" onClick={() => setZoom(zoom / 1.2)}><ZoomOut size={16} /> Zoom Out <span className="ml-auto text-xs text-[#888] pl-4">Ctrl + -</span></button>
+                            <button className="bg-transparent border-none text-[var(--text-primary)] px-4 py-2 text-left cursor-pointer text-[13px] flex items-center gap-2 w-full hover:bg-[var(--btn-hover)] disabled:opacity-50 disabled:cursor-default whitespace-nowrap" onClick={() => setZoom(zoom * 1.2)}><ZoomIn size={16} /> Zoom In <span className="ml-auto text-xs text-[#888] pl-4">Ctrl + +</span></button>
+                            <button className="bg-transparent border-none text-[var(--text-primary)] px-4 py-2 text-left cursor-pointer text-[13px] flex items-center gap-2 w-full hover:bg-[var(--btn-hover)] disabled:opacity-50 disabled:cursor-default whitespace-nowrap" onClick={() => setZoom(zoom / 1.2)}><ZoomOut size={16} /> Zoom Out <span className="ml-auto text-xs text-[#888] pl-4">Ctrl + -</span></button>
                             <div className="h-px bg-[var(--border-color)] my-1" />
                             <button
-                                className="bg-transparent border-none text-[var(--text-primary)] px-4 py-2 text-left cursor-pointer text-[13px] flex items-center gap-2 w-full hover:bg-[#b4e6a0] hover:text-[#1a1a1a] disabled:opacity-50 disabled:cursor-default whitespace-nowrap"
+                                className="bg-transparent border-none text-[var(--text-primary)] px-4 py-2 text-left cursor-pointer text-[13px] flex items-center gap-2 w-full hover:bg-[var(--btn-hover)] disabled:opacity-50 disabled:cursor-default whitespace-nowrap"
                                 onClick={() => { rotateAllPages(90); setActiveMenu(null); }}
                             >
                                 <RotateCw size={16} /> Rotate Clockwise <span className="ml-auto text-xs text-[#888] pl-4">Ctrl+Shift++</span>
                             </button>
                             <button
-                                className="bg-transparent border-none text-[var(--text-primary)] px-4 py-2 text-left cursor-pointer text-[13px] flex items-center gap-2 w-full hover:bg-[#b4e6a0] hover:text-[#1a1a1a] disabled:opacity-50 disabled:cursor-default whitespace-nowrap"
+                                className="bg-transparent border-none text-[var(--text-primary)] px-4 py-2 text-left cursor-pointer text-[13px] flex items-center gap-2 w-full hover:bg-[var(--btn-hover)] disabled:opacity-50 disabled:cursor-default whitespace-nowrap"
                                 onClick={() => { rotateAllPages(-90); setActiveMenu(null); }}
                             >
                                 <RotateCcw size={16} /> Rotate Anti-Clockwise <span className="ml-auto text-xs text-[#888] pl-4">Ctrl+Shift+-</span>
                             </button>
                             <div className="h-px bg-[var(--border-color)] my-1" />
                             <button
-                                className="bg-transparent border-none text-[var(--text-primary)] px-4 py-2 text-left cursor-pointer text-[13px] flex items-center gap-2 w-full hover:bg-[#b4e6a0] hover:text-[#1a1a1a] disabled:opacity-50 disabled:cursor-default whitespace-nowrap"
+                                className="bg-transparent border-none text-[var(--text-primary)] px-4 py-2 text-left cursor-pointer text-[13px] flex items-center gap-2 w-full hover:bg-[var(--btn-hover)] disabled:opacity-50 disabled:cursor-default whitespace-nowrap"
                                 onClick={toggleTheme}
                             >
                                 {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
@@ -508,6 +533,10 @@ const TopMenu = ({ setPdfDocument, setIsLoading, isDocumentLoaded, onNewPDF, pdf
 
             {showShortcutsDialog && (
                 <ShortcutsDialog onClose={() => setShowShortcutsDialog(false)} />
+            )}
+
+            {showPreferences && (
+                <PreferencesDialog onClose={() => setShowPreferences(false)} />
             )}
         </div>
     );

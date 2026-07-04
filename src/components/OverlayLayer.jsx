@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState, useEffect, useCallback } from "react";
+import { createPortal } from "react-dom";
 import useAppStore from "../stores/useAppStore";
 import { calculateDistance, calculatePolygonArea } from "../geometry/transforms";
 import { findShapeAtPoint, findItemAtPoint } from "../geometry/hitTest";
@@ -160,6 +161,11 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
         defaultShapeStyle,
         viewport,
         snappingEnabled,
+        cut,
+        copy,
+        paste,
+        clipboard,
+        setDefaultShapeStyle,
     } = useAppStore();
 
     const viewScale = (viewport && viewport.scale) ? viewport.scale : propViewScale;
@@ -223,6 +229,163 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
 
     // Resize
     const [resizingState, setResizingState] = useState(null); // { id, handle, startShape, startPoint }
+
+    // Context menu state
+    const [canvasContextMenu, setCanvasContextMenu] = useState(null);
+
+    // Auto-close context menu on click elsewhere
+    useEffect(() => {
+        const handleWindowClick = (e) => {
+            if (e.target.closest('.context-menu-container')) {
+                return;
+            }
+            setCanvasContextMenu(null);
+        };
+        window.addEventListener('click', handleWindowClick);
+        window.addEventListener('pointerdown', handleWindowClick);
+        return () => {
+            window.removeEventListener('click', handleWindowClick);
+            window.removeEventListener('pointerdown', handleWindowClick);
+        };
+    }, []);
+
+    const duplicateSelected = () => {
+        const selectedShapes = shapes.filter(s => selectedIds.includes(s.id));
+        const selectedMeas = measurements.filter(m => selectedIds.includes(m.id));
+        const newIds = [];
+
+        selectedShapes.forEach(s => {
+            const newId = crypto.randomUUID();
+            newIds.push(newId);
+            addShape({
+                ...s,
+                id: newId,
+                x: s.x !== undefined ? s.x + 20 : undefined,
+                y: s.y !== undefined ? s.y + 20 : undefined,
+                start: s.start ? { x: s.start.x + 20, y: s.start.y + 20 } : undefined,
+                end: s.end ? { x: s.end.x + 20, y: s.end.y + 20 } : undefined,
+                points: s.points ? s.points.map(p => ({ x: p.x + 20, y: p.y + 20 })) : undefined,
+            });
+        });
+
+        selectedMeas.forEach(m => {
+            const newId = crypto.randomUUID();
+            newIds.push(newId);
+            addMeasurement({
+                ...m,
+                id: newId,
+                points: m.points ? m.points.map(p => ({ x: p.x + 20, y: p.y + 20 })) : undefined,
+                point: m.point ? { x: m.point.x + 20, y: m.point.y + 20 } : undefined,
+                box: m.box ? { ...m.box, x: m.box.x + 20, y: m.box.y + 20 } : undefined,
+                tip: m.tip ? { x: m.tip.x + 20, y: m.tip.y + 20 } : undefined,
+                knee: m.knee ? { x: m.knee.x + 20, y: m.knee.y + 20 } : undefined,
+            });
+        });
+
+        if (newIds.length > 0) {
+            setSelectedIds(newIds);
+            pushHistory();
+        }
+    };
+
+    const handleCut = () => {
+        cut();
+        pushHistory();
+        setCanvasContextMenu(null);
+    };
+
+    const handleCopy = () => {
+        copy();
+        setCanvasContextMenu(null);
+    };
+
+    const handlePaste = () => {
+        paste();
+        pushHistory();
+        setCanvasContextMenu(null);
+    };
+
+    const handleDelete = () => {
+        if (selectedIds.length > 0) {
+            const shapeIds = selectedIds.filter(id => pageShapes.some(s => s.id === id));
+            const measIds = selectedIds.filter(id => pageMeasurements.some(m => m.id === id));
+            shapeIds.forEach(id => deleteShape(id));
+            measIds.forEach(id => deleteMeasurement(id));
+            setSelectedIds([]);
+            pushHistory();
+        }
+        setCanvasContextMenu(null);
+    };
+
+    const handleDuplicate = () => {
+        duplicateSelected();
+        setCanvasContextMenu(null);
+    };
+
+    const handleSetAsDefault = () => {
+        if (selectedIds.length === 0) return;
+        const targetId = selectedIds[0];
+        const s = pageShapes.find(x => x.id === targetId);
+        const m = pageMeasurements.find(x => x.id === targetId);
+        const target = s || m;
+        if (target) {
+            const newDefaults = {};
+            if (target.stroke !== undefined) newDefaults.stroke = target.stroke;
+            if (target.fill !== undefined) newDefaults.fill = target.fill;
+            if (target.strokeWidth !== undefined) newDefaults.strokeWidth = target.strokeWidth;
+            if (target.strokeDasharray !== undefined) newDefaults.strokeDasharray = target.strokeDasharray;
+            if (target.opacity !== undefined) newDefaults.opacity = target.opacity;
+            if (target.fontSize !== undefined) newDefaults.fontSize = target.fontSize;
+            if (target.textColor !== undefined) newDefaults.textColor = target.textColor;
+
+            setDefaultShapeStyle(newDefaults);
+        }
+        setCanvasContextMenu(null);
+    };
+
+    const handleDeselectAll = () => {
+        setSelectedIds([]);
+        setCanvasContextMenu(null);
+    };
+
+    const handleSelectAll = () => {
+        const allIds = [
+            ...pageShapes.map(s => s.id),
+            ...pageMeasurements.map(m => m.id)
+        ];
+        setSelectedIds(allIds);
+        setCanvasContextMenu(null);
+    };
+
+    const handleContextMenu = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+
+        const targetShapeRef = e.target.closest('[data-shape-id]');
+        const targetMeasRef = e.target.closest('[data-meas-id]');
+        const targetShapeId = targetShapeRef?.getAttribute("data-shape-id");
+        const targetMeasId = targetMeasRef?.getAttribute("data-meas-id");
+        const hitId = targetShapeId || targetMeasId;
+
+        if (hitId) {
+            if (!selectedIds.includes(hitId)) {
+                setSelectedIds([hitId]);
+            }
+            setCanvasContextMenu({
+                x: e.clientX,
+                y: e.clientY,
+                type: 'object',
+                targetId: hitId
+            });
+        } else {
+            setCanvasContextMenu({
+                x: e.clientX,
+                y: e.clientY,
+                type: 'canvas',
+                targetId: null
+            });
+        }
+    };
 
     const resizingStateRef = useRef(null);
     const isDraggingItemsRef = useRef(false);
@@ -699,20 +862,48 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
 
                 setSelectedIds(newSelection);
 
-                // Prepare Drag Snapshot for items in newSelection
-                const snapshot = {};
-                newSelection.forEach(id => {
-                    const s = pageShapes.find(x => x.id === id);
-                    if (s) {
-                        snapshot[id] = JSON.parse(JSON.stringify(s));
-                    } else {
-                        const m = pageMeasurements.find(x => x.id === id);
-                        if (m) {
-                            snapshot[id] = JSON.parse(JSON.stringify(m));
+                if (e.ctrlKey) {
+                    const duplicatedIds = [];
+                    const dupSnapshot = {};
+                    newSelection.forEach(id => {
+                        const s = pageShapes.find(x => x.id === id);
+                        if (s) {
+                            const newId = crypto.randomUUID();
+                            duplicatedIds.push(newId);
+                            const duplicatedShape = { ...s, id: newId };
+                            addShape(duplicatedShape);
+                            dupSnapshot[newId] = JSON.parse(JSON.stringify(duplicatedShape));
+                        } else {
+                            const m = pageMeasurements.find(x => x.id === id);
+                            if (m) {
+                                const newId = crypto.randomUUID();
+                                duplicatedIds.push(newId);
+                                const duplicatedMeas = { ...m, id: newId };
+                                addMeasurement(duplicatedMeas);
+                                dupSnapshot[newId] = JSON.parse(JSON.stringify(duplicatedMeas));
+                            }
                         }
+                    });
+                    if (duplicatedIds.length > 0) {
+                        newSelection = duplicatedIds;
+                        setSelectedIds(newSelection);
+                        setDragStartItems(dupSnapshot);
                     }
-                });
-                setDragStartItems(snapshot);
+                } else {
+                    const snapshot = {};
+                    newSelection.forEach(id => {
+                        const s = pageShapes.find(x => x.id === id);
+                        if (s) {
+                            snapshot[id] = JSON.parse(JSON.stringify(s));
+                        } else {
+                            const m = pageMeasurements.find(x => x.id === id);
+                            if (m) {
+                                snapshot[id] = JSON.parse(JSON.stringify(m));
+                            }
+                        }
+                    });
+                    setDragStartItems(snapshot);
+                }
 
                 const isClickingText = e.target.tagName === "text";
                 isDraggingTextRef.current = isShift && isClickingText && newSelection.some(id => {
@@ -744,20 +935,48 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                     }
                     setSelectedIds(newSelection);
 
-                    // Snapshot
-                    const snapshot = {};
-                    newSelection.forEach(id => {
-                        const s = pageShapes.find(x => x.id === id);
-                        if (s) {
-                            snapshot[id] = JSON.parse(JSON.stringify(s));
-                        } else {
-                            const m = pageMeasurements.find(x => x.id === id);
-                            if (m) {
-                                snapshot[id] = JSON.parse(JSON.stringify(m));
+                    if (e.ctrlKey) {
+                        const duplicatedIds = [];
+                        const dupSnapshot = {};
+                        newSelection.forEach(id => {
+                            const s = pageShapes.find(x => x.id === id);
+                            if (s) {
+                                const newId = crypto.randomUUID();
+                                duplicatedIds.push(newId);
+                                const duplicatedShape = { ...s, id: newId };
+                                addShape(duplicatedShape);
+                                dupSnapshot[newId] = JSON.parse(JSON.stringify(duplicatedShape));
+                            } else {
+                                const m = pageMeasurements.find(x => x.id === id);
+                                if (m) {
+                                    const newId = crypto.randomUUID();
+                                    duplicatedIds.push(newId);
+                                    const duplicatedMeas = { ...m, id: newId };
+                                    addMeasurement(duplicatedMeas);
+                                    dupSnapshot[newId] = JSON.parse(JSON.stringify(duplicatedMeas));
+                                }
                             }
+                        });
+                        if (duplicatedIds.length > 0) {
+                            newSelection = duplicatedIds;
+                            setSelectedIds(newSelection);
+                            setDragStartItems(dupSnapshot);
                         }
-                    });
-                    setDragStartItems(snapshot);
+                    } else {
+                        const snapshot = {};
+                        newSelection.forEach(id => {
+                            const s = pageShapes.find(x => x.id === id);
+                            if (s) {
+                                snapshot[id] = JSON.parse(JSON.stringify(s));
+                            } else {
+                                const m = pageMeasurements.find(x => x.id === id);
+                                if (m) {
+                                    snapshot[id] = JSON.parse(JSON.stringify(m));
+                                }
+                            }
+                        });
+                        setDragStartItems(snapshot);
+                    }
 
                     const isClickingTextCanvas = e.target.tagName === "text";
                     isDraggingTextRef.current = isShift && isClickingTextCanvas && newSelection.some(id => {
@@ -1515,13 +1734,13 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                 const w = Math.abs(point.x - shapeStart.x);
                 const h = Math.abs(point.y - shapeStart.y);
 
-                // If distinct box dragged
-                if (w > 10 && h > 10) {
+                // If they dragged at all (more than 4px in either direction)
+                if (w > 4 || h > 4) {
                     newMeas = {
                         id,
                         type: "text",
                         pageIndex,
-                        box: { x, y, w, h },
+                        box: { x, y, w: Math.max(30, w), h: Math.max(20, h) },
                         text: "Text",
                         ...defaultShapeStyle
                     };
@@ -2277,8 +2496,8 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                 // Fix: Apply stroke style to Leader
                 const strokeDasharray = isShadow ? undefined : (
                     m.strokeDasharray === 'dashed' ? '12, 12'
-                    : m.strokeDasharray === 'dotted' ? '2, 8'
-                    : (m.strokeDasharray === 'none' ? undefined : m.strokeDasharray)
+                        : m.strokeDasharray === 'dotted' ? '2, 8'
+                            : (m.strokeDasharray === 'none' ? undefined : m.strokeDasharray)
                 );
 
                 let angle = 0;
@@ -2336,8 +2555,8 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
         const bgColor = isShadow ? "rgba(226, 232, 240, 0.4)" : (m.fill || (m.type === "text" ? "transparent" : "#fff"));
         const strokeDasharray = isShadow ? undefined : (
             m.strokeDasharray === 'dashed' ? '12, 12' :
-            m.strokeDasharray === 'dotted' ? '2, 8' :
-            (m.strokeDasharray === 'none' ? undefined : m.strokeDasharray)
+                m.strokeDasharray === 'dotted' ? '2, 8' :
+                    (m.strokeDasharray === 'none' ? undefined : m.strokeDasharray)
         );
 
         return (
@@ -2495,6 +2714,7 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                 onPointerUp={handlePointerUp}
                 onPointerLeave={() => setSnapIndicator(null)}
                 onDoubleClick={() => finishDrawing()}
+                onContextMenu={handleContextMenu}
             >
                 {/* 0️⃣ SHADOW SHAPES / MEASUREMENTS (Left behind during editing) */}
                 {(() => {
@@ -2601,6 +2821,27 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                     (() => {
                         // Temporary shape for preview
                         const tempId = "temp-draw";
+
+                        if (activeTool === "text") {
+                            const x = Math.min(shapeStart.x, cursor.x);
+                            const y = Math.min(shapeStart.y, cursor.y);
+                            const w = Math.abs(cursor.x - shapeStart.x);
+                            const h = Math.abs(cursor.y - shapeStart.y);
+
+                            const box = { x, y, w, h };
+
+                            const m = {
+                                id: tempId,
+                                type: "text",
+                                box,
+                                text: "Text",
+                                ...defaultShapeStyle,
+                                stroke: defaultShapeStyle.stroke || '#333333',
+                                strokeWidth: defaultShapeStyle.strokeWidth || 1,
+                                fill: defaultShapeStyle.fill || 'transparent'
+                            };
+                            return renderMeasurement(m);
+                        }
 
                         if (activeTool === "callout") {
                             // Don't show callout preview for the first 0.1s (100ms)
@@ -2994,6 +3235,87 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                 )}
 
             </svg>
+
+            {canvasContextMenu && createPortal(
+                <div
+                    style={{
+                        position: 'fixed',
+                        top: canvasContextMenu.y,
+                        left: canvasContextMenu.x,
+                        zIndex: 999999,
+                    }}
+                    className="context-menu-container bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-md shadow-xl py-1 min-w-[160px] text-sm animate-in fade-in zoom-in-95 duration-100"
+                    onMouseDown={e => e.stopPropagation()}
+                    onClick={e => e.stopPropagation()}
+                >
+                    {canvasContextMenu.type === 'object' ? (
+                        <>
+                            <button
+                                className="bg-transparent border-none text-[var(--text-primary)] px-4 py-2 text-left cursor-pointer text-[13px] flex items-center gap-2 w-full hover:bg-[var(--btn-hover)] disabled:opacity-50 disabled:cursor-default"
+                                onClick={handleCut}
+                            >
+                                Cut
+                            </button>
+                            <button
+                                className="bg-transparent border-none text-[var(--text-primary)] px-4 py-2 text-left cursor-pointer text-[13px] flex items-center gap-2 w-full hover:bg-[var(--btn-hover)] disabled:opacity-50 disabled:cursor-default"
+                                onClick={handleCopy}
+                            >
+                                Copy
+                            </button>
+                            <button
+                                className="bg-transparent border-none text-[var(--text-primary)] px-4 py-2 text-left cursor-pointer text-[13px] flex items-center gap-2 w-full hover:bg-[var(--btn-hover)] disabled:opacity-50 disabled:cursor-default"
+                                onClick={handleDuplicate}
+                            >
+                                Duplicate
+                            </button>
+                            <button
+                                className="bg-transparent border-none text-[var(--text-primary)] px-4 py-2 text-left cursor-pointer text-[13px] flex items-center gap-2 w-full hover:bg-[var(--btn-hover)] disabled:opacity-50 disabled:cursor-default"
+                                onClick={handleSetAsDefault}
+                            >
+                                Set as Default
+                            </button>
+                            <button
+                                className="bg-transparent border-none text-[var(--text-primary)] px-4 py-2 text-left cursor-pointer text-[13px] flex items-center gap-2 w-full hover:bg-[var(--btn-hover)] disabled:opacity-50 disabled:cursor-default"
+                                onClick={handleDelete}
+                            >
+                                Delete
+                            </button>
+                            <div className="h-px bg-[var(--border-color)] my-1" />
+                            <button
+                                className="bg-transparent border-none text-[var(--text-primary)] px-4 py-2 text-left cursor-pointer text-[13px] flex items-center gap-2 w-full hover:bg-[var(--btn-hover)] disabled:opacity-50 disabled:cursor-default"
+                                onClick={handleDeselectAll}
+                            >
+                                Deselect
+                            </button>
+                        </>
+                    ) : (
+                        <>
+                            <button
+                                className="bg-transparent border-none text-[var(--text-primary)] px-4 py-2 text-left cursor-pointer text-[13px] flex items-center gap-2 w-full hover:bg-[var(--btn-hover)] disabled:opacity-50 disabled:cursor-default"
+                                onClick={handlePaste}
+                                disabled={!clipboard || clipboard.length === 0}
+                            >
+                                Paste
+                            </button>
+                            <div className="h-px bg-[var(--border-color)] my-1" />
+                            <button
+                                className="bg-transparent border-none text-[var(--text-primary)] px-4 py-2 text-left cursor-pointer text-[13px] flex items-center gap-2 w-full hover:bg-[var(--btn-hover)] disabled:opacity-50 disabled:cursor-default"
+                                onClick={handleSelectAll}
+                            >
+                                Select All
+                            </button>
+                            <button
+                                className="bg-transparent border-none text-[var(--text-primary)] px-4 py-2 text-left cursor-pointer text-[13px] flex items-center gap-2 w-full hover:bg-[var(--btn-hover)] disabled:opacity-50 disabled:cursor-default"
+                                onClick={handleDeselectAll}
+                                disabled={selectedIds.length === 0}
+                            >
+                                Deselect All
+                            </button>
+                        </>
+                    )}
+                </div>,
+                document.body
+            )}
         </div>
     );
 };

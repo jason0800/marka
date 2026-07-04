@@ -44,11 +44,7 @@ const PropertiesPanel = () => {
 
     // --- Property Handlers ---
     const updateProp = (key, value) => {
-        // 1. "Sticky" Behavior: Always update the global default style
-        // so the user's preference persists for the next shape/measurement they draw.
-        if (key !== 'text') {
-            setDefaultShapeStyle({ [key]: value });
-        }
+        // Sticky style defaults are now explicitly set via "Set as Default" in the context menu.
 
         if (hasSelection) {
             selectedIds.forEach(id => {

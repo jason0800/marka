@@ -114,11 +114,10 @@ const ShortcutsDialog = ({ onClose }) => {
                                             setListeningId(toolId);
                                             setErrorMsg('');
                                         }}
-                                        className={`min-w-[48px] h-[30px] rounded border flex items-center justify-center font-mono text-xs font-semibold uppercase shadow-sm cursor-pointer transition-all duration-200 ${
-                                            isListening
+                                        className={`min-w-[48px] h-[30px] rounded border flex items-center justify-center font-mono text-xs font-semibold uppercase shadow-sm cursor-pointer transition-all duration-200 ${isListening
                                                 ? 'bg-[var(--primary-color)] text-[var(--text-active)] border-[var(--primary-color)] animate-pulse'
                                                 : 'bg-[var(--bg-secondary)] border-[var(--border-color)] text-[var(--text-primary)] hover:bg-[var(--btn-hover)]'
-                                        }`}
+                                            }`}
                                     >
                                         {isListening ? '...' : key}
                                     </button>
