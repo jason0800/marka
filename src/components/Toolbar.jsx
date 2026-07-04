@@ -146,7 +146,7 @@ const Toolbar = () => {
 
     // ── Style helpers ─────────────────────────────────────────────────────────
     const btnBase = [
-        'relative w-[36px] h-[36px] rounded-md border-none bg-transparent',
+        'relative w-[36px] h-[36px] rounded-l-md border-none bg-transparent',
         'text-[var(--text-secondary)] flex items-center justify-center',
         'transition-all duration-150 hover:bg-[var(--btn-hover)]',
         'hover:text-[var(--text-primary)] shrink-0 cursor-pointer overflow-hidden',
@@ -171,7 +171,7 @@ const Toolbar = () => {
                     return (
                         <button
                             key={item.id}
-                            className={btnBase}
+                            className={`${btnBase} ${isActive ? 'bg-gray-100' : ''}`}
                             onClick={() => handleToolSelect(item.id)}
                             title={title}
                         >
@@ -182,7 +182,7 @@ const Toolbar = () => {
                                     right: 0,
                                     top: 0,
                                     bottom: 0,
-                                    width: 5,
+                                    width: 3,
                                     background: 'var(--primary-color)',
                                     borderRadius: 0,
                                 }} />
@@ -220,7 +220,7 @@ const Toolbar = () => {
                                     right: 0,
                                     top: 0,
                                     bottom: 0,
-                                    width: 2,
+                                    width: 3,
                                     background: 'var(--primary-color)',
                                     borderRadius: 0,
                                 }} />

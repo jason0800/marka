@@ -2,35 +2,51 @@ import React, { useState } from 'react';
 import { LayoutGrid, Sliders } from 'lucide-react';
 import ThumbnailsPanel from './ThumbnailsPanel';
 import PropertiesPanel from './PropertiesPanel';
-import useAppStore from '../stores/useAppStore'; // Just in case, though might not need it here directly
+import useAppStore from '../stores/useAppStore';
 
-// Left panel with thumbnails, properties, and bookmarks.
 const LeftPanel = ({ pdfDocument }) => {
     const [activeTab, setActiveTab] = useState('thumbnails');
+
+    // Accent line fixed to the LEFT edge
+    const AccentLine = () => (
+        <span style={{
+            position: 'absolute',
+            left: 0, // Changed from right to left
+            top: 0,
+            bottom: 0,
+            width: 3,
+            background: 'var(--primary-color)',
+            borderRadius: 0,
+        }} />
+    );
 
     return (
         <div className="flex h-full border-r border-[var(--border-color)] bg-[var(--bg-secondary)] shrink-0">
             {/* Skinny Icon Column */}
             <div className="w-[48px] flex flex-col items-center py-3 border-r border-[var(--border-color)] bg-[var(--bg-secondary)] gap-1.5">
                 <button
-                    className={`p-2 rounded-md transition-colors ${activeTab === 'thumbnails'
-                        ? 'bg-[var(--primary-color)] text-[var(--text-active)]'
+                    // Added 'relative' here
+                    className={`relative p-2 rounded-r-md transition-colors ${activeTab === 'thumbnails'
+                        ? 'bg-gray-100 text-[var(--text-active)]'
                         : 'text-[var(--text-secondary)] hover:bg-[var(--btn-hover)]'
                         }`}
                     onClick={() => setActiveTab(activeTab === 'thumbnails' ? null : 'thumbnails')}
                     title="Thumbnails"
                 >
                     <LayoutGrid size={20} />
+                    {activeTab === 'thumbnails' && <AccentLine />}
                 </button>
                 <button
-                    className={`p-2 rounded-md transition-colors ${activeTab === 'properties'
-                        ? 'bg-[var(--primary-color)] text-[var(--text-active)]'
+                    // Added 'relative' here
+                    className={`relative p-2 rounded-r-md transition-colors ${activeTab === 'properties'
+                        ? 'bg-gray-100 text-[var(--text-active)]'
                         : 'text-[var(--text-secondary)] hover:bg-[var(--btn-hover)]'
                         }`}
                     onClick={() => setActiveTab(activeTab === 'properties' ? null : 'properties')}
                     title="Properties"
                 >
                     <Sliders size={20} />
+                    {activeTab === 'properties' && <AccentLine />}
                 </button>
             </div>
 
