@@ -34,6 +34,8 @@ const PDFViewer = ({ document }) => {
         pageRotations,
         setNumPages: setStoreNumPages,
         sheets,
+        jumpToPage,
+        setJumpToPage,
     } = useAppStore();
 
     // --- DOM refs ---
@@ -54,6 +56,7 @@ const PDFViewer = ({ document }) => {
     const startedPanButtonRef = useRef(null);
     const suppressNextClickRef = useRef(false);
     const suppressDetectUntilRef = useRef(0);
+    const lastPageSwitchTimeRef = useRef(0);
 
     // --- current page ref (avoid stale closures) ---
     const currentPageRef = useRef(currentPage);
@@ -394,6 +397,26 @@ const PDFViewer = ({ document }) => {
 
             if (dx === 0 && dy === 0) return;
 
+            if (viewMode === "single") {
+                const { minY, maxY } = boundsRef.current;
+                const nextY = y - dy;
+                const now = performance.now();
+                if (now - lastPageSwitchTimeRef.current > 500) {
+                    const currentP = currentPageRef.current;
+                    const totalS = useAppStore.getState().sheets.length;
+                    if (dy > 0 && nextY < minY && currentP < totalS) {
+                        lastPageSwitchTimeRef.current = now;
+                        setJumpToPage(currentP + 1);
+                        return;
+                    }
+                    if (dy < 0 && nextY > maxY && currentP > 1) {
+                        lastPageSwitchTimeRef.current = now;
+                        setJumpToPage(currentP - 1);
+                        return;
+                    }
+                }
+            }
+
             applyState({ x: x - dx, y: y - dy });
         };
 
@@ -407,7 +430,6 @@ const PDFViewer = ({ document }) => {
 
     // ---- mode switch positioning ----
     // ---- mode switch positioning & explicit jumps ----
-    const { jumpToPage, setJumpToPage } = useAppStore();
 
     useEffect(() => {
         if (!numPages) return;

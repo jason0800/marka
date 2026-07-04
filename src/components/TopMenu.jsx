@@ -4,12 +4,11 @@ import { loadPDF } from '../services/pdf-service';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
 import {
-    FileText, FolderOpen, Save,
+    FileText, FolderOpen, Save, Printer, Loader2,
     Undo, Redo, ZoomIn, ZoomOut, Sun, Moon,
     ChevronDown, RotateCw, RotateCcw, Clipboard, Scissors, Copy,
     Magnet, Keyboard
 } from 'lucide-react';
-import UpgradeDialog from './UpgradeDialog';
 import DocumentPropertiesDialog from './DocumentPropertiesDialog';
 import { exportFlattenedPDF } from '../services/pdf-export-service';
 import { toast } from 'sonner';
@@ -28,12 +27,12 @@ const TopMenu = ({ setPdfDocument, setIsLoading, isDocumentLoaded, onNewPDF, pdf
         undo, redo, history, historyIndex, selectedIds, setSelectedIds, deleteShape, deleteMeasurement, pushHistory,
         copy, cut, paste, clipboard, rotateAllPages, currentPage,
         fileName, fileSize, setFileInfo,
-        isPremium, setProjectData, snappingEnabled, setSnappingEnabled
+        setProjectData, snappingEnabled, setSnappingEnabled
     } = useAppStore();
 
 
     const [showDocProps, setShowDocProps] = useState(false);
-    const [showUpgradeDialog, setShowUpgradeDialog] = useState(false);
+    const [isPrinting, setIsPrinting] = useState(false);
     const [loadingProgress, setLoadingProgress] = useState(0);
     const [showShortcutsDialog, setShowShortcutsDialog] = useState(false);
 
@@ -182,26 +181,12 @@ const TopMenu = ({ setPdfDocument, setIsLoading, isDocumentLoaded, onNewPDF, pdf
 
     // --- Project Save/Load (.marka) ---
     const handleSaveProject = () => {
-        // PRO mode check temporarily disabled for testing
-        // if (!isPremium) {
-        //     setShowUpgradeDialog(true);
-        //     setActiveMenu(null);
-        //     return;
-        // }
-
         const state = useAppStore.getState();
         saveProject(state, state.fileName);
         setActiveMenu(null);
     };
 
     const handleOpenProject = async () => {
-        // PRO mode check temporarily disabled for testing
-        // if (!isPremium) {
-        //     setShowUpgradeDialog(true);
-        //     setActiveMenu(null);
-        //     return;
-        // }
-
         setActiveMenu(null);
 
         try {
@@ -292,7 +277,7 @@ const TopMenu = ({ setPdfDocument, setIsLoading, isDocumentLoaded, onNewPDF, pdf
     const handleSave = async () => {
         if (!isDocumentLoaded) return;
 
-        setIsLoading(true);
+        setIsPrinting(true);
         setLoadingProgress(0);
 
         try {
@@ -313,10 +298,10 @@ const TopMenu = ({ setPdfDocument, setIsLoading, isDocumentLoaded, onNewPDF, pdf
             console.error("Save PDF failed", e);
             alert("Save PDF failed: " + e.message);
         } finally {
-            setIsLoading(false);
+            setIsPrinting(false);
             setLoadingProgress(0);
+            setActiveMenu(null);
         }
-        setActiveMenu(null);
     };
 
 
@@ -329,19 +314,6 @@ const TopMenu = ({ setPdfDocument, setIsLoading, isDocumentLoaded, onNewPDF, pdf
     return (
 
         <div className="h-10 bg-[var(--bg-secondary)] border-b border-[var(--border-color)] flex items-center px-4 text-[var(--text-primary)] text-sm select-none relative z-[100]">
-            {/* Loading Overlay for Export */}
-            {loadingProgress > 0 && (
-                <div className="fixed inset-0 z-[9999] bg-transparent flex items-center justify-center flex-col">
-                    <div className="text-white text-xl font-bold mb-4">Generating PDF...</div>
-                    <div className="w-[300px] h-4 bg-gray-700 rounded-full overflow-hidden">
-                        <div
-                            className="h-full bg-[var(--primary-color)] transition-all duration-300 ease-out"
-                            style={{ width: `${loadingProgress}%` }}
-                        />
-                    </div>
-                    <div className="text-white mt-2">{loadingProgress}%</div>
-                </div>
-            )}
 
             <div className="font-semibold mr-6 text-white hidden">Marka</div>
 
@@ -363,11 +335,13 @@ const TopMenu = ({ setPdfDocument, setIsLoading, isDocumentLoaded, onNewPDF, pdf
                             <button className="bg-transparent border-none text-[var(--text-primary)] px-4 py-2 text-left cursor-pointer text-[13px] flex items-center gap-2 w-full hover:bg-[#b4e6a0] hover:text-[#1a1a1a] disabled:opacity-50 disabled:cursor-default whitespace-nowrap" onClick={handleOpen}><FolderOpen size={16} /> Open PDF</button>
 
                             <div className="h-px bg-[var(--border-color)] my-1" />
-                            <button className="bg-transparent border-none text-[var(--text-primary)] px-4 py-2 text-left cursor-pointer text-[13px] flex items-center gap-2 w-full hover:bg-[#b4e6a0] hover:text-[#1a1a1a] disabled:opacity-50 disabled:cursor-default whitespace-nowrap" onClick={handleOpenProject}><FolderOpen size={16} /> Open Project <span className="text-[10px] bg-amber-500 text-black px-1 rounded ml-auto">PRO</span></button>
-                            <button className={`bg-transparent border-none text-[var(--text-primary)] px-4 py-2 text-left cursor-pointer text-[13px] flex items-center gap-2 w-full hover:bg-[#b4e6a0] hover:text-[#1a1a1a] disabled:opacity-50 disabled:cursor-default whitespace-nowrap ${!isDocumentLoaded ? 'opacity-50 cursor-default' : ''}`} onClick={handleSaveProject} disabled={!isDocumentLoaded}><Save size={16} /> Save Project <span className="text-[10px] bg-amber-500 text-black px-1 rounded ml-auto">PRO</span></button>
+                            <button className="bg-transparent border-none text-[var(--text-primary)] px-4 py-2 text-left cursor-pointer text-[13px] flex items-center gap-2 w-full hover:bg-[#b4e6a0] hover:text-[#1a1a1a] disabled:opacity-50 disabled:cursor-default whitespace-nowrap" onClick={handleOpenProject}><FolderOpen size={16} /> Open Project</button>
+                            <button className={`bg-transparent border-none text-[var(--text-primary)] px-4 py-2 text-left cursor-pointer text-[13px] flex items-center gap-2 w-full hover:bg-[#b4e6a0] hover:text-[#1a1a1a] disabled:opacity-50 disabled:cursor-default whitespace-nowrap ${!isDocumentLoaded ? 'opacity-50 cursor-default' : ''}`} onClick={handleSaveProject} disabled={!isDocumentLoaded}><Save size={16} /> Save Project</button>
 
                             <div className="h-px bg-[var(--border-color)] my-1" />
-                            <button className={`bg-transparent border-none text-[var(--text-primary)] px-4 py-2 text-left cursor-pointer text-[13px] flex items-center gap-2 w-full hover:bg-[#b4e6a0] hover:text-[#1a1a1a] disabled:opacity-50 disabled:cursor-default whitespace-nowrap ${!isDocumentLoaded ? 'opacity-50 cursor-default' : ''}`} onClick={handleSave} disabled={!isDocumentLoaded}><Save size={16} /> Save Flattened PDF</button>
+                            <button className={`bg-transparent border-none text-[var(--text-primary)] px-4 py-2 text-left cursor-pointer text-[13px] flex items-center gap-2 w-full hover:bg-[#b4e6a0] hover:text-[#1a1a1a] disabled:opacity-50 disabled:cursor-default whitespace-nowrap ${!isDocumentLoaded || isPrinting ? 'opacity-50 cursor-default' : ''}`} onClick={handleSave} disabled={!isDocumentLoaded || isPrinting}>
+                                {isPrinting ? <Loader2 size={16} className="animate-spin text-[var(--primary-color)]" /> : <Printer size={16} />} Print PDF
+                            </button>
                         </div>
                     )}
                 </div>
@@ -527,10 +501,6 @@ const TopMenu = ({ setPdfDocument, setIsLoading, isDocumentLoaded, onNewPDF, pdf
                     fileSize={fileSize}
                     onClose={() => setShowDocProps(false)}
                 />
-            )}
-
-            {showUpgradeDialog && (
-                <UpgradeDialog onClose={() => setShowUpgradeDialog(false)} />
             )}
 
             {showShortcutsDialog && (

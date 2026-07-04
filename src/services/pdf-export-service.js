@@ -38,7 +38,7 @@ export const exportFlattenedPDF = async (
         let width = 800;
         let height = 1100;
         const canvas = document.createElement("canvas");
-        const scale = 4.0; // Render at 4x for high-resolution vector sharpness
+        const scale = 5.0; // Render at 5x for print-ready vector-like sharpness
 
         if (sheet && sheet.type === 'blank') {
             width = sheet.width;
@@ -93,8 +93,8 @@ export const exportFlattenedPDF = async (
             width > height ? "l" : "p"
         );
 
-        const imgData = canvas.toDataURL("image/jpeg", 0.95); // High quality 0.95 (sharp and compression artifact free)
-        pdf.addImage(imgData, "JPEG", 0, 0, width, height);
+        const imgData = canvas.toDataURL("image/png"); // Lossless PNG (absolutely crisp text & line drawings)
+        pdf.addImage(imgData, "PNG", 0, 0, width, height, undefined, "FAST");
 
         // Cleanup to save memory
         canvas.width = 1;
