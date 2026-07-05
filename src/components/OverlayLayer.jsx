@@ -160,6 +160,7 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
         undo,
         redo,
         defaultShapeStyle,
+        setDefaultShapeStyle,
         viewport,
         snappingEnabled,
         cut,
