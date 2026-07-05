@@ -109,14 +109,6 @@ const ThumbnailsPanel = ({ pdfDocument }) => {
                     Sheets
                 </h2>
                 <div className="flex items-center gap-2">
-                    <button
-                        onClick={() => handleOpenInsertDialog(sheets.length)}
-                        className="p-1 rounded hover:bg-[var(--btn-hover)] text-[var(--text-secondary)] transition-colors flex items-center gap-1"
-                        title="Append Blank Sheet"
-                    >
-                        <Plus size={16} />
-                        <span className="text-xs">Add</span>
-                    </button>
                     <span className="text-xs text-[var(--text-secondary)]">{numPages} Pages</span>
                 </div>
             </div>

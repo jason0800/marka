@@ -101,6 +101,8 @@ const PropertiesPanel = () => {
     const strokeWidth = source?.strokeWidth || defaultShapeStyle.strokeWidth;
     const strokeDasharray = source?.strokeDasharray || defaultShapeStyle.strokeDasharray;
     const opacity = source?.opacity ?? defaultShapeStyle.opacity;
+    const strokeOpacity = source?.strokeOpacity ?? defaultShapeStyle.strokeOpacity ?? 1;
+    const textOpacity = source?.textOpacity ?? defaultShapeStyle.textOpacity ?? 1;
 
     // Local state for rotation input to allow typing "-"
     const [tempRotation, setTempRotation] = useState(null);
@@ -143,21 +145,6 @@ const PropertiesPanel = () => {
         <div className="bg-[var(--bg-secondary)] flex flex-col text-[var(--text-primary)] h-full">
             <div className="flex justify-between items-center p-3 px-4 border-b border-[var(--border-color)] bg-[var(--bg-secondary)] shrink-0">
                 <h2 className="text-sm font-semibold m-0">Properties</h2>
-                {hasSelection && (
-                    <button
-                        className="p-1 rounded text-[var(--text-secondary)] hover:text-[#ff4d4f] hover:bg-[var(--btn-hover)] transition-colors"
-                        onClick={() => {
-                            selectedIds.forEach(id => {
-                                if (shapes.find(s => s.id === id)) deleteShape(id);
-                                else deleteMeasurement(id);
-                            });
-                            useAppStore.getState().setSelectedIds([]); // Clear selection using store getter or passed prop if available
-                        }}
-                        title="Delete Selected (Delete/Backspace)"
-                    >
-                        <Trash2 size={16} />
-                    </button>
-                )}
             </div>
 
             {!hasSelection ? (
@@ -185,6 +172,41 @@ const PropertiesPanel = () => {
                                 </div>
                             </div>
 
+                            {/* Font Style Toggles */}
+                            <div className="flex flex-col gap-1">
+                                <label className="text-xs text-[var(--text-secondary)] font-medium">Text Style</label>
+                                <div className="flex gap-1 bg-[var(--bg-color)] p-0.5 rounded border border-[var(--border-color)] w-max">
+                                    <button
+                                        onClick={() => updateProp('bold', !source?.bold)}
+                                        className={`w-7 h-7 flex items-center justify-center font-bold text-xs rounded transition-colors ${source?.bold ? 'bg-[var(--primary-color)] text-white' : 'text-[var(--text-secondary)] hover:bg-[var(--btn-hover)] hover:text-[var(--text-primary)]'}`}
+                                        title="Bold"
+                                    >
+                                        B
+                                    </button>
+                                    <button
+                                        onClick={() => updateProp('italic', !source?.italic)}
+                                        className={`w-7 h-7 flex items-center justify-center italic text-xs rounded transition-colors ${source?.italic ? 'bg-[var(--primary-color)] text-white' : 'text-[var(--text-secondary)] hover:bg-[var(--btn-hover)] hover:text-[var(--text-primary)]'}`}
+                                        title="Italic"
+                                    >
+                                        I
+                                    </button>
+                                    <button
+                                        onClick={() => updateProp('underline', !source?.underline)}
+                                        className={`w-7 h-7 flex items-center justify-center underline text-xs rounded transition-colors ${source?.underline ? 'bg-[var(--primary-color)] text-white' : 'text-[var(--text-secondary)] hover:bg-[var(--btn-hover)] hover:text-[var(--text-primary)]'}`}
+                                        title="Underline"
+                                    >
+                                        U
+                                    </button>
+                                    <button
+                                        onClick={() => updateProp('crossout', !source?.crossout)}
+                                        className={`w-7 h-7 flex items-center justify-center line-through text-xs rounded transition-colors ${source?.crossout ? 'bg-[var(--primary-color)] text-white' : 'text-[var(--text-secondary)] hover:bg-[var(--btn-hover)] hover:text-[var(--text-primary)]'}`}
+                                        title="Cross-out"
+                                    >
+                                        S
+                                    </button>
+                                </div>
+                            </div>
+
                             {/* Text Color */}
                             <div className="flex flex-col gap-1">
                                 <label className="text-xs text-[var(--text-secondary)] font-medium">Text Color</label>
@@ -192,7 +214,7 @@ const PropertiesPanel = () => {
                                     {STROKE_COLORS.map(c => (
                                         <button
                                             key={c}
-                                            className={`w-5 h-5 rounded border border-transparent cursor-pointer transition-transform duration-100 hover:scale-110 ${(source?.textColor || source?.stroke) === c ? 'ring-2 ring-[var(--text-primary)] ring-offset-1 ring-offset-[var(--bg-secondary)]' : ''}`}
+                                            className={`w-5 h-5 rounded border border-transparent cursor-pointer transition-transform duration-100 hover:scale-110 ${(source?.textColor || '#000000') === c ? 'ring-2 ring-[var(--text-primary)] ring-offset-1 ring-offset-[var(--bg-secondary)]' : ''}`}
                                             style={{ backgroundColor: c }}
                                             onClick={() => updateProp('textColor', c)}
                                         />
@@ -203,15 +225,15 @@ const PropertiesPanel = () => {
 
                                     {/* Custom Color Button */}
                                     <button
-                                        className={`w-5 h-5 rounded border border-transparent cursor-pointer flex items-center justify-center transition-transform duration-100 hover:scale-110 ${!STROKE_COLORS.includes(source?.textColor || source?.stroke) ? 'ring-2 ring-[var(--text-primary)] ring-offset-1 ring-offset-[var(--bg-secondary)]' : ''}`}
+                                        className={`w-5 h-5 rounded border border-transparent cursor-pointer flex items-center justify-center transition-transform duration-100 hover:scale-110 ${!STROKE_COLORS.includes(source?.textColor || '#000000') ? 'ring-2 ring-[var(--text-primary)] ring-offset-1 ring-offset-[var(--bg-secondary)]' : ''}`}
                                         style={{
-                                            background: !STROKE_COLORS.includes(source?.textColor || source?.stroke) ? (source?.textColor || source?.stroke) : 'linear-gradient(135deg, #E5E7EB, #9CA3AF)',
+                                            background: !STROKE_COLORS.includes(source?.textColor || '#000000') ? (source?.textColor || '#000000') : 'linear-gradient(135deg, #E5E7EB, #9CA3AF)',
                                             border: '1px solid var(--border-color)'
                                         }}
-                                        onClick={(e) => openColorPicker(e, 'textColor', source?.textColor || source?.stroke)}
+                                        onClick={(e) => openColorPicker(e, 'textColor', source?.textColor || '#000000')}
                                         title="Custom Color"
                                     >
-                                        {!STROKE_COLORS.includes(source?.textColor || source?.stroke) ? null : <div className="w-full h-full rounded-sm bg-[var(--bg-secondary)] opacity-0 hover:opacity-20" />}
+                                        {!STROKE_COLORS.includes(source?.textColor || '#000000') ? null : <div className="w-full h-full rounded-sm bg-[var(--bg-secondary)] opacity-0 hover:opacity-20" />}
                                     </button>
                                 </div>
                             </div>
@@ -220,7 +242,7 @@ const PropertiesPanel = () => {
 
                     <div className="flex flex-col gap-1">
                         <label className="text-xs text-[var(--text-secondary)] font-medium">
-                            {source?.type === 'callout' ? 'Line Color' : (source?.type === 'text' ? 'Border Color' : 'Stroke')}
+                            {source?.type === 'callout' ? 'Line Color' : (source?.type === 'text' ? 'Border Color' : 'Border')}
                         </label>
                         <div className="flex gap-2 items-center">
                             {STROKE_COLORS.map(c => (
@@ -290,7 +312,7 @@ const PropertiesPanel = () => {
 
                     {/* Stroke Width */}
                     <div className="flex flex-col gap-1">
-                        <label className="text-xs text-[var(--text-secondary)] font-medium">Stroke Width</label>
+                        <label className="text-xs text-[var(--text-secondary)] font-medium">Border Width</label>
                         <div className="flex items-center bg-[var(--bg-color)] px-2 py-0.5 rounded border border-transparent focus-within:border-[var(--primary-color)] transition-colors h-7 w-[80px]">
                             <input
                                 type="number"
@@ -307,7 +329,7 @@ const PropertiesPanel = () => {
 
                     {/* // line styles */}
                     <div className="flex flex-col gap-1">
-                        <label className="text-xs text-[var(--text-secondary)] font-medium">Stroke Style</label>
+                        <label className="text-xs text-[var(--text-secondary)] font-medium">Border Style</label>
                         <div className="flex gap-1 bg-[var(--bg-color)] p-0.5 rounded-md border border-[var(--border-color)]">
                             <button
                                 className={`flex-1 h-7 border-none bg-transparent rounded cursor-pointer flex items-center justify-center text-[var(--text-secondary)] hover:bg-[var(--btn-hover)] hover:text-[var(--text-primary)] ${strokeDasharray === 'none' ? '!bg-[var(--primary-color)] !text-[var(--text-active)] shadow-[0_0_10px_rgba(var(--primary-color-rgb),0.25)]' : ''}`}
@@ -342,18 +364,49 @@ const PropertiesPanel = () => {
                         </div>
                     </div>
 
-                    {/* Opacity Control */}
+                    {/* Fill Opacity Control - Hidden for Lines/Arrows/Length */}
+                    {!['line', 'arrow', 'length'].includes(source?.type) && (
+                        <div className="flex flex-col gap-2">
+                            <div className="flex justify-between items-center mb-1">
+                                <label className="text-xs text-[var(--text-secondary)] font-medium">Fill Opacity</label>
+                                <div className="flex items-center bg-[var(--bg-color)] px-1.5 py-0.5 rounded min-w-[12px] border border-transparent focus-within:border-[var(--primary-color)] transition-colors">
+                                    <input
+                                        type="text"
+                                        value={`${Math.round(opacity * 100)}`}
+                                        onChange={(e) => {
+                                            let val = parseInt(e.target.value.replace(/[^0-9]/g, '')) || 0;
+                                            val = Math.min(100, Math.max(0, val));
+                                            updateProp('opacity', val / 100);
+                                        }}
+                                        className="w-[24px] text-xs text-[var(--text-primary)] bg-transparent outline-none text-right font-mono"
+                                    />
+                                    <span className="text-xs text-[var(--text-secondary)] ml-0.5">%</span>
+                                </div>
+                            </div>
+                            <input
+                                type="range"
+                                min="0"
+                                max="1"
+                                step="0.01"
+                                value={opacity}
+                                onChange={(e) => updateProp('opacity', parseFloat(e.target.value))}
+                                className="w-full h-0.5 bg-[var(--border-color)] rounded-sm appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-2.5 [&::-webkit-slider-thumb]:h-2.5 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-[var(--text-primary)] [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-[var(--bg-secondary)] [&::-webkit-slider-thumb]:shadow-md"
+                            />
+                        </div>
+                    )}
+
+                    {/* Stroke Opacity Control */}
                     <div className="flex flex-col gap-2">
                         <div className="flex justify-between items-center mb-1">
-                            <label className="text-xs text-[var(--text-secondary)] font-medium">Opacity</label>
+                            <label className="text-xs text-[var(--text-secondary)] font-medium">Border Opacity</label>
                             <div className="flex items-center bg-[var(--bg-color)] px-1.5 py-0.5 rounded min-w-[12px] border border-transparent focus-within:border-[var(--primary-color)] transition-colors">
                                 <input
                                     type="text"
-                                    value={`${Math.round(opacity * 100)}`}
+                                    value={`${Math.round(strokeOpacity * 100)}`}
                                     onChange={(e) => {
                                         let val = parseInt(e.target.value.replace(/[^0-9]/g, '')) || 0;
                                         val = Math.min(100, Math.max(0, val));
-                                        updateProp('opacity', val / 100);
+                                        updateProp('strokeOpacity', val / 100);
                                     }}
                                     className="w-[24px] text-xs text-[var(--text-primary)] bg-transparent outline-none text-right font-mono"
                                 />
@@ -365,11 +418,42 @@ const PropertiesPanel = () => {
                             min="0"
                             max="1"
                             step="0.01"
-                            value={opacity}
-                            onChange={(e) => updateProp('opacity', parseFloat(e.target.value))}
+                            value={strokeOpacity}
+                            onChange={(e) => updateProp('strokeOpacity', parseFloat(e.target.value))}
                             className="w-full h-0.5 bg-[var(--border-color)] rounded-sm appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-2.5 [&::-webkit-slider-thumb]:h-2.5 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-[var(--text-primary)] [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-[var(--bg-secondary)] [&::-webkit-slider-thumb]:shadow-md"
                         />
                     </div>
+
+                    {/* Text Opacity Control - Only for text/label elements */}
+                    {(['text', 'callout', 'comment', 'length', 'area', 'perimeter'].includes(source?.type)) && (
+                        <div className="flex flex-col gap-2">
+                            <div className="flex justify-between items-center mb-1">
+                                <label className="text-xs text-[var(--text-secondary)] font-medium">Text Opacity</label>
+                                <div className="flex items-center bg-[var(--bg-color)] px-1.5 py-0.5 rounded min-w-[12px] border border-transparent focus-within:border-[var(--primary-color)] transition-colors">
+                                    <input
+                                        type="text"
+                                        value={`${Math.round(textOpacity * 100)}`}
+                                        onChange={(e) => {
+                                            let val = parseInt(e.target.value.replace(/[^0-9]/g, '')) || 0;
+                                            val = Math.min(100, Math.max(0, val));
+                                            updateProp('textOpacity', val / 100);
+                                        }}
+                                        className="w-[24px] text-xs text-[var(--text-primary)] bg-transparent outline-none text-right font-mono"
+                                    />
+                                    <span className="text-xs text-[var(--text-secondary)] ml-0.5">%</span>
+                                </div>
+                            </div>
+                            <input
+                                type="range"
+                                min="0"
+                                max="1"
+                                step="0.01"
+                                value={textOpacity}
+                                onChange={(e) => updateProp('textOpacity', parseFloat(e.target.value))}
+                                className="w-full h-0.5 bg-[var(--border-color)] rounded-sm appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-2.5 [&::-webkit-slider-thumb]:h-2.5 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-[var(--text-primary)] [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-[var(--bg-secondary)] [&::-webkit-slider-thumb]:shadow-md"
+                            />
+                        </div>
+                    )}
 
                     {/* Rotation Control - Hidden for Lines/Arrows/Length */}
                     {!['line', 'arrow', 'length'].includes(source?.type) && (

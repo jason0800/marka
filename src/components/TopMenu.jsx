@@ -28,7 +28,8 @@ const TopMenu = ({ setPdfDocument, setIsLoading, isDocumentLoaded, onNewPDF, pdf
         undo, redo, history, historyIndex, selectedIds, setSelectedIds, deleteShape, deleteMeasurement, pushHistory,
         copy, cut, paste, clipboard, rotateAllPages, currentPage,
         fileName, fileSize, setFileInfo,
-        setProjectData, snappingEnabled, setSnappingEnabled
+        setProjectData, snappingEnabled, setSnappingEnabled,
+        addShape, addMeasurement
     } = useAppStore();
 
 
@@ -68,21 +69,72 @@ const TopMenu = ({ setPdfDocument, setIsLoading, isDocumentLoaded, onNewPDF, pdf
                 return;
             }
 
-            // Paste
-            if ((e.ctrlKey || e.metaKey) && (e.key.toLowerCase() === 'v' || e.code === 'KeyV')) {
-                e.preventDefault();
-                console.log("Shortcut: Paste");
-                paste();
-                pushHistory(); // Push history after paste
-                return;
-            }
-
             // Cut
             if ((e.ctrlKey || e.metaKey) && (e.key.toLowerCase() === 'x' || e.code === 'KeyX')) {
                 e.preventDefault();
                 console.log("Shortcut: Cut");
                 cut();
                 pushHistory(); // Push history after cut
+                return;
+            }
+
+            // Select All
+            if ((e.ctrlKey || e.metaKey) && (e.key.toLowerCase() === 'a' || e.code === 'KeyA')) {
+                e.preventDefault();
+                const allPageItemIds = [
+                    ...shapes.filter(s => s.pageIndex === currentPage).map(s => s.id),
+                    ...measurements.filter(m => m.pageIndex === currentPage).map(m => m.id)
+                ];
+                setSelectedIds(allPageItemIds);
+                return;
+            }
+
+            // Duplicate
+            if ((e.ctrlKey || e.metaKey) && (e.key.toLowerCase() === 'd' || e.code === 'KeyD')) {
+                e.preventDefault();
+                if (selectedIds.length > 0) {
+                    const newIds = [];
+                    selectedIds.forEach(id => {
+                        const s = shapes.find(x => x.id === id);
+                        if (s) {
+                            const newId = crypto.randomUUID();
+                            newIds.push(newId);
+                            addShape({
+                                ...s,
+                                id: newId,
+                                x: s.x !== undefined ? s.x + 20 : undefined,
+                                y: s.y !== undefined ? s.y + 20 : undefined,
+                                start: s.start ? { x: s.start.x + 20, y: s.start.y + 20 } : undefined,
+                                end: s.end ? { x: s.end.x + 20, y: s.end.y + 20 } : undefined,
+                                points: s.points ? s.points.map(p => ({ x: p.x + 20, y: p.y + 20 })) : undefined,
+                            });
+                        } else {
+                            const m = measurements.find(x => x.id === id);
+                            if (m) {
+                                const newId = crypto.randomUUID();
+                                newIds.push(newId);
+                                addMeasurement({
+                                    ...m,
+                                    id: newId,
+                                    points: m.points ? m.points.map(p => ({ x: p.x + 20, y: p.y + 20 })) : undefined,
+                                    point: m.point ? { x: m.point.x + 20, y: m.point.y + 20 } : undefined,
+                                    tip: m.tip ? { x: m.tip.x + 20, y: m.tip.y + 20 } : undefined,
+                                    knee: m.knee ? { x: m.knee.x + 20, y: m.knee.y + 20 } : undefined,
+                                    box: m.box ? { ...m.box, x: m.box.x + 20, y: m.box.y + 20 } : undefined,
+                                    textOffset: m.textOffset ? { x: m.textOffset.x, y: m.textOffset.y } : undefined,
+                                });
+                            }
+                        }
+                    });
+                    setSelectedIds(newIds);
+                    pushHistory();
+                }
+                return;
+            }
+
+            // Deselect
+            if (e.key === 'Escape') {
+                setSelectedIds([]);
                 return;
             }
 

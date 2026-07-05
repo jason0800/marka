@@ -1,12 +1,14 @@
 import {
     MousePointer2, Hand, RulerDimensionLine, Circle, Minus,
     ArrowRight, RectangleHorizontal, Type, Tally5Icon, PencilRuler,
+    Paintbrush,
 } from 'lucide-react';
 import { createPortal } from 'react-dom';
 import useAppStore from '../stores/useAppStore';
 import { useEffect, useState, useRef, useCallback } from 'react';
 import CalibrationDialog from './CalibrationDialog';
 import { confirmToast } from '../utils/confirm-toast';
+import { toast } from 'sonner';
 
 // ─── All tool IDs for keyboard shortcut lookup ────────────────────────────────
 const ALL_TOOL_IDS = [
@@ -14,13 +16,14 @@ const ALL_TOOL_IDS = [
     'length', 'area', 'angle', 'count',
     'callout', 'text',
     'rectangle', 'circle', 'polygon', 'polyline',
-    'line', 'arrow',
+    'line', 'arrow', 'format-painter',
 ];
 
 // ─── Toolbar layout definition ────────────────────────────────────────────────
 const TOOLBAR = [
     { type: 'tool', id: 'select', icon: MousePointer2, label: 'Select' },
     { type: 'tool', id: 'pan', icon: Hand, label: 'Pan' },
+    { type: 'tool', id: 'format-painter', icon: Paintbrush, label: 'Format Painter' },
     { type: 'separator' },
     { type: 'tool', id: 'calibrate', icon: PencilRuler, label: 'Set Scale' },
     { type: 'tool', id: 'length', icon: RulerDimensionLine, label: 'Length' },
@@ -72,6 +75,35 @@ const Toolbar = () => {
 
     // ── Tool activation ──────────────────────────────────────────────────────
     const handleToolSelect = useCallback(async (toolId) => {
+        if (toolId === 'format-painter') {
+            const { selectedIds, shapes, measurements, setFormatPaintStyle } = useAppStore.getState();
+            const firstSelectedId = selectedIds[0];
+            const sourceItem = firstSelectedId 
+                ? (shapes.find(s => s.id === firstSelectedId) || measurements.find(m => m.id === firstSelectedId))
+                : null;
+            if (sourceItem) {
+                // Copy formatting
+                setFormatPaintStyle({
+                    stroke: sourceItem.stroke,
+                    fill: sourceItem.fill,
+                    strokeWidth: sourceItem.strokeWidth,
+                    strokeDasharray: sourceItem.strokeDasharray,
+                    opacity: sourceItem.opacity,
+                    textColor: sourceItem.textColor,
+                    fontSize: sourceItem.fontSize,
+                    bold: sourceItem.bold,
+                    italic: sourceItem.italic,
+                    underline: sourceItem.underline,
+                    crossout: sourceItem.crossout,
+                });
+                setActiveTool('format-painter');
+                toast.success('Format copied! Click another item to apply style.');
+            } else {
+                toast.error('Select an item first to copy formatting');
+            }
+            setFlyout(null);
+            return;
+        }
         if (toolId === 'calibrate') {
             setShowCalibrationDialog(true);
             setFlyout(null);

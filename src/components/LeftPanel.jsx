@@ -5,7 +5,7 @@ import PropertiesPanel from './PropertiesPanel';
 import useAppStore from '../stores/useAppStore';
 
 const LeftPanel = ({ pdfDocument }) => {
-    const [activeTab, setActiveTab] = useState('thumbnails');
+    const { leftPanelActiveTab: activeTab, setLeftPanelActiveTab: setActiveTab } = useAppStore();
 
     // Accent line fixed to the LEFT edge
     const AccentLine = () => (

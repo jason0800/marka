@@ -150,13 +150,14 @@ const useAppStore = create((set, get) => ({
         return { shortcuts: defaultShortcuts };
     }),
 
-    // --- Default Shape Properties (Sticky) ---
     defaultShapeStyle: {
         stroke: "#000000",
         strokeWidth: 2,
         strokeDasharray: "none",
         fill: "#ffffff",
         opacity: 1,
+        strokeOpacity: 1,
+        textOpacity: 1,
     },
     setDefaultShapeStyle: (style) =>
         set((state) => ({
@@ -244,6 +245,12 @@ const useAppStore = create((set, get) => ({
 
     isPremium: false, // Start as free user
     setPremiumStatus: (status) => set({ isPremium: status }),
+
+    leftPanelActiveTab: 'thumbnails',
+    setLeftPanelActiveTab: (tab) => set({ leftPanelActiveTab: tab }),
+
+    formatPaintStyle: null,
+    setFormatPaintStyle: (style) => set({ formatPaintStyle: style }),
 
     setProjectData: (data) =>
         set((state) => {
@@ -398,6 +405,9 @@ const useAppStore = create((set, get) => ({
                     }
                     if (newItem.box) {
                         newItem.box = { ...newItem.box, x: newItem.box.x + offset, y: newItem.box.y + offset };
+                    }
+                    if (newItem.knee) {
+                        newItem.knee = { x: newItem.knee.x + offset, y: newItem.knee.y + offset };
                     }
 
                     newMeasurements.push(newItem);

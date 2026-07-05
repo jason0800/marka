@@ -717,6 +717,7 @@ const PDFViewer = ({ document }) => {
     const getCursor = () => {
         if (dragging) return "grabbing";
         if (activeTool === "pan") return "grab";
+        if (activeTool === "format-painter") return "copy";
         return "default";
     };
 

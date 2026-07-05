@@ -17,6 +17,7 @@ const OverlayCanvasLayer = ({
     calibrationScales = {},
 }) => {
     const canvasRef = useRef(null);
+    const imageCacheRef = useRef(new Map());
 
     // Helpers for units
     const calibrationScale = calibrationScales[pageIndex - 1] || 1.0;
@@ -29,39 +30,45 @@ const OverlayCanvasLayer = ({
         const canvas = canvasRef.current;
         if (!canvas) return;
 
-        // Handle High DPI + Render Scale (Crispness)
-        const dpr = window.devicePixelRatio || 1;
-        const effectiveDpr = dpr * renderScale;
+        let active = true;
+        const imageCache = imageCacheRef.current;
 
-        // Resize canvas if needed
-        let targetW = Math.floor(width * effectiveDpr);
-        let targetH = Math.floor(height * effectiveDpr);
+        const draw = () => {
+            if (!active) return;
 
-        // Safety Cap: Downscale if exceeding limits
-        let reductionScale = 1.0;
-        const totalPixels = targetW * targetH;
+            // Handle High DPI + Render Scale (Crispness)
+            const dpr = window.devicePixelRatio || 1;
+            const effectiveDpr = dpr * renderScale;
 
-        if (totalPixels > MAX_CANVAS_PIXELS) {
-            reductionScale = Math.sqrt(MAX_CANVAS_PIXELS / totalPixels);
-        } else if (targetW > MAX_SIDE || targetH > MAX_SIDE) {
-            reductionScale = Math.min(MAX_SIDE / targetW, MAX_SIDE / targetH);
-        }
+            // Resize canvas if needed
+            let targetW = Math.floor(width * effectiveDpr);
+            let targetH = Math.floor(height * effectiveDpr);
 
-        if (reductionScale < 1.0) {
-            targetW = Math.floor(targetW * reductionScale);
-            targetH = Math.floor(targetH * reductionScale);
-        }
+            // Safety Cap: Downscale if exceeding limits
+            let reductionScale = 1.0;
+            const totalPixels = targetW * targetH;
 
-        if (canvas.width !== targetW || canvas.height !== targetH) {
-            canvas.width = targetW;
-            canvas.height = targetH;
-        }
+            if (totalPixels > MAX_CANVAS_PIXELS) {
+                reductionScale = Math.sqrt(MAX_CANVAS_PIXELS / totalPixels);
+            } else if (targetW > MAX_SIDE || targetH > MAX_SIDE) {
+                reductionScale = Math.min(MAX_SIDE / targetW, MAX_SIDE / targetH);
+            }
 
-        const ctx = canvas.getContext("2d", { alpha: true });
-        ctx.setTransform(1, 0, 0, 1, 0, 0); // Reset
+            if (reductionScale < 1.0) {
+                targetW = Math.floor(targetW * reductionScale);
+                targetH = Math.floor(targetH * reductionScale);
+            }
 
-        // Use exact pixel ratio derived from the actual backing store size.
-        // This ensures 1 canvas coordinate unit = 1 CSS pixel, matching SVG perfectly.
+            if (canvas.width !== targetW || canvas.height !== targetH) {
+                canvas.width = targetW;
+                canvas.height = targetH;
+            }
+
+            const ctx = canvas.getContext("2d", { alpha: true });
+            ctx.setTransform(1, 0, 0, 1, 0, 0); // Reset
+
+            // Use exact pixel ratio derived from the actual backing store size.
+            // This ensures 1 canvas coordinate unit = 1 CSS pixel, matching SVG perfectly.
         // Using effectiveDpr*reductionScale can introduce sub-pixel rounding drift
         // because targetW = Math.floor(width * effectiveDpr * reductionScale).
         const scaleX = targetW / width;
@@ -115,6 +122,34 @@ const OverlayCanvasLayer = ({
 
             const hasFill = shape.fill && shape.fill !== "none" && shape.fill !== "transparent";
             const opacity = shape.opacity ?? 1;
+
+            if (shape.type === "image") {
+                const img = imageCache.get(shape.src);
+                if (img) {
+                    if (img.complete && img.naturalWidth !== 0) {
+                        ctx.save();
+                        ctx.globalAlpha = opacity;
+                        const cx = shape.x + shape.width / 2;
+                        const cy = shape.y + shape.height / 2;
+                        if (shape.rotation) {
+                            ctx.translate(cx, cy);
+                            ctx.rotate((shape.rotation * Math.PI) / 180);
+                            ctx.drawImage(img, -shape.width / 2, -shape.height / 2, shape.width, shape.height);
+                        } else {
+                            ctx.drawImage(img, shape.x, shape.y, shape.width, shape.height);
+                        }
+                        ctx.restore();
+                    }
+                } else {
+                    const newImg = new Image();
+                    newImg.src = shape.src;
+                    newImg.onload = () => {
+                        requestAnimationFrame(draw);
+                    };
+                    imageCache.set(shape.src, newImg);
+                }
+                continue;
+            }
 
             // Note: shape.strokeWidth might be stored (e.g. 2).
             // If we want it "vector" (scaling), we leave it.
@@ -362,6 +397,9 @@ const OverlayCanvasLayer = ({
         });
 
         ctx.restore(); // End global scale
+        };
+
+        draw();
     }, [width, height, viewScale, renderScale, shapes, measurements, selectedIds, pageIndex, calibrationScales, pageUnits]);
 
     return (

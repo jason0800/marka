@@ -5,6 +5,7 @@ import { calculateDistance, calculatePolygonArea } from "../geometry/transforms"
 import { findShapeAtPoint, findItemAtPoint } from "../geometry/hitTest";
 import OverlayCanvasLayer from "./OverlayCanvasLayer";
 import * as pdfjsLib from 'pdfjs-dist';
+import { Scissors, Copy, Clipboard, Trash2, Sliders, XCircle, CheckSquare, Layers, Star } from 'lucide-react';
 
 // Helper: Calculate knee position from standard rules
 // Returns { x, y }
@@ -165,7 +166,9 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
         copy,
         paste,
         clipboard,
-        setDefaultShapeStyle,
+        leftPanelActiveTab,
+        setLeftPanelActiveTab,
+        formatPaintStyle,
     } = useAppStore();
 
     const viewScale = (viewport && viewport.scale) ? viewport.scale : propViewScale;
@@ -233,7 +236,7 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
     // Context menu state
     const [canvasContextMenu, setCanvasContextMenu] = useState(null);
 
-    // Auto-close context menu on click elsewhere
+    // Auto-close context menu on click elsewhere & handle image paste
     useEffect(() => {
         const handleWindowClick = (e) => {
             if (e.target.closest('.context-menu-container')) {
@@ -241,13 +244,80 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
             }
             setCanvasContextMenu(null);
         };
+
+        const handlePaste = (e) => {
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+
+            const items = e.clipboardData?.items;
+            if (items) {
+                let hasImage = false;
+                for (let i = 0; i < items.length; i++) {
+                    const item = items[i];
+                    if (item.type.startsWith('image/')) {
+                        hasImage = true;
+                        const file = item.getAsFile();
+                        if (!file) continue;
+
+                        const reader = new FileReader();
+                        reader.onload = (event) => {
+                            const dataUrl = event.target.result;
+                            const img = new Image();
+                            img.onload = () => {
+                                let w = img.width || 300;
+                                let h = img.height || 200;
+                                const maxSide = 400;
+                                if (w > maxSide || h > maxSide) {
+                                    const ratio = Math.min(maxSide / w, maxSide / h);
+                                    w = Math.round(w * ratio);
+                                    h = Math.round(h * ratio);
+                                }
+
+                                const newId = crypto.randomUUID();
+                                const newImageShape = {
+                                    id: newId,
+                                    type: "image",
+                                    src: dataUrl,
+                                    x: 100,
+                                    y: 100,
+                                    width: w,
+                                    height: h,
+                                    rotation: 0,
+                                    stroke: "#000000",
+                                    strokeWidth: 0,
+                                    fill: "none",
+                                    opacity: 1,
+                                    pageIndex: pageIndex,
+                                };
+                                addShape(newImageShape);
+                                setSelectedIds([newId]);
+                                pushHistory();
+                            };
+                            img.src = dataUrl;
+                        };
+                        reader.readAsDataURL(file);
+                        e.preventDefault();
+                        break;
+                    }
+                }
+                if (hasImage) return;
+            }
+
+            // Fallback: regular paste of markup shapes from the app store clipboard
+            e.preventDefault();
+            paste();
+            pushHistory();
+        };
+
         window.addEventListener('click', handleWindowClick);
         window.addEventListener('pointerdown', handleWindowClick);
+        window.addEventListener('paste', handlePaste);
+
         return () => {
             window.removeEventListener('click', handleWindowClick);
             window.removeEventListener('pointerdown', handleWindowClick);
+            window.removeEventListener('paste', handlePaste);
         };
-    }, []);
+    }, [pageIndex, addShape, setSelectedIds, pushHistory]);
 
     const duplicateSelected = () => {
         const selectedShapes = shapes.filter(s => selectedIds.includes(s.id));
@@ -677,40 +747,60 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
         return { point: rawPoint, snapped: false, type: null };
     }, [snappingEnabled, viewScale, activeTool, pdfVectors]);
 
-    const finishDrawing = useCallback(() => {
+    const finishDrawing = useCallback((isDoubleClick = false) => {
         if (!isDrawingRef.current) return;
 
-        if (activeTool === "area" && drawingPoints.length >= 3) {
+        // Filter out coincident or extremely close consecutive points
+        let pts = [];
+        for (const p of drawingPoints) {
+            if (pts.length === 0) {
+                pts.push(p);
+            } else {
+                const prev = pts[pts.length - 1];
+                const dist = Math.hypot(p.x - prev.x, p.y - prev.y);
+                if (dist > 2) {
+                    pts.push(p);
+                }
+            }
+        }
+
+        // Double-click gesture first click adds the point, second click fires double click.
+        // If finishing via double click, pop the extra coordinate that got added.
+        if (isDoubleClick && pts.length > 1) {
+            pts.pop();
+        }
+
+        if (activeTool === "area" && pts.length >= 3) {
             addMeasurement({
                 id: crypto.randomUUID(),
                 type: "area",
                 pageIndex,
-                points: [...drawingPoints],
+                points: pts,
             });
             pushHistory();
-        } else if (activeTool === "perimeter" && drawingPoints.length >= 2) {
+        } else if (activeTool === "perimeter" && pts.length >= 2) {
             addMeasurement({
                 id: crypto.randomUUID(),
                 type: "perimeter",
                 pageIndex,
-                points: [...drawingPoints],
+                points: pts,
             });
             pushHistory();
-        } else if (activeTool === "polyline" && drawingPoints.length >= 2) {
+        } else if (activeTool === "polyline" && pts.length >= 2) {
             addShape({
                 id: crypto.randomUUID(),
                 type: "polyline",
                 pageIndex,
-                points: [...drawingPoints],
+                points: pts,
                 ...defaultShapeStyle,
             });
             pushHistory();
-        } else if (activeTool === "polygon" && drawingPoints.length >= 3) {
+        } else if (activeTool === "polygon" && pts.length >= 3) {
             addShape({
                 id: crypto.randomUUID(),
                 type: "polygon",
                 pageIndex,
-                points: [...drawingPoints],
+                points: pts,
                 ...defaultShapeStyle,
             });
             pushHistory();
@@ -782,6 +872,128 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
 
         const rawPoint = getPagePoint(e);
         if (!rawPoint) return;
+
+        // Shift-click to add/remove vertices
+        if (e.shiftKey) {
+            const resizeHandle = e.target.getAttribute("data-resize-handle");
+            const resizeId = e.target.getAttribute("data-resize-id");
+
+            if (resizeHandle && resizeHandle.startsWith('vertex-') && resizeId) {
+                // REMOVE VERTEX
+                const vertexIdx = parseInt(resizeHandle.split('-')[1], 10);
+                const s = pageShapes.find(x => x.id === resizeId);
+                const m = pageMeasurements.find(x => x.id === resizeId);
+
+                if (s && s.points) {
+                    const newPoints = [...s.points];
+                    newPoints.splice(vertexIdx, 1);
+                    if (newPoints.length < 2) {
+                        deleteShape(resizeId);
+                        setSelectedIds([]);
+                    } else {
+                        updateShape(resizeId, { points: newPoints });
+                    }
+                    pushHistory();
+                    e.preventDefault();
+                    e.stopPropagation();
+                    return;
+                } else if (m && m.points) {
+                    const newPoints = [...m.points];
+                    newPoints.splice(vertexIdx, 1);
+                    const minPts = m.type === 'area' ? 3 : 2;
+                    if (newPoints.length < minPts) {
+                        deleteMeasurement(resizeId);
+                        setSelectedIds([]);
+                    } else {
+                        updateMeasurement(resizeId, { points: newPoints });
+                    }
+                    pushHistory();
+                    e.preventDefault();
+                    e.stopPropagation();
+                    return;
+                }
+            } else {
+                // ADD VERTEX
+                const targetShapeRef = e.target.closest('[data-shape-id]');
+                const targetMeasRef = e.target.closest('[data-meas-id]');
+                const targetShapeId = targetShapeRef?.getAttribute("data-shape-id");
+                const targetMeasId = targetMeasRef?.getAttribute("data-meas-id");
+                const hitId = targetShapeId || targetMeasId;
+                const isShape = !!targetShapeId;
+
+                const item = isShape 
+                    ? pageShapes.find(x => x.id === hitId)
+                    : pageMeasurements.find(x => x.id === hitId);
+
+                if (item) {
+                    const isClosed = item.type === 'polygon' || item.type === 'area';
+                    if (['polyline', 'polygon', 'area', 'perimeter'].includes(item.type) && item.points) {
+                        // find best insert index
+                        let minDist = Infinity;
+                        let insertIdx = -1;
+                        const pts = item.points;
+                        const limit = isClosed ? pts.length : pts.length - 1;
+                        for (let i = 0; i < limit; i++) {
+                            const a = pts[i];
+                            const b = pts[(i + 1) % pts.length];
+                            const dx = b.x - a.x;
+                            const dy = b.y - a.y;
+                            const lenSq = dx * dx + dy * dy;
+                            let t = 0;
+                            if (lenSq > 1e-9) {
+                                t = ((rawPoint.x - a.x) * dx + (rawPoint.y - a.y) * dy) / lenSq;
+                                t = Math.max(0, Math.min(1, t));
+                            }
+                            const projX = a.x + t * dx;
+                            const projY = a.y + t * dy;
+                            const dist = Math.hypot(rawPoint.x - projX, rawPoint.y - projY);
+                            if (dist < minDist) {
+                                minDist = dist;
+                                insertIdx = i + 1;
+                            }
+                        }
+
+                        if (insertIdx !== -1) {
+                            const newPoints = [...pts];
+                            newPoints.splice(insertIdx, 0, rawPoint);
+                            if (isShape) {
+                                updateShape(item.id, { points: newPoints });
+                            } else {
+                                updateMeasurement(item.id, { points: newPoints });
+                            }
+                            setSelectedIds([item.id]);
+                            pushHistory();
+                            e.preventDefault();
+                            e.stopPropagation();
+                            return;
+                        }
+                    }
+                }
+            }
+        }
+
+        if (activeTool === "format-painter") {
+            const targetShapeRef = e.target.closest('[data-shape-id]');
+            const targetMeasRef = e.target.closest('[data-meas-id]');
+            const targetShapeId = targetShapeRef?.getAttribute("data-shape-id");
+            const targetMeasId = targetMeasRef?.getAttribute("data-meas-id");
+            const hitId = targetShapeId || targetMeasId;
+            const finalHitId = hitId || findItemAtPoint(rawPoint, pageShapes, pageMeasurements)?.item.id;
+
+            if (finalHitId) {
+                if (formatPaintStyle) {
+                    pushHistory();
+                    const isShape = pageShapes.some(s => s.id === finalHitId);
+                    if (isShape) {
+                        updateShape(finalHitId, formatPaintStyle);
+                    } else {
+                        updateMeasurement(finalHitId, formatPaintStyle);
+                    }
+                }
+            }
+            setActiveTool("select");
+            return;
+        }
 
         const shouldSnap = snappingEnabled && activeTool === "length";
         const snapResult = shouldSnap ? getSnappedPoint(rawPoint) : { point: rawPoint, snapped: false };
@@ -2052,9 +2264,10 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
             strokeWidth: s.strokeWidth,
             strokeDasharray: isShadow ? undefined : (s.strokeDasharray === 'none' ? undefined : s.strokeDasharray),
             fill: fillColor,
-            opacity: isShadow ? 0.7 : s.opacity,
+            fillOpacity: isShadow ? 0.7 : (s.opacity ?? 1),
+            strokeOpacity: isShadow ? 0.7 : (s.strokeOpacity ?? 1),
             style: {
-                cursor: isShadow ? "default" : "move",
+                cursor: isShadow ? "default" : (activeTool === "format-painter" ? "copy" : "move"),
                 pointerEvents: isShadow ? "none" : (hasFill ? "all" : "stroke")
             },
             strokeLinecap: "round",
@@ -2195,6 +2408,34 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
             elem = <rect x={0} y={0} width={s.width} height={s.height} {...commonProps} strokeLinejoin="miter" />;
         } else if (s.type === "circle") {
             elem = <ellipse cx={s.width / 2} cy={s.height / 2} rx={s.width / 2} ry={s.height / 2} {...commonProps} />;
+        } else if (s.type === "image") {
+            if (isShadow) {
+                elem = (
+                    <rect
+                        x={0}
+                        y={0}
+                        width={s.width}
+                        height={s.height}
+                        fill="#cbd5e1"
+                        fillOpacity={0.4}
+                        stroke="#94a3b8"
+                        strokeWidth={1.5}
+                    />
+                );
+            } else {
+                elem = (
+                    <image
+                        href={s.src}
+                        x={0}
+                        y={0}
+                        width={s.width}
+                        height={s.height}
+                        opacity={s.opacity ?? 1}
+                        style={{ cursor: "move", pointerEvents: "all" }}
+                        data-shape-id={s.id}
+                    />
+                );
+            }
         }
 
         return (
@@ -2213,7 +2454,7 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
         const measCommon = {
             "data-meas-id": isShadow ? undefined : m.id,
             style: {
-                cursor: isShadow ? "default" : (activeTool === "select" ? "move" : "default"),
+                cursor: isShadow ? "default" : (activeTool === "format-painter" ? "copy" : (activeTool === "select" ? "move" : "default")),
                 pointerEvents: isShadow ? "none" : "all"
             }
         };
@@ -2226,11 +2467,11 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
             const strokeWidth = m.strokeWidth || 2;
             const strokeDasharray = isShadow ? undefined : (m.strokeDasharray === 'none' ? undefined : (m.strokeDasharray === 'dashed' ? '12, 12' : (m.strokeDasharray === 'dotted' ? '2, 8' : m.strokeDasharray)));
             const fontSize = m.fontSize || 14;
-            const textColor = isShadow ? "#94a3b8" : (m.textColor || strokeColor);
-            const opacity = isShadow ? 0.7 : (m.opacity ?? 1);
+            const strokeOpacity = isShadow ? 0.7 : (m.strokeOpacity ?? 1);
+            const textOpacity = isShadow ? 0.7 : (m.textOpacity ?? 1);
 
             return (
-                <g key={m.id + (isShadow ? "-shadow" : "")} {...measCommon} style={{ ...measCommon.style, opacity }}>
+                <g key={m.id + (isShadow ? "-shadow" : "")} {...measCommon} style={{ ...measCommon.style }}>
                     {/* Hit Area for dragging */}
                     {!isShadow && (
                         <line
@@ -2253,6 +2494,7 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                         stroke={strokeColor}
                         strokeWidth={strokeWidth}
                         strokeDasharray={strokeDasharray}
+                        strokeOpacity={strokeOpacity}
                         strokeLinecap="butt"
                         pointerEvents="none"
                     />
@@ -2261,10 +2503,19 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                             x={(a.x + b.x) / 2 + (m.textOffset?.x || 0)}
                             y={(a.y + b.y) / 2 - 6 + (m.textOffset?.y || 0)}
                             fill={textColor}
+                            fillOpacity={textOpacity}
                             fontSize={fontSize}
                             textAnchor="middle"
                             pointerEvents="all"
-                            style={{ cursor: "move" }}
+                            style={{
+                                cursor: "move",
+                                fontWeight: m.bold ? 'bold' : 'normal',
+                                fontStyle: m.italic ? 'italic' : 'normal',
+                                textDecoration: [
+                                    m.underline ? 'underline' : '',
+                                    m.crossout ? 'line-through' : ''
+                                ].filter(Boolean).join(' ') || 'none'
+                            }}
                         >
                             {toUnits(dist).toFixed(2)} {unit}
                         </text>
@@ -2279,7 +2530,8 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
             const p2 = m.points[2];
             const strokeColor = isShadow ? "#cbd5e1" : (m.stroke || "#3498db");
             const strokeWidth = m.strokeWidth || 2;
-            const opacity = isShadow ? 0.7 : (m.opacity ?? 1);
+            const strokeOpacity = isShadow ? 0.7 : (m.strokeOpacity ?? 1);
+            const textOpacity = isShadow ? 0.7 : (m.textOpacity ?? 1);
             const fontSize = m.fontSize || 14;
             const textColor = isShadow ? "#94a3b8" : (m.textColor || strokeColor);
 
@@ -2309,7 +2561,7 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
             }
 
             return (
-                <g key={m.id + (isShadow ? "-shadow" : "")} {...measCommon} style={{ ...measCommon.style, opacity }}>
+                <g key={m.id + (isShadow ? "-shadow" : "")} {...measCommon} style={{ ...measCommon.style }}>
                     {!isShadow && (
                         <>
                             <polyline
@@ -2328,22 +2580,32 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                         fill="none"
                         stroke={strokeColor}
                         strokeWidth={strokeWidth}
+                        strokeOpacity={strokeOpacity}
                         strokeLinecap="butt"
                         strokeLinejoin="miter"
                         pointerEvents="none"
                     />
                     {arcPath && (
-                        <path d={arcPath} fill="none" stroke={strokeColor} strokeWidth={strokeWidth} pointerEvents="none" />
+                        <path d={arcPath} fill="none" stroke={strokeColor} strokeWidth={strokeWidth} strokeOpacity={strokeOpacity} pointerEvents="none" />
                     )}
                     {!isShadow && (
                         <text
                             x={p1.x + (m.textOffset?.x || 0)}
                             y={p1.y - 12 - (fontSize / 2) + (m.textOffset?.y || 0)}
                             fill={textColor}
+                            fillOpacity={textOpacity}
                             fontSize={fontSize}
                             textAnchor="middle"
                             pointerEvents="all"
-                            style={{ cursor: "move" }}
+                            style={{
+                                cursor: "move",
+                                fontWeight: m.bold ? 'bold' : 'normal',
+                                fontStyle: m.italic ? 'italic' : 'normal',
+                                textDecoration: [
+                                    m.underline ? 'underline' : '',
+                                    m.crossout ? 'line-through' : ''
+                                ].filter(Boolean).join(' ') || 'none'
+                            }}
                         >
                             {angleDeg.toFixed(1)}°
                         </text>
@@ -2362,14 +2624,18 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
             const fontSize = m.fontSize || 14;
             const textColor = isShadow ? "#94a3b8" : (m.textColor || strokeColor);
             const opacity = isShadow ? 0.7 : (m.opacity ?? 1);
+            const strokeOpacity = isShadow ? 0.7 : (m.strokeOpacity ?? 1);
+            const textOpacity = isShadow ? 0.7 : (m.textOpacity ?? 1);
 
             return (
-                <g key={m.id + (isShadow ? "-shadow" : "")} {...measCommon} style={{ ...measCommon.style, opacity }}>
+                <g key={m.id + (isShadow ? "-shadow" : "")} {...measCommon} style={{ ...measCommon.style }}>
                     <polygon
                         points={pointsStr}
                         fill={fillColor}
+                        fillOpacity={opacity}
                         stroke={strokeColor}
                         strokeWidth={strokeWidth}
+                        strokeOpacity={strokeOpacity}
                         strokeDasharray={strokeDasharray}
                     />
                     {!isShadow && (
@@ -2377,9 +2643,18 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                             x={m.points[0].x + (m.textOffset?.x || 0)}
                             y={m.points[0].y - 8 + (m.textOffset?.y || 0)}
                             fill={textColor}
+                            fillOpacity={textOpacity}
                             fontSize={fontSize}
                             pointerEvents="all"
-                            style={{ cursor: "move" }}
+                            style={{
+                                cursor: "move",
+                                fontWeight: m.bold ? 'bold' : 'normal',
+                                fontStyle: m.italic ? 'italic' : 'normal',
+                                textDecoration: [
+                                    m.underline ? 'underline' : '',
+                                    m.crossout ? 'line-through' : ''
+                                ].filter(Boolean).join(' ') || 'none'
+                            }}
                         >
                             {toUnits2(area).toFixed(2)} {unit}²
                         </text>
@@ -2396,24 +2671,35 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
             }
             const strokeColor = isShadow ? "#cbd5e1" : "#9b59b6";
             const strokeWidth = m.strokeWidth || 2;
-            const opacity = isShadow ? 0.7 : 1;
+            const strokeOpacity = isShadow ? 0.7 : (m.strokeOpacity ?? 1);
+            const textOpacity = isShadow ? 0.7 : (m.textOpacity ?? 1);
 
             return (
-                <g key={m.id + (isShadow ? "-shadow" : "")} {...measCommon} style={{ opacity }}>
+                <g key={m.id + (isShadow ? "-shadow" : "")} {...measCommon} style={{ ...measCommon.style }}>
                     <polyline
                         points={pointsStr}
                         fill="none"
                         stroke={strokeColor}
                         strokeWidth={strokeWidth}
+                        strokeOpacity={strokeOpacity}
                     />
                     {!isShadow && (
                         <text
                             x={m.points[0].x + (m.textOffset?.x || 0)}
                             y={m.points[0].y - 8 + (m.textOffset?.y || 0)}
                             fill="#9b59b6"
+                            fillOpacity={textOpacity}
                             fontSize={14}
                             pointerEvents="all"
-                            style={{ cursor: "move" }}
+                            style={{
+                                cursor: "move",
+                                fontWeight: m.bold ? 'bold' : 'normal',
+                                fontStyle: m.italic ? 'italic' : 'normal',
+                                textDecoration: [
+                                    m.underline ? 'underline' : '',
+                                    m.crossout ? 'line-through' : ''
+                                ].filter(Boolean).join(' ') || 'none'
+                            }}
                         >
                             {toUnits(len).toFixed(2)} {unit}
                         </text>
@@ -2425,7 +2711,8 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
         if (m.type === "count" && m.point) {
             const fillColor = isShadow ? "#cbd5e1" : "var(--primary-color)";
             const strokeColor = isShadow ? "#cbd5e1" : "white";
-            const opacity = isShadow ? 0.7 : 1;
+            const fillOpacity = isShadow ? 0.7 : (m.opacity ?? 1);
+            const strokeOpacity = isShadow ? 0.7 : (m.strokeOpacity ?? 1);
             return (
                 <circle
                     key={m.id + (isShadow ? "-shadow" : "")}
@@ -2434,15 +2721,18 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                     cy={m.point.y}
                     r={8}
                     fill={fillColor}
+                    fillOpacity={fillOpacity}
                     stroke={strokeColor}
                     strokeWidth={2}
-                    style={{ ...measCommon.style, opacity }}
+                    strokeOpacity={strokeOpacity}
+                    style={{ ...measCommon.style }}
                 />
             );
         }
 
         const isEditing = editingId === m.id;
-        const measOpacity = isShadow ? 0.7 : (m.opacity ?? 1);
+        const strokeOpacity = isShadow ? 0.7 : (m.strokeOpacity ?? 1);
+        const textOpacity = isShadow ? 0.7 : (m.textOpacity ?? 1);
 
         // Comment: Line + Dot. Callout: Arrow. Text: None.
         const renderConnector = () => {
@@ -2457,12 +2747,14 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                             y2={m.box.y + m.box.h / 2}
                             stroke={strokeColor}
                             strokeWidth={1}
+                            strokeOpacity={strokeOpacity}
                         />
                         <circle
                             cx={m.tip.x}
                             cy={m.tip.y}
                             r={3}
                             fill={strokeColor}
+                            fillOpacity={strokeOpacity}
                         />
                     </>
                 );
@@ -2521,6 +2813,7 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                             points="0,0 -8,-3 -8,3"
                             transform={arrowTransform}
                             fill={strokeColor}
+                            fillOpacity={strokeOpacity}
                         />
                         <polyline
                             points={points}
@@ -2530,6 +2823,7 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                             strokeLinecap="round"
                             strokeLinejoin="round"
                             strokeDasharray={strokeDasharray}
+                            strokeOpacity={strokeOpacity}
                         />
                         {/* Hit Target for Arrow Tip Marker */}
                         {!isShadow && (
@@ -2550,7 +2844,7 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
         };
 
         const fontSize = m.fontSize || 14;
-        const textColor = isShadow ? "#94a3b8" : (m.textColor || m.stroke || "black");
+        const textColor = isShadow ? "#94a3b8" : (m.textColor || "black");
         const borderColor = isShadow ? "#cbd5e1" : (m.stroke || "#333");
         const bgColor = isShadow ? "rgba(226, 232, 240, 0.4)" : (m.fill || (m.type === "text" ? "transparent" : "#fff"));
         const strokeDasharray = isShadow ? undefined : (
@@ -2562,19 +2856,21 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
         return (
             <g key={m.id + (isShadow ? "-shadow" : "")} {...measCommon}>
                 {/* Content Group with Opacity */}
-                <g style={{ opacity: measOpacity }}>
+                <g style={{ opacity: isShadow ? 0.7 : 1 }}>
                     {renderConnector()}
                     <g transform={m.rotation ? `rotate(${m.rotation}, ${m.box.x + m.box.w / 2}, ${m.box.y + m.box.h / 2})` : undefined}>
-                        {/* Background Rect for Styling */}
+                         {/* Background Rect for Styling */}
                         <rect
                             x={m.box.x}
                             y={m.box.y}
                             width={m.box.w}
                             height={m.box.h}
                             fill={bgColor}
+                            fillOpacity={isShadow ? 0.7 : (m.opacity ?? 1)}
                             stroke={borderColor}
                             strokeWidth={m.strokeWidth || 1}
                             strokeDasharray={strokeDasharray}
+                            strokeOpacity={strokeOpacity}
                             strokeLinecap="round"
                             rx={0} ry={0}
                         />
@@ -2607,8 +2903,15 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                                             padding: "4px",
                                             margin: 0,
                                             fontSize: `${fontSize}px`,
+                                            fontWeight: m.bold ? 'bold' : 'normal',
+                                            fontStyle: m.italic ? 'italic' : 'normal',
+                                            textDecoration: [
+                                                m.underline ? 'underline' : '',
+                                                m.crossout ? 'line-through' : ''
+                                            ].filter(Boolean).join(' ') || 'none',
                                             background: "transparent",
                                             color: textColor,
+                                            opacity: textOpacity,
                                             outline: "none",
                                             fontFamily: 'sans-serif',
                                             pointerEvents: 'auto',
@@ -2633,9 +2936,16 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                                             border: "none",
                                             background: "transparent",
                                             color: textColor,
+                                            opacity: textOpacity,
                                             padding: "4px",
                                             margin: 0,
                                             fontSize: `${fontSize}px`,
+                                            fontWeight: m.bold ? 'bold' : 'normal',
+                                            fontStyle: m.italic ? 'italic' : 'normal',
+                                            textDecoration: [
+                                                m.underline ? 'underline' : '',
+                                                m.crossout ? 'line-through' : ''
+                                            ].filter(Boolean).join(' ') || 'none',
                                             fontFamily: 'sans-serif',
                                             overflow: "hidden",
                                             wordBreak: "break-word",
@@ -2713,7 +3023,7 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                 onPointerMove={handlePointerMove}
                 onPointerUp={handlePointerUp}
                 onPointerLeave={() => setSnapIndicator(null)}
-                onDoubleClick={() => finishDrawing()}
+                onDoubleClick={() => finishDrawing(true)}
                 onContextMenu={handleContextMenu}
             >
                 {/* 0️⃣ SHADOW SHAPES / MEASUREMENTS (Left behind during editing) */}
@@ -2726,7 +3036,7 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                         } else {
                             shadows.push({ item: start, type: 'shape' });
                         }
-                    } else if (isDraggingItems && dragStartItems) {
+                    } else if (isDraggingItems && dragStartItems && (dragDelta.x !== 0 || dragDelta.y !== 0)) {
                         Object.entries(dragStartItems).forEach(([id, startItem]) => {
                             const isMeas = pageMeasurements.some(m => m.id === id);
                             shadows.push({ item: startItem, type: isMeas ? 'measurement' : 'shape' });
@@ -3069,7 +3379,7 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                                 <g key={`handles-${s.id}`}>
                                     {shapeToRender.points.map((p, idx) => (
                                         <circle
-                                            key={idx}
+                                            key={`vertex-${idx}-${p.x}-${p.y}`}
                                             cx={p.x}
                                             cy={p.y}
                                             r={handleSize / 2}
@@ -3126,7 +3436,7 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                                 <g key={`handles-${m.id}`}>
                                     {measToRender.points.map((p, idx) => (
                                         <circle
-                                            key={idx}
+                                            key={`vertex-${idx}-${p.x}-${p.y}`}
                                             cx={p.x}
                                             cy={p.y}
                                             r={handleSize / 2}
@@ -3251,65 +3561,112 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                     {canvasContextMenu.type === 'object' ? (
                         <>
                             <button
-                                className="bg-transparent border-none text-[var(--text-primary)] px-4 py-2 text-left cursor-pointer text-[13px] flex items-center gap-2 w-full hover:bg-[var(--btn-hover)] disabled:opacity-50 disabled:cursor-default"
+                                className="bg-transparent border-none text-[var(--text-primary)] px-3 py-1.5 text-left cursor-pointer text-[13px] flex items-center justify-between w-full hover:bg-[var(--btn-hover)] disabled:opacity-50 disabled:cursor-default"
                                 onClick={handleCut}
                             >
-                                Cut
+                                <span className="flex items-center gap-2">
+                                    <Scissors size={14} className="text-[var(--text-secondary)]" />
+                                    <span>Cut</span>
+                                </span>
+                                <span className="text-[11px] text-[var(--text-secondary)] font-mono ml-4">Ctrl+X</span>
                             </button>
                             <button
-                                className="bg-transparent border-none text-[var(--text-primary)] px-4 py-2 text-left cursor-pointer text-[13px] flex items-center gap-2 w-full hover:bg-[var(--btn-hover)] disabled:opacity-50 disabled:cursor-default"
+                                className="bg-transparent border-none text-[var(--text-primary)] px-3 py-1.5 text-left cursor-pointer text-[13px] flex items-center justify-between w-full hover:bg-[var(--btn-hover)] disabled:opacity-50 disabled:cursor-default"
                                 onClick={handleCopy}
                             >
-                                Copy
+                                <span className="flex items-center gap-2">
+                                    <Copy size={14} className="text-[var(--text-secondary)]" />
+                                    <span>Copy</span>
+                                </span>
+                                <span className="text-[11px] text-[var(--text-secondary)] font-mono ml-4">Ctrl+C</span>
                             </button>
                             <button
-                                className="bg-transparent border-none text-[var(--text-primary)] px-4 py-2 text-left cursor-pointer text-[13px] flex items-center gap-2 w-full hover:bg-[var(--btn-hover)] disabled:opacity-50 disabled:cursor-default"
+                                className="bg-transparent border-none text-[var(--text-primary)] px-3 py-1.5 text-left cursor-pointer text-[13px] flex items-center justify-between w-full hover:bg-[var(--btn-hover)] disabled:opacity-50 disabled:cursor-default"
                                 onClick={handleDuplicate}
                             >
-                                Duplicate
+                                <span className="flex items-center gap-2">
+                                    <Layers size={14} className="text-[var(--text-secondary)]" />
+                                    <span>Duplicate</span>
+                                </span>
+                                <span className="text-[11px] text-[var(--text-secondary)] font-mono ml-4">Ctrl+D</span>
                             </button>
                             <button
-                                className="bg-transparent border-none text-[var(--text-primary)] px-4 py-2 text-left cursor-pointer text-[13px] flex items-center gap-2 w-full hover:bg-[var(--btn-hover)] disabled:opacity-50 disabled:cursor-default"
+                                className="bg-transparent border-none text-[var(--text-primary)] px-3 py-1.5 text-left cursor-pointer text-[13px] flex items-center justify-between w-full hover:bg-[var(--btn-hover)] disabled:opacity-50 disabled:cursor-default"
                                 onClick={handleSetAsDefault}
                             >
-                                Set as Default
+                                <span className="flex items-center gap-2">
+                                    <Star size={14} className="text-[var(--text-secondary)]" />
+                                    <span>Set as Default</span>
+                                </span>
                             </button>
                             <button
-                                className="bg-transparent border-none text-[var(--text-primary)] px-4 py-2 text-left cursor-pointer text-[13px] flex items-center gap-2 w-full hover:bg-[var(--btn-hover)] disabled:opacity-50 disabled:cursor-default"
+                                className="bg-transparent border-none text-[var(--text-primary)] px-3 py-1.5 text-left cursor-pointer text-[13px] flex items-center justify-between w-full hover:bg-[var(--btn-hover)] disabled:opacity-50 disabled:cursor-default"
                                 onClick={handleDelete}
                             >
-                                Delete
+                                <span className="flex items-center gap-2">
+                                    <Trash2 size={14} className="text-[var(--text-secondary)]" />
+                                    <span>Delete</span>
+                                </span>
+                                <span className="text-[11px] text-[var(--text-secondary)] font-mono ml-4">Del</span>
+                            </button>
+                            <button
+                                className="bg-transparent border-none text-[var(--text-primary)] px-3 py-1.5 text-left cursor-pointer text-[13px] flex items-center justify-between w-full hover:bg-[var(--btn-hover)] disabled:opacity-50 disabled:cursor-default"
+                                onClick={() => {
+                                    setLeftPanelActiveTab('properties');
+                                    setCanvasContextMenu(null);
+                                }}
+                            >
+                                <span className="flex items-center gap-2">
+                                    <Sliders size={14} className="text-[var(--text-secondary)]" />
+                                    <span>Properties</span>
+                                </span>
                             </button>
                             <div className="h-px bg-[var(--border-color)] my-1" />
                             <button
-                                className="bg-transparent border-none text-[var(--text-primary)] px-4 py-2 text-left cursor-pointer text-[13px] flex items-center gap-2 w-full hover:bg-[var(--btn-hover)] disabled:opacity-50 disabled:cursor-default"
+                                className="bg-transparent border-none text-[var(--text-primary)] px-3 py-1.5 text-left cursor-pointer text-[13px] flex items-center justify-between w-full hover:bg-[var(--btn-hover)] disabled:opacity-50 disabled:cursor-default"
                                 onClick={handleDeselectAll}
                             >
-                                Deselect
+                                <span className="flex items-center gap-2">
+                                    <XCircle size={14} className="text-[var(--text-secondary)]" />
+                                    <span>Deselect</span>
+                                </span>
+                                <span className="text-[11px] text-[var(--text-secondary)] font-mono ml-4">Esc</span>
                             </button>
                         </>
                     ) : (
                         <>
                             <button
-                                className="bg-transparent border-none text-[var(--text-primary)] px-4 py-2 text-left cursor-pointer text-[13px] flex items-center gap-2 w-full hover:bg-[var(--btn-hover)] disabled:opacity-50 disabled:cursor-default"
+                                className="bg-transparent border-none text-[var(--text-primary)] px-3 py-1.5 text-left cursor-pointer text-[13px] flex items-center justify-between w-full hover:bg-[var(--btn-hover)] disabled:opacity-50 disabled:cursor-default"
                                 onClick={handlePaste}
                                 disabled={!clipboard || clipboard.length === 0}
                             >
-                                Paste
+                                <span className="flex items-center gap-2">
+                                    <Clipboard size={14} className="text-[var(--text-secondary)]" />
+                                    <span>Paste</span>
+                                </span>
+                                <span className="text-[11px] text-[var(--text-secondary)] font-mono ml-4">Ctrl+V</span>
                             </button>
                             <div className="h-px bg-[var(--border-color)] my-1" />
                             <button
-                                className="bg-transparent border-none text-[var(--text-primary)] px-4 py-2 text-left cursor-pointer text-[13px] flex items-center gap-2 w-full hover:bg-[var(--btn-hover)] disabled:opacity-50 disabled:cursor-default"
+                                className="bg-transparent border-none text-[var(--text-primary)] px-3 py-1.5 text-left cursor-pointer text-[13px] flex items-center justify-between w-full hover:bg-[var(--btn-hover)] disabled:opacity-50 disabled:cursor-default"
                                 onClick={handleSelectAll}
                             >
-                                Select All
+                                <span className="flex items-center gap-2">
+                                    <CheckSquare size={14} className="text-[var(--text-secondary)]" />
+                                    <span>Select All</span>
+                                </span>
+                                <span className="text-[11px] text-[var(--text-secondary)] font-mono ml-4">Ctrl+A</span>
                             </button>
                             <button
-                                className="bg-transparent border-none text-[var(--text-primary)] px-4 py-2 text-left cursor-pointer text-[13px] flex items-center gap-2 w-full hover:bg-[var(--btn-hover)] disabled:opacity-50 disabled:cursor-default"
+                                className="bg-transparent border-none text-[var(--text-primary)] px-3 py-1.5 text-left cursor-pointer text-[13px] flex items-center justify-between w-full hover:bg-[var(--btn-hover)] disabled:opacity-50 disabled:cursor-default"
                                 onClick={handleDeselectAll}
                                 disabled={selectedIds.length === 0}
                             >
-                                Deselect All
+                                <span className="flex items-center gap-2">
+                                    <XCircle size={14} className="text-[var(--text-secondary)]" />
+                                    <span>Deselect All</span>
+                                </span>
+                                <span className="text-[11px] text-[var(--text-secondary)] font-mono ml-4">Esc</span>
                             </button>
                         </>
                     )}
