@@ -9,6 +9,7 @@ const defaultShortcuts = {
     pan: 'h',
     calibrate: 's',
     length: 'l',
+    polylength: 'k',
     area: 'g',
     angle: 'd',
     count: 'n',

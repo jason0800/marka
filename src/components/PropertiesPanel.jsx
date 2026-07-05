@@ -154,7 +154,7 @@ const PropertiesPanel = () => {
             ) : (
                 <div className="flex-1 p-4 flex flex-col gap-4 overflow-y-auto">
                     {/* Text Properties */}
-                    {(['text', 'callout', 'comment', 'length', 'area', 'perimeter'].includes(source?.type)) && (
+                    {(['text', 'callout', 'comment', 'length', 'area', 'perimeter', 'polylength'].includes(source?.type)) && (
                         <>
                             {/* Font Size */}
                             <div className="flex flex-col gap-1">
@@ -272,7 +272,7 @@ const PropertiesPanel = () => {
                     </div>
 
                     {/* Fill / Background - Hidden for Lines/Arrows/Length */}
-                    {!['line', 'arrow', 'length', 'image'].includes(source?.type) && (
+                    {!['line', 'arrow', 'length', 'image', 'polylength'].includes(source?.type) && (
                         <div className="flex flex-col gap-1">
                             <label className="text-xs text-[var(--text-secondary)] font-medium">
                                 {['text', 'callout', 'comment'].includes(source?.type) ? 'Background' : 'Fill'}
@@ -429,7 +429,7 @@ const PropertiesPanel = () => {
                     )}
 
                     {/* Fill Opacity Control - Hidden for Lines/Arrows/Length */}
-                    {!['line', 'arrow', 'length'].includes(source?.type) && (
+                    {!['line', 'arrow', 'length', 'polylength'].includes(source?.type) && (
                         <div className="flex flex-col gap-2">
                             <div className="flex justify-between items-center mb-1">
                                 <label className="text-xs text-[var(--text-secondary)] font-medium">
@@ -491,7 +491,7 @@ const PropertiesPanel = () => {
                     </div>
 
                     {/* Text Opacity Control - Only for text/label elements */}
-                    {(['text', 'callout', 'comment', 'length', 'area', 'perimeter'].includes(source?.type)) && (
+                    {(['text', 'callout', 'comment', 'length', 'area', 'perimeter', 'polylength'].includes(source?.type)) && (
                         <div className="flex flex-col gap-2">
                             <div className="flex justify-between items-center mb-1">
                                 <label className="text-xs text-[var(--text-secondary)] font-medium">Text Opacity</label>
@@ -522,7 +522,7 @@ const PropertiesPanel = () => {
                     )}
 
                     {/* Rotation Control - Hidden for Lines/Arrows/Length */}
-                    {!['line', 'arrow', 'length', 'count'].includes(source?.type) && (
+                    {!['line', 'arrow', 'length', 'count', 'polylength'].includes(source?.type) && (
                         <div className="flex flex-col gap-1">
                             <div className="flex justify-between items-center">
                                 <label className="text-xs text-[var(--text-secondary)] font-medium">Rotation</label>

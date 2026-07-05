@@ -152,8 +152,8 @@ export const isPointInMeasurement = (point, m, tolerance = 5) => {
         return dist <= Math.max(tolerance, (m.strokeWidth || 2) / 2 + 5);
     }
 
-    // Perimeter (Polyline)
-    if (m.type === "perimeter" && m.points?.length >= 2) {
+    // Perimeter & Polylength (Polyline)
+    if ((m.type === "perimeter" || m.type === "polylength") && m.points?.length >= 2) {
         for (let i = 0; i < m.points.length - 1; i++) {
             const dist = distanceToSegment(point, m.points[i], m.points[i + 1]);
             if (dist <= Math.max(tolerance, (m.strokeWidth || 2) / 2 + 5)) return true;

@@ -13,7 +13,7 @@ import { toast } from 'sonner';
 // ─── All tool IDs for keyboard shortcut lookup ────────────────────────────────
 const ALL_TOOL_IDS = [
     'select', 'pan', 'calibrate',
-    'length', 'area', 'angle', 'count',
+    'length', 'polylength', 'area', 'angle', 'count',
     'callout', 'text',
     'rectangle', 'circle', 'polygon', 'polyline',
     'line', 'arrow', 'format-painter', 'highlight', 'cloud',
@@ -26,7 +26,13 @@ const TOOLBAR = [
     { type: 'tool', id: 'format-painter', icon: Paintbrush, label: 'Format Painter' },
     { type: 'separator' },
     { type: 'tool', id: 'calibrate', icon: PencilRuler, label: 'Set Scale' },
-    { type: 'tool', id: 'length', icon: RulerDimensionLine, label: 'Length' },
+    {
+        type: 'group', groupId: 'dimensions',
+        children: [
+            { id: 'length', icon: RulerDimensionLine, label: 'Length' },
+            { id: 'polylength', icon: PolylengthIcon, label: 'Polylength' },
+        ],
+    },
     { type: 'tool', id: 'area', icon: AreaIcon, label: 'Area' },
     { type: 'tool', id: 'angle', icon: AngleIcon, label: 'Angle' },
     { type: 'tool', id: 'count', icon: Tally5Icon, label: 'Count' },
@@ -66,6 +72,7 @@ const Toolbar = () => {
 
     // Last-used tool per group (controls which icon is shown on the group button)
     const [groupActive, setGroupActive] = useState({
+        dimensions: 'length',
         annotations: 'callout',
         shapes: 'rectangle',
         lines: 'line',
@@ -80,7 +87,7 @@ const Toolbar = () => {
         if (toolId === 'format-painter') {
             const { selectedIds, shapes, measurements, setFormatPaintStyle } = useAppStore.getState();
             const firstSelectedId = selectedIds[0];
-            const sourceItem = firstSelectedId 
+            const sourceItem = firstSelectedId
                 ? (shapes.find(s => s.id === firstSelectedId) || measurements.find(m => m.id === firstSelectedId))
                 : null;
             if (sourceItem) {
@@ -111,7 +118,7 @@ const Toolbar = () => {
             setFlyout(null);
             return;
         }
-        if (['length', 'area'].includes(toolId)) {
+        if (['length', 'area', 'polylength'].includes(toolId)) {
             const { calibrationScales, currentPage } = useAppStore.getState();
             if (!calibrationScales[currentPage - 1]) {
                 setPendingTool(toolId);
@@ -395,6 +402,20 @@ function PolygonIcon({ size, style, ...props }) {
             stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
             style={style} {...props}>
             <path d="M12 3 L21 9 L18 19 L6 19 L3 9 Z" />
+        </svg>
+    );
+}
+
+function PolylengthIcon({ size, style, ...props }) {
+    return (
+        <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+            style={style} {...props}>
+            <path d="m3 16 7-7 6 6 5-7" />
+            <circle cx="3" cy="16" r="1.5" fill="currentColor" />
+            <circle cx="10" cy="9" r="1.5" fill="currentColor" />
+            <circle cx="16" cy="15" r="1.5" fill="currentColor" />
+            <circle cx="21" cy="9" r="1.5" fill="currentColor" />
         </svg>
     );
 }

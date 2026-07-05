@@ -211,7 +211,8 @@ export const exportFlattenedPDF = async (
                 m.type === "length" ? "#e74c3c" :
                     m.type === "area" ? "#2ecc71" :
                         m.type === "perimeter" ? "#9b59b6" :
-                            m.type === "count" ? "white" : "#333"
+                            m.type === "polylength" ? "#16a085" :
+                                m.type === "count" ? "white" : "#333"
             );
             const fillColor = m.fill || (
                 m.type === "area" ? "rgba(108, 176, 86, 0.25)" :
@@ -219,6 +220,7 @@ export const exportFlattenedPDF = async (
             );
 
             const border = hexToRgb(strokeColor);
+            const textCol = hexToRgb(m.textColor || strokeColor);
             const fill = fillColor !== "transparent" && fillColor !== "none" ? hexToRgb(fillColor) : null;
             const thickness = m.strokeWidth || 2;
             const dashStyle = getDashStyle(m.strokeDasharray);
@@ -256,7 +258,7 @@ export const exportFlattenedPDF = async (
                     y: labelY,
                     size: fontSize,
                     font: font,
-                    color: border,
+                    color: textCol,
                 });
             } else if (m.type === "perimeter" && m.points?.length >= 2) {
                 let len = 0;
@@ -286,7 +288,37 @@ export const exportFlattenedPDF = async (
                     y: labelY,
                     size: fontSize,
                     font: font,
-                    color: hexToRgb("#9b59b6"),
+                    color: textCol,
+                });
+            } else if (m.type === "polylength" && m.points?.length >= 2) {
+                let len = 0;
+                for (let j = 0; j < m.points.length - 1; j++) {
+                    const p1 = m.points[j];
+                    const p2 = m.points[j + 1];
+                    len += Math.hypot(p2.x - p1.x, p2.y - p1.y);
+                    page.drawLine({
+                        start: toPdfPoint(p1),
+                        end: toPdfPoint(p2),
+                        color: border,
+                        thickness: thickness,
+                        opacity: m.opacity ?? 1,
+                        ...dashStyle
+                    });
+                }
+                const label = m.text ? m.text : `${toUnits(len).toFixed(2)} ${unitLabel}`;
+                const refX = m.points[0].x;
+                const refY = m.points[0].y - 8;
+                const tOffset = m.textOffset || { x: 0, y: 0 };
+                const labelX = refX + tOffset.x;
+                const labelY = height - (refY + tOffset.y);
+
+                const fontSize = 11;
+                page.drawText(label, {
+                    x: labelX,
+                    y: labelY,
+                    size: fontSize,
+                    font: font,
+                    color: textCol,
                 });
             } else if (m.type === "area" && m.points?.length >= 3) {
                 let area = 0;

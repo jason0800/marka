@@ -94,7 +94,7 @@ const OverlayCanvasLayer = ({
                 const maxY = Math.max(...pts.map(p => p.y));
                 return minX < 0 || minY < 0 || maxX > width || maxY > height;
             }
-            if ((item.type === "area" || item.type === "perimeter" || item.type === "polyline" || item.type === "polygon") && item.points) {
+            if ((item.type === "area" || item.type === "perimeter" || item.type === "polyline" || item.type === "polygon" || item.type === "polylength") && item.points) {
                 const minX = Math.min(...item.points.map(p => p.x));
                 const maxX = Math.max(...item.points.map(p => p.x));
                 const minY = Math.min(...item.points.map(p => p.y));
@@ -306,11 +306,14 @@ const OverlayCanvasLayer = ({
             const opacity = m.opacity ?? 1;
             ctx.globalAlpha = opacity;
 
+            const tOffset = m.textOffset || { x: 0, y: 0 };
+
             const strokeColor = m.stroke || (
                 m.type === "length" ? "#e74c3c" :
                     m.type === "area" ? "#2ecc71" :
                         m.type === "perimeter" ? "#9b59b6" :
-                            m.type === "count" ? "white" : "#333"
+                            m.type === "polylength" ? "#16a085" :
+                                m.type === "count" ? "white" : "#333"
             );
 
             const fillColor = m.fill || (
@@ -341,7 +344,7 @@ const OverlayCanvasLayer = ({
                 ctx.fillStyle = strokeColor;
                 const midX = (a.x + b.x) / 2;
                 const midY = (a.y + b.y) / 2;
-                ctx.fillText(`${toUnits(dist).toFixed(2)} ${unit}`, midX, midY - textOffset);
+                ctx.fillText(`${toUnits(dist).toFixed(2)} ${unit}`, midX + tOffset.x, midY - textOffset + tOffset.y);
 
             } else if (m.type === "area" && m.points?.length >= 3) {
                 const area = calculatePolygonArea(m.points);
@@ -357,7 +360,7 @@ const OverlayCanvasLayer = ({
 
                 ctx.fillStyle = strokeColor;
                 ctx.textAlign = "left";
-                ctx.fillText(`${toUnits2(area).toFixed(2)} ${unit}²`, m.points[0].x, m.points[0].y - textOffset);
+                ctx.fillText(`${toUnits2(area).toFixed(2)} ${unit}²`, m.points[0].x + tOffset.x, m.points[0].y - textOffset + tOffset.y);
 
             } else if (m.type === "perimeter" && m.points?.length >= 2) {
                 let len = 0;
@@ -373,7 +376,23 @@ const OverlayCanvasLayer = ({
 
                 ctx.fillStyle = strokeColor;
                 ctx.textAlign = "left";
-                ctx.fillText(`${toUnits(len).toFixed(2)} ${unit}`, m.points[0].x, m.points[0].y - textOffset);
+                ctx.fillText(`${toUnits(len).toFixed(2)} ${unit}`, m.points[0].x + tOffset.x, m.points[0].y - textOffset + tOffset.y);
+
+            } else if (m.type === "polylength" && m.points?.length >= 2) {
+                let len = 0;
+                ctx.beginPath();
+                m.points.forEach((p, i) => {
+                    if (i === 0) ctx.moveTo(p.x, p.y);
+                    else {
+                        ctx.lineTo(p.x, p.y);
+                        len += calculateDistance(m.points[i - 1], p);
+                    }
+                });
+                ctx.stroke();
+
+                ctx.fillStyle = strokeColor;
+                ctx.textAlign = "left";
+                ctx.fillText(`${toUnits(len).toFixed(2)} ${unit}`, m.points[0].x + tOffset.x, m.points[0].y - textOffset + tOffset.y);
 
             } else if (m.type === "angle" && m.points?.length === 3) {
                 const p0 = m.points[0];
@@ -413,7 +432,7 @@ const OverlayCanvasLayer = ({
 
                 ctx.fillStyle = strokeColor;
                 ctx.textAlign = "center";
-                ctx.fillText(`${angleDeg.toFixed(1)}°`, p1.x, p1.y - 12 - textOffset);
+                ctx.fillText(`${angleDeg.toFixed(1)}°`, p1.x + tOffset.x, p1.y - 12 - textOffset + tOffset.y);
 
             } else if (m.type === "count") {
                 const pts = m.points || (m.point ? [m.point] : []);

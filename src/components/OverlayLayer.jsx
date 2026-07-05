@@ -7,6 +7,7 @@ import OverlayCanvasLayer from "./OverlayCanvasLayer";
 import * as pdfjsLib from 'pdfjs-dist';
 import { Scissors, Copy, Clipboard, Trash2, Sliders, XCircle, CheckSquare, Layers, Star, Paintbrush, Play } from 'lucide-react';
 
+const deleteVertexCursor = `url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'><path d='M0,0 L0,16.7 L4.6,12 L8.3,19.5 L10.8,18.3 L7.1,10.8 L12,10.8 Z' fill='white' stroke='black' stroke-width='1' stroke-linejoin='miter'/><line x1='14' y1='5' x2='19' y2='5' stroke='white' stroke-width='3.5' stroke-linecap='round'/><line x1='14' y1='5' x2='19' y2='5' stroke='black' stroke-width='1.5' stroke-linecap='round'/></svg>") 0 0, default`;
 // Helper: Calculate knee position from standard rules
 // Returns { x, y }
 const getCalloutKnee = (box, tip, knee = null) => {
@@ -237,6 +238,33 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
 
     // Context menu state
     const [canvasContextMenu, setCanvasContextMenu] = useState(null);
+
+    // Shift key tracking state for cursor updates and snapping
+    const [isShiftPressed, setIsShiftPressed] = useState(false);
+
+    useEffect(() => {
+        const handleKeyDown = (e) => {
+            if (e.key === "Shift") {
+                setIsShiftPressed(true);
+            }
+        };
+        const handleKeyUp = (e) => {
+            if (e.key === "Shift") {
+                setIsShiftPressed(false);
+            }
+        };
+        const handleBlur = () => {
+            setIsShiftPressed(false);
+        };
+        window.addEventListener("keydown", handleKeyDown);
+        window.addEventListener("keyup", handleKeyUp);
+        window.addEventListener("blur", handleBlur);
+        return () => {
+            window.removeEventListener("keydown", handleKeyDown);
+            window.removeEventListener("keyup", handleKeyUp);
+            window.removeEventListener("blur", handleBlur);
+        };
+    }, []);
 
     // Active count group reference
     const activeCountGroupIdRef = useRef(null);
@@ -813,6 +841,18 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                 points: pts,
             });
             pushHistory();
+        } else if (activeTool === "polylength" && pts.length >= 2) {
+            addMeasurement({
+                id: crypto.randomUUID(),
+                type: "polylength",
+                pageIndex,
+                points: pts,
+                stroke: defaultShapeStyle.stroke || "#16a085",
+                strokeWidth: defaultShapeStyle.strokeWidth || 2,
+                strokeDasharray: defaultShapeStyle.strokeDasharray || "none",
+                opacity: defaultShapeStyle.opacity !== undefined ? defaultShapeStyle.opacity : 1,
+            });
+            pushHistory();
         } else if (activeTool === "polyline" && pts.length >= 2) {
             addShape({
                 id: crypto.randomUUID(),
@@ -964,13 +1004,13 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                 const hitId = targetShapeId || targetMeasId;
                 const isShape = !!targetShapeId;
 
-                const item = isShape 
+                const item = isShape
                     ? pageShapes.find(x => x.id === hitId)
                     : pageMeasurements.find(x => x.id === hitId);
 
                 if (item) {
                     const isClosed = item.type === 'polygon' || item.type === 'area';
-                    if (['polyline', 'polygon', 'area', 'perimeter'].includes(item.type) && item.points) {
+                    if (['polyline', 'polygon', 'area', 'perimeter', 'polylength'].includes(item.type) && item.points) {
                         // find best insert index
                         let minDist = Infinity;
                         let insertIdx = -1;
@@ -1061,7 +1101,7 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
             } else {
                 // Check measurements
                 const meas = pageMeasurements.find(m => m.id === resizeId);
-                if (meas && ['text', 'callout', 'length', 'area', 'perimeter', 'angle', 'count'].includes(meas.type)) {
+                if (meas && ['text', 'callout', 'length', 'area', 'perimeter', 'angle', 'count', 'polylength'].includes(meas.type)) {
                     pushHistory();
                     // Normalize to shape-like for resizing logic
                     const startShape = {
@@ -1176,10 +1216,10 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                     setDragStartItems(snapshot);
                 }
 
-                const isClickingText = e.target.tagName === "text";
-                isDraggingTextRef.current = isShift && isClickingText && newSelection.some(id => {
+                const isClickingText = e.target.tagName.toLowerCase() === "text";
+                isDraggingTextRef.current = isClickingText && newSelection.some(id => {
                     const m = pageMeasurements.find(x => x.id === id);
-                    return m && ['length', 'angle', 'area', 'perimeter'].includes(m.type);
+                    return m && ['length', 'angle', 'area', 'perimeter', 'polylength'].includes(m.type);
                 });
 
                 setDragStart({ x: point.x, y: point.y });
@@ -1249,10 +1289,10 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                         setDragStartItems(snapshot);
                     }
 
-                    const isClickingTextCanvas = e.target.tagName === "text";
-                    isDraggingTextRef.current = isShift && isClickingTextCanvas && newSelection.some(id => {
+                    const isClickingTextCanvas = e.target.tagName.toLowerCase() === "text";
+                    isDraggingTextRef.current = isClickingTextCanvas && newSelection.some(id => {
                         const m = pageMeasurements.find(x => x.id === id);
-                        return m && ['length', 'angle', 'area', 'perimeter'].includes(m.type);
+                        return m && ['length', 'angle', 'area', 'perimeter', 'polylength'].includes(m.type);
                     });
 
                     setDragStart({ x: point.x, y: point.y });
@@ -1288,7 +1328,7 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
         }
 
         // 4) Measurement tools
-        if (["length", "calibrate", "area", "perimeter", "angle", "polyline", "polygon", "count", "comment"].includes(activeTool)) {
+        if (["length", "calibrate", "area", "perimeter", "angle", "polyline", "polygon", "count", "comment", "polylength"].includes(activeTool)) {
             if (activeTool === "count") {
                 const activeId = activeCountGroupIdRef.current;
                 const existingGroup = activeId ? pageMeasurements.find(m => m.id === activeId) : null;
@@ -1355,13 +1395,13 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                 return;
             }
 
-            if (activeTool === "area" || activeTool === "perimeter" || activeTool === "polyline" || activeTool === "polygon") {
+            if (activeTool === "area" || activeTool === "perimeter" || activeTool === "polyline" || activeTool === "polygon" || activeTool === "polylength") {
                 if (!isDrawingRef.current) {
                     setIsDrawing(true);
                     setDrawingPoints([{ x: point.x, y: point.y }]);
                 } else {
                     let nextPoint = { x: point.x, y: point.y };
-                    if ((activeTool === "polyline" || activeTool === "polygon") && e.shiftKey && drawingPoints.length > 0) {
+                    if ((activeTool === "polyline" || activeTool === "polygon" || activeTool === "polylength") && e.shiftKey && drawingPoints.length > 0) {
                         nextPoint = snapTo45Degrees(drawingPoints[drawingPoints.length - 1], nextPoint);
                     }
                     setDrawingPoints((prev) => [...prev, nextPoint]);
@@ -1420,7 +1460,7 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                 cursorPt = snapTo45Degrees(shapeStart, cursorPt);
             } else if (["length", "calibrate"].includes(activeTool) && isDrawingRef.current && drawingPoints.length > 0) {
                 cursorPt = snapTo45Degrees(drawingPoints[0], cursorPt);
-            } else if (["angle", "polyline", "polygon"].includes(activeTool) && isDrawingRef.current && drawingPoints.length > 0) {
+            } else if (["angle", "polyline", "polygon", "polylength"].includes(activeTool) && isDrawingRef.current && drawingPoints.length > 0) {
                 const referencePt = drawingPoints[drawingPoints.length - 1];
                 cursorPt = snapTo45Degrees(referencePt, cursorPt);
             } else if (["rectangle", "circle", "highlight", "cloud"].includes(activeTool) && shapeStart) {
@@ -1539,16 +1579,20 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
             if (startShape.type === "length" && (handle === "start" || handle === "end")) {
                 const newPoints = [...startShape.points];
                 if (handle === "start") {
-                    newPoints[0] = { x: startShape.points[0].x + dx, y: startShape.points[0].y + dy };
+                    let pt = { x: startShape.points[0].x + dx, y: startShape.points[0].y + dy };
+                    if (e.shiftKey) pt = snapTo45Degrees(startShape.points[1], pt);
+                    newPoints[0] = pt;
                 } else if (handle === "end") {
-                    newPoints[1] = { x: startShape.points[1].x + dx, y: startShape.points[1].y + dy };
+                    let pt = { x: startShape.points[1].x + dx, y: startShape.points[1].y + dy };
+                    if (e.shiftKey) pt = snapTo45Degrees(startShape.points[0], pt);
+                    newPoints[1] = pt;
                 }
                 updateMeasurement(id, { points: newPoints });
                 return;
             }
 
             // Area, perimeter, angle, polyline, polygon, and count vertex dragging
-            if (["area", "perimeter", "angle", "polyline", "polygon", "count"].includes(startShape.type) && handle.startsWith("vertex-")) {
+            if (["area", "perimeter", "angle", "polyline", "polygon", "count", "polylength"].includes(startShape.type) && handle.startsWith("vertex-")) {
                 const vertexIndex = parseInt(handle.split("-")[1]);
                 const newPoints = [...startShape.points];
                 let targetPt = {
@@ -1556,7 +1600,7 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                     y: startShape.points[vertexIndex].y + dy
                 };
 
-                if (["angle", "polyline", "polygon"].includes(startShape.type) && e.shiftKey) {
+                if (["angle", "polyline", "polygon", "area", "perimeter", "polylength"].includes(startShape.type) && e.shiftKey) {
                     const startPos = startShape.points[vertexIndex];
                     targetPt = snapTo45Degrees(startPos, targetPt);
                 }
@@ -1895,7 +1939,7 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                         } else {
                             const meas = pageMeasurements.find(m => m.id === id);
                             if (meas) {
-                                if (isTextDrag && ['length', 'angle', 'area', 'perimeter'].includes(meas.type)) {
+                                if (isTextDrag && ['length', 'angle', 'area', 'perimeter', 'polylength'].includes(meas.type)) {
                                     const currentOffset = meas.textOffset || { x: 0, y: 0 };
                                     updateMeasurement(id, {
                                         textOffset: { x: currentOffset.x + dx, y: currentOffset.y + dy }
@@ -2348,6 +2392,8 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
         const strokeColor = isShadow ? "#cbd5e1" : s.stroke;
         const fillColor = isShadow ? "none" : s.fill;
         const hasFill = fillColor && fillColor !== "none" && fillColor !== "transparent";
+        const canAddVertex = ["polyline", "polygon", "area", "perimeter", "polylength"].includes(s.type);
+        const isDragging = isDraggingItems || !!resizingState;
         const commonProps = {
             "data-shape-id": isShadow ? undefined : s.id,
             stroke: strokeColor,
@@ -2357,7 +2403,15 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
             fillOpacity: isShadow ? 0.7 : (s.opacity ?? 1),
             strokeOpacity: isShadow ? 0.7 : (s.strokeOpacity ?? 1),
             style: {
-                cursor: isShadow ? "default" : (activeTool === "format-painter" ? "copy" : "move"),
+                cursor: isShadow
+                    ? "default"
+                    : (activeTool === "format-painter"
+                        ? "copy"
+                        : (activeTool === "select"
+                            ? (isDragging
+                                ? "default"
+                                : (isShiftPressed && canAddVertex ? "copy" : "move"))
+                            : "default")),
                 pointerEvents: isShadow ? "none" : (hasFill ? "all" : "stroke")
             },
             strokeLinecap: "round",
@@ -2563,10 +2617,20 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
 
     const renderMeasurement = (m, isShadow = false) => {
         const isSelected = isShadow ? false : selectedIds.includes(m.id);
+        const canAddVertex = ["area", "perimeter", "polylength"].includes(m.type);
+        const isDragging = isDraggingItems || !!resizingState;
         const measCommon = {
             "data-meas-id": isShadow ? undefined : m.id,
             style: {
-                cursor: isShadow ? "default" : (activeTool === "format-painter" ? "copy" : (activeTool === "select" ? "move" : "default")),
+                cursor: isShadow
+                    ? "default"
+                    : (activeTool === "format-painter"
+                        ? "copy"
+                        : (activeTool === "select"
+                            ? (isDragging
+                                ? "default"
+                                : (isShiftPressed && canAddVertex ? "copy" : "move"))
+                            : "default")),
                 pointerEvents: isShadow ? "none" : "all"
             }
         };
@@ -2821,6 +2885,54 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
             );
         }
 
+        if (m.type === "polylength" && m.points?.length >= 2) {
+            const pointsStr = m.points.map((p) => `${p.x},${p.y}`).join(" ");
+            let totalLen = 0;
+            for (let i = 0; i < m.points.length - 1; i++) {
+                totalLen += calculateDistance(m.points[i], m.points[i + 1]);
+            }
+            const strokeColor = isShadow ? "#cbd5e1" : (m.stroke || "#16a085");
+            const strokeWidth = m.strokeWidth || 2;
+            const strokeOpacity = isShadow ? 0.7 : (m.strokeOpacity ?? 1);
+            const textOpacity = isShadow ? 0.7 : (m.textOpacity ?? 1);
+            const textColor = isShadow ? "#cbd5e1" : (m.textColor || strokeColor);
+            const fontSize = m.fontSize || 14;
+
+            return (
+                <g key={m.id + (isShadow ? "-shadow" : "")} {...measCommon} style={{ ...measCommon.style }}>
+                    <polyline
+                        points={pointsStr}
+                        fill="none"
+                        stroke={strokeColor}
+                        strokeWidth={strokeWidth}
+                        strokeOpacity={strokeOpacity}
+                        strokeDasharray={isShadow ? undefined : (m.strokeDasharray === 'none' ? undefined : (m.strokeDasharray === 'dashed' ? '12, 12' : (m.strokeDasharray === 'dotted' ? '2, 8' : m.strokeDasharray)))}
+                    />
+                    {!isShadow && (
+                        <text
+                            x={m.points[0].x + (m.textOffset?.x || 0)}
+                            y={m.points[0].y - 8 + (m.textOffset?.y || 0)}
+                            fill={textColor}
+                            fillOpacity={textOpacity}
+                            fontSize={fontSize}
+                            pointerEvents="all"
+                            style={{
+                                cursor: "move",
+                                fontWeight: m.bold ? 'bold' : 'normal',
+                                fontStyle: m.italic ? 'italic' : 'normal',
+                                textDecoration: [
+                                    m.underline ? 'underline' : '',
+                                    m.crossout ? 'line-through' : ''
+                                ].filter(Boolean).join(' ') || 'none'
+                            }}
+                        >
+                            {toUnits(totalLen).toFixed(2)} {unit}
+                        </text>
+                    )}
+                </g>
+            );
+        }
+
         if (m.type === "count") {
             const pts = m.points || (m.point ? [m.point] : []);
             const renderCountPoint = (p, idx, m, isShadow, measCommon) => {
@@ -3019,7 +3131,7 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                 <g style={{ opacity: isShadow ? 0.7 : 1 }}>
                     {renderConnector()}
                     <g transform={m.rotation ? `rotate(${m.rotation}, ${m.box.x + m.box.w / 2}, ${m.box.y + m.box.h / 2})` : undefined}>
-                         {/* Background Rect for Styling */}
+                        {/* Background Rect for Styling */}
                         <rect
                             x={m.box.x}
                             y={m.box.y}
@@ -3256,7 +3368,7 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                             if (selectedIds.includes(m.id)) {
                                 const dx = dragDelta.x, dy = dragDelta.y;
 
-                                if (isDraggingTextRef.current && ['length', 'angle', 'area', 'perimeter'].includes(m.type)) {
+                                if (isDraggingTextRef.current && ['length', 'angle', 'area', 'perimeter', 'polylength'].includes(m.type)) {
                                     const currentOffset = m.textOffset || { x: 0, y: 0 };
                                     measToRender = {
                                         ...m,
@@ -3409,7 +3521,7 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                 {isDrawingRef.current && drawingPoints.length > 0 && (
                     <g pointerEvents="none">
                         {/* Render partial polyline */}
-                        {["area", "perimeter", "polyline", "polygon"].includes(activeTool) ? (
+                        {["area", "perimeter", "polyline", "polygon", "polylength"].includes(activeTool) ? (
                             <>
                                 <polyline
                                     points={[...drawingPoints, cursor].map(p => p ? `${p.x},${p.y}` : "").join(" ")}
@@ -3556,7 +3668,7 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                                             stroke="#3a6b24"
                                             strokeWidth={1 / Math.max(1e-6, viewScale)}
                                             vectorEffect="non-scaling-stroke"
-                                            cursor="default"
+                                            cursor={isShiftPressed ? (isDraggingItems || resizingState ? "default" : deleteVertexCursor) : "default"}
                                             data-resize-id={s.id}
                                             data-resize-handle={`vertex-${idx}`}
                                         />
@@ -3619,7 +3731,7 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                                             stroke="#3a6b24"
                                             strokeWidth={1 / Math.max(1e-6, viewScale)}
                                             vectorEffect="non-scaling-stroke"
-                                            cursor="default"
+                                            cursor={isShiftPressed ? (isDraggingItems || resizingState ? "default" : deleteVertexCursor) : "default"}
                                             data-resize-id={m.id}
                                             data-resize-handle={`vertex-${idx}`}
                                             data-meas-id={m.id}
@@ -3629,7 +3741,7 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                             );
                         }
 
-                        if (["area", "perimeter", "angle", "length", "calibrate"].includes(measToRender.type) && measToRender.points?.length >= 2) {
+                        if (["area", "perimeter", "angle", "length", "calibrate", "polylength"].includes(measToRender.type) && measToRender.points?.length >= 2) {
                             return (
                                 <g key={`handles-${m.id}`}>
                                     {measToRender.points.map((p, idx) => (
@@ -3642,7 +3754,7 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                                             stroke="#3a6b24"
                                             strokeWidth={1 / Math.max(1e-6, viewScale)}
                                             vectorEffect="non-scaling-stroke"
-                                            cursor="default"
+                                            cursor={isShiftPressed ? (isDraggingItems || resizingState ? "default" : deleteVertexCursor) : "default"}
                                             data-resize-id={m.id}
                                             data-resize-handle={`vertex-${idx}`}
                                         />
@@ -3829,7 +3941,7 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                                 </span>
                                 <span className="text-[11px] text-[var(--text-secondary)] font-mono ml-4">Del</span>
                             </button>
-                             <button
+                            <button
                                 className="bg-transparent border-none text-[var(--text-primary)] px-3 py-1.5 text-left cursor-pointer text-[13px] flex items-center justify-between w-full hover:bg-[var(--btn-hover)] disabled:opacity-50 disabled:cursor-default"
                                 onClick={() => {
                                     setLeftPanelActiveTab('properties');
