@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState, useEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
 import useAppStore from "../stores/useAppStore";
-import { calculateDistance, calculatePolygonArea } from "../geometry/transforms";
+import { calculateDistance, calculatePolygonArea, getCloudPath } from "../geometry/transforms";
 import { findShapeAtPoint, findItemAtPoint } from "../geometry/hitTest";
 import OverlayCanvasLayer from "./OverlayCanvasLayer";
 import * as pdfjsLib from 'pdfjs-dist';
@@ -1227,7 +1227,7 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
         }
 
         // 3) Shape tools (start drag)
-        if (["rectangle", "circle", "line", "arrow", "text", "callout"].includes(activeTool)) {
+        if (["rectangle", "circle", "line", "arrow", "text", "callout", "highlight", "cloud"].includes(activeTool)) {
             setIsDrawing(true);
             drawStartTimeRef.current = Date.now();
             setShapeStart({ x: point.x, y: point.y });
@@ -1360,7 +1360,7 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
             } else if (["angle", "polyline", "polygon"].includes(activeTool) && isDrawingRef.current && drawingPoints.length > 0) {
                 const referencePt = drawingPoints[drawingPoints.length - 1];
                 cursorPt = snapTo45Degrees(referencePt, cursorPt);
-            } else if (["rectangle", "circle"].includes(activeTool) && shapeStart) {
+            } else if (["rectangle", "circle", "highlight", "cloud"].includes(activeTool) && shapeStart) {
                 const dx = cursorPt.x - shapeStart.x;
                 const dy = cursorPt.y - shapeStart.y;
                 const size = Math.max(Math.abs(dx), Math.abs(dy));
@@ -1561,7 +1561,7 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
             if (handle.includes("w")) newL += localDx;
             if (handle.includes("e")) newR += localDx;
 
-            if (e.shiftKey && (startShape.type === "rectangle" || startShape.type === "circle" || startShape.type === "image")) {
+            if (e.shiftKey && (startShape.type === "rectangle" || startShape.type === "circle" || startShape.type === "image" || startShape.type === "highlight" || startShape.type === "cloud")) {
                 const aspect = w0 / h0;
                 const candidateW = newR - newL;
                 const candidateH = newB - newT;
@@ -1882,12 +1882,12 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
         }
 
         // finalize shape draw
-        if (["rectangle", "circle", "line", "arrow"].includes(activeTool) && isDrawingRef.current && shapeStart && point) {
+        if (["rectangle", "circle", "line", "arrow", "highlight", "cloud"].includes(activeTool) && isDrawingRef.current && shapeStart && point) {
             let endPt = { x: point.x, y: point.y };
             if (e.shiftKey) {
                 if (activeTool === "line" || activeTool === "arrow") {
                     endPt = snapTo45Degrees(shapeStart, endPt);
-                } else if (activeTool === "rectangle" || activeTool === "circle") {
+                } else if (activeTool === "rectangle" || activeTool === "circle" || activeTool === "highlight" || activeTool === "cloud") {
                     const dx = endPt.x - shapeStart.x;
                     const dy = endPt.y - shapeStart.y;
                     const size = Math.max(Math.abs(dx), Math.abs(dy));
@@ -1907,6 +1907,12 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                     ...defaultShapeStyle, // Sticky properties
                     rotation: 0,
                 };
+
+                if (activeTool === "highlight") {
+                    base.fill = "#ffeb3b";
+                    base.stroke = "transparent";
+                    base.opacity = 0.4;
+                }
 
                 if (activeTool === "line" || activeTool === "arrow") {
                     addShape({ ...base, start: shapeStart, end: endPt });
@@ -2242,7 +2248,7 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                 style={cursorStyle}
                 transform={`translate(${s.x}, ${s.y}) rotate(${rot}, ${s.width / 2}, ${s.height / 2})`}
             >
-                {s.type === "rectangle" ? (
+                {(s.type === "rectangle" || s.type === "highlight" || s.type === "cloud") ? (
                     <rect
                         x={0}
                         y={0}
@@ -2272,7 +2278,7 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
     const renderShape = (s, isShadow = false) => {
         const isSelected = isShadow ? false : selectedIds.includes(s.id);
         const strokeColor = isShadow ? "#cbd5e1" : s.stroke;
-        const fillColor = isShadow ? (s.fill && s.fill !== "none" ? "rgba(226, 232, 240, 0.4)" : "none") : s.fill;
+        const fillColor = isShadow ? "none" : s.fill;
         const hasFill = fillColor && fillColor !== "none" && fillColor !== "transparent";
         const commonProps = {
             "data-shape-id": isShadow ? undefined : s.id,
@@ -2422,6 +2428,10 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
 
         if (s.type === "rectangle") {
             elem = <rect x={0} y={0} width={s.width} height={s.height} {...commonProps} strokeLinejoin="miter" />;
+        } else if (s.type === "highlight") {
+            elem = <rect x={0} y={0} width={s.width} height={s.height} {...commonProps} style={{ ...commonProps.style, mixBlendMode: "multiply" }} strokeLinejoin="miter" />;
+        } else if (s.type === "cloud") {
+            elem = <path d={getCloudPath(s.width, s.height)} {...commonProps} strokeLinejoin="miter" />;
         } else if (s.type === "circle") {
             elem = <ellipse cx={s.width / 2} cy={s.height / 2} rx={s.width / 2} ry={s.height / 2} {...commonProps} />;
         } else if (s.type === "image") {
@@ -2432,7 +2442,7 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                         y={0}
                         width={s.width}
                         height={s.height}
-                        fill="#cbd5e1"
+                        fill="none"
                         fillOpacity={0.15}
                         stroke="#cbd5e1"
                         strokeWidth={1}
@@ -2654,7 +2664,7 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
             const strokeColor = isShadow ? "#cbd5e1" : (m.stroke || "#2ecc71");
             const strokeWidth = m.strokeWidth || 2;
             const strokeDasharray = isShadow ? undefined : (m.strokeDasharray === 'none' ? undefined : (m.strokeDasharray === 'dashed' ? '12, 12' : (m.strokeDasharray === 'dotted' ? '2, 8' : m.strokeDasharray)));
-            const fillColor = isShadow ? "rgba(226, 232, 240, 0.4)" : (m.fill || "rgba(108, 176, 86, 0.25)");
+            const fillColor = isShadow ? "none" : (m.fill || "rgba(108, 176, 86, 0.25)");
             const fontSize = m.fontSize || 14;
             const textColor = isShadow ? "#94a3b8" : (m.textColor || strokeColor);
             const opacity = isShadow ? 0.7 : (m.opacity ?? 1);
@@ -2743,7 +2753,7 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
         }
 
         if (m.type === "count" && m.point) {
-            const fillColor = isShadow ? "#cbd5e1" : "var(--primary-color)";
+            const fillColor = isShadow ? "none" : "var(--primary-color)";
             const strokeColor = isShadow ? "#cbd5e1" : "white";
             const fillOpacity = isShadow ? 0.7 : (m.opacity ?? 1);
             const strokeOpacity = isShadow ? 0.7 : (m.strokeOpacity ?? 1);
@@ -2880,7 +2890,7 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
         const fontSize = m.fontSize || 14;
         const textColor = isShadow ? "#94a3b8" : (m.textColor || "black");
         const borderColor = isShadow ? "#cbd5e1" : (m.stroke || "#333");
-        const bgColor = isShadow ? "rgba(226, 232, 240, 0.4)" : (m.fill || (m.type === "text" ? "transparent" : "#fff"));
+        const bgColor = isShadow ? "none" : (m.fill || (m.type === "text" ? "transparent" : "#fff"));
         const strokeDasharray = isShadow ? undefined : (
             m.strokeDasharray === 'dashed' ? '12, 12' :
                 m.strokeDasharray === 'dotted' ? '2, 8' :
@@ -3065,15 +3075,19 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                     const shadows = [];
                     if (resizingState && resizingState.startShape) {
                         const start = resizingState.startShape;
-                        if (resizingState.isMeasurement) {
-                            shadows.push({ item: start, type: 'measurement' });
-                        } else {
-                            shadows.push({ item: start, type: 'shape' });
+                        if (start.type !== "highlight") {
+                            if (resizingState.isMeasurement) {
+                                shadows.push({ item: start, type: 'measurement' });
+                            } else {
+                                shadows.push({ item: start, type: 'shape' });
+                            }
                         }
                     } else if (isDraggingItems && dragStartItems && (dragDelta.x !== 0 || dragDelta.y !== 0)) {
                         Object.entries(dragStartItems).forEach(([id, startItem]) => {
-                            const isMeas = pageMeasurements.some(m => m.id === id);
-                            shadows.push({ item: startItem, type: isMeas ? 'measurement' : 'shape' });
+                            if (startItem.type !== "highlight") {
+                                const isMeas = pageMeasurements.some(m => m.id === id);
+                                shadows.push({ item: startItem, type: isMeas ? 'measurement' : 'shape' });
+                            }
                         });
                     }
                     return shadows.map(({ item, type }) => {
@@ -3254,6 +3268,11 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                         }
 
                         let s = { id: tempId, type: activeTool, ...defaultShapeStyle, stroke: defaultShapeStyle.stroke, start: shapeStart, end: cursor, x: 0, y: 0, width: 0, height: 0, rotation: 0 };
+                        if (activeTool === "highlight") {
+                            s.fill = "#ffeb3b";
+                            s.stroke = "transparent";
+                            s.opacity = 0.4;
+                        }
 
                         if (activeTool === "line" || activeTool === "arrow") {
                             // s is set needed props

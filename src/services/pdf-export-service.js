@@ -3,6 +3,7 @@
  * This service loads the original PDF bytes, copies pages vectorially,
  * and draws annotations (shapes, measurements, text) directly as vector elements.
  */
+import { getCloudPath } from '../geometry/transforms';
 
 export const exportFlattenedPDF = async (
     pdfDocument,
@@ -110,18 +111,29 @@ export const exportFlattenedPDF = async (
             const thickness = s.strokeWidth || 2;
             const dashStyle = getDashStyle(s.strokeDasharray);
 
-            if (s.type === "rectangle") {
+            if (s.type === "rectangle" || s.type === "highlight") {
                 page.drawRectangle({
                     x: s.x,
                     y: height - s.y - s.height,
                     width: s.width,
                     height: s.height,
+                    borderColor: s.type === "highlight" ? undefined : border,
+                    borderWidth: s.type === "highlight" ? 0 : thickness,
+                    color: fill || undefined,
+                    opacity: s.opacity ?? 1,
+                    borderColorOpacity: s.type === "highlight" ? 0 : (s.opacity ?? 1),
+                    ...dashStyle
+                });
+            } else if (s.type === "cloud") {
+                const pathStr = getCloudPath(s.width, s.height);
+                page.drawSvgPath(pathStr, {
+                    x: s.x,
+                    y: height - s.y - s.height,
                     borderColor: border,
                     borderWidth: thickness,
                     color: fill || undefined,
                     opacity: s.opacity ?? 1,
-                    borderColorOpacity: s.opacity ?? 1,
-                    ...dashStyle
+                    borderOpacity: s.opacity ?? 1,
                 });
             } else if (s.type === "circle") {
                 const cx = s.cx || (s.x + s.width / 2);

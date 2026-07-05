@@ -1,7 +1,7 @@
 import {
     MousePointer2, Hand, RulerDimensionLine, Circle, Minus,
     ArrowRight, RectangleHorizontal, Type, Tally5Icon, PencilRuler,
-    Paintbrush,
+    Paintbrush, Highlighter, Cloud,
 } from 'lucide-react';
 import { createPortal } from 'react-dom';
 import useAppStore from '../stores/useAppStore';
@@ -16,7 +16,7 @@ const ALL_TOOL_IDS = [
     'length', 'area', 'angle', 'count',
     'callout', 'text',
     'rectangle', 'circle', 'polygon', 'polyline',
-    'line', 'arrow', 'format-painter',
+    'line', 'arrow', 'format-painter', 'highlight', 'cloud',
 ];
 
 // ─── Toolbar layout definition ────────────────────────────────────────────────
@@ -36,6 +36,7 @@ const TOOLBAR = [
         children: [
             { id: 'callout', icon: CalloutIcon, label: 'Callout' },
             { id: 'text', icon: Type, label: 'Text Box' },
+            { id: 'highlight', icon: Highlighter, label: 'Highlight' },
         ],
     },
     {
@@ -44,6 +45,7 @@ const TOOLBAR = [
             { id: 'rectangle', icon: RectangleHorizontal, label: 'Rectangle' },
             { id: 'circle', icon: Circle, label: 'Circle' },
             { id: 'polygon', icon: PolygonIcon, label: 'Polygon' },
+            { id: 'cloud', icon: Cloud, label: 'Revision Cloud' },
         ],
     },
     {

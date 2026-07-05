@@ -43,3 +43,83 @@ export const calculatePolygonArea = (points) => {
     return Math.abs(area) / 2;
 };
 
+export const getCloudPath = (w, h, targetArcSize = 16) => {
+    if (w <= 0 || h <= 0) return "M 0 0 Z";
+
+    let path = "M 0 0";
+
+    const addSegment = (x1, y1, x2, y2) => {
+        const dx = x2 - x1;
+        const dy = y2 - y1;
+        const dist = Math.hypot(dx, dy);
+        if (dist < 1e-6) return;
+        const numArcs = Math.max(1, Math.round(dist / targetArcSize));
+
+        let xLast = x1;
+        let yLast = y1;
+        for (let i = 1; i <= numArcs; i++) {
+            const tx = x1 + (dx * i) / numArcs;
+            const ty = y1 + (dy * i) / numArcs;
+
+            const dx_seg = tx - xLast;
+            const dy_seg = ty - yLast;
+            const mx = (xLast + tx) / 2;
+            const my = (yLast + ty) / 2;
+
+            // Outwards normal control point
+            const cpx = mx + dy_seg * 0.45;
+            const cpy = my - dx_seg * 0.45;
+
+            path += ` Q ${cpx.toFixed(2)} ${cpy.toFixed(2)}, ${tx.toFixed(2)} ${ty.toFixed(2)}`;
+            xLast = tx;
+            yLast = ty;
+        }
+    };
+
+    addSegment(0, 0, w, 0);
+    addSegment(w, 0, w, h);
+    addSegment(w, h, 0, h);
+    addSegment(0, h, 0, 0);
+
+    path += " Z";
+    return path;
+};
+
+export const drawCloudPath = (ctx, w, h, targetArcSize = 16) => {
+    if (w <= 0 || h <= 0) return;
+
+    ctx.moveTo(0, 0);
+
+    const addSegment = (x1, y1, x2, y2) => {
+        const dx = x2 - x1;
+        const dy = y2 - y1;
+        const dist = Math.hypot(dx, dy);
+        if (dist < 1e-6) return;
+        const numArcs = Math.max(1, Math.round(dist / targetArcSize));
+
+        let xLast = x1;
+        let yLast = y1;
+        for (let i = 1; i <= numArcs; i++) {
+            const tx = x1 + (dx * i) / numArcs;
+            const ty = y1 + (dy * i) / numArcs;
+
+            const dx_seg = tx - xLast;
+            const dy_seg = ty - yLast;
+            const mx = (xLast + tx) / 2;
+            const my = (yLast + ty) / 2;
+
+            const cpx = mx + dy_seg * 0.45;
+            const cpy = my - dx_seg * 0.45;
+
+            ctx.quadraticCurveTo(cpx, cpy, tx, ty);
+            xLast = tx;
+            yLast = ty;
+        }
+    };
+
+    addSegment(0, 0, w, 0);
+    addSegment(w, 0, w, h);
+    addSegment(w, h, 0, h);
+    addSegment(0, h, 0, 0);
+};
+

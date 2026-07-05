@@ -96,7 +96,7 @@ export const isPointInShape = (point, shape, tolerance = 5) => {
     const t = tolerance + halfStroke;
     const hasFill = shape.fill && shape.fill !== "none" && shape.fill !== "transparent";
 
-    if (shape.type === "rectangle") {
+    if (shape.type === "rectangle" || shape.type === "highlight" || shape.type === "cloud") {
         if (hasFill) {
             return (
                 localP.x >= x - t &&

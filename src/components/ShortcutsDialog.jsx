@@ -18,6 +18,8 @@ const TOOL_LABELS = {
     polygon: 'Polygon Shape',
     line: 'Line Shape',
     arrow: 'Arrow Shape',
+    highlight: 'Highlight Tool',
+    cloud: 'Revision Cloud',
 };
 
 const ShortcutsDialog = ({ onClose }) => {

@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, memo } from "react";
-import { calculateDistance, calculatePolygonArea } from "../geometry/transforms";
+import { calculateDistance, calculatePolygonArea, drawCloudPath } from "../geometry/transforms";
 
 const MAX_CANVAS_PIXELS = 25_000_000; // ~25MP Cap to match high-resolution rendering
 const MAX_SIDE = 8192;               // GPU Texture Limit
@@ -192,10 +192,13 @@ const OverlayCanvasLayer = ({
 
             ctx.save();
             ctx.globalAlpha = opacity;
+            if (shape.type === "highlight") {
+                ctx.globalCompositeOperation = "multiply";
+            }
             ctx.strokeStyle = stroke;
             ctx.lineWidth = strokeWidth;
             ctx.lineCap = (shape.type === "arrow" || shape.type === "line" || shape.type === "polyline" || shape.type === "polygon") ? "butt" : "round";
-            ctx.lineJoin = (shape.type === "rectangle" || shape.type === "polyline" || shape.type === "polygon") ? "miter" : "round";
+            ctx.lineJoin = (shape.type === "rectangle" || shape.type === "polyline" || shape.type === "polygon" || shape.type === "highlight") ? "miter" : "round";
 
             if (dash && dash !== "none") {
                 ctx.setLineDash(dash.split(",").map(Number));
@@ -205,10 +208,20 @@ const OverlayCanvasLayer = ({
 
             // Geometry
             ctx.beginPath();
-            if (shape.type === "rectangle") {
+            if (shape.type === "rectangle" || shape.type === "highlight") {
                 if (hasFill && shape.rotation) drawRotatedRect(ctx, shape, true); // Path only
                 else if (shape.rotation) drawRotatedRectPath(ctx, shape);
                 else ctx.rect(shape.x, shape.y, shape.width, shape.height);
+            } else if (shape.type === "cloud") {
+                const cx = shape.x + shape.width / 2;
+                const cy = shape.y + shape.height / 2;
+                if (shape.rotation) {
+                    ctx.translate(cx, cy);
+                    ctx.rotate((shape.rotation * Math.PI) / 180);
+                    ctx.translate(-cx, -cy);
+                }
+                ctx.translate(shape.x, shape.y);
+                drawCloudPath(ctx, shape.width, shape.height);
             } else if (shape.type === "circle") {
                 if (shape.rotation) drawRotatedEllipsePath(ctx, shape);
                 else {

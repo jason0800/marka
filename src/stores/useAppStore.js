@@ -20,6 +20,8 @@ const defaultShortcuts = {
     polygon: 'o',
     line: 'i',
     arrow: 'a',
+    highlight: 'y',
+    cloud: 'c',
 };
 
 const getStoredShortcuts = () => {
@@ -367,7 +369,7 @@ const useAppStore = create((set, get) => ({
                 // Shape types: rectangle, circle, line, arrow
                 // Measurement types: length, area, perimeter, count, comment
 
-                const isShape = ['rectangle', 'circle', 'line', 'arrow', 'polyline', 'polygon', 'image'].includes(item.type);
+                const isShape = ['rectangle', 'circle', 'line', 'arrow', 'polyline', 'polygon', 'image', 'highlight', 'cloud'].includes(item.type);
                 console.log("Paste Item Processing:", item.type, "isShape:", isShape);
 
                 if (isShape) {
