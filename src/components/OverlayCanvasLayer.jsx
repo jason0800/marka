@@ -135,8 +135,34 @@ const OverlayCanvasLayer = ({
                             ctx.translate(cx, cy);
                             ctx.rotate((shape.rotation * Math.PI) / 180);
                             ctx.drawImage(img, -shape.width / 2, -shape.height / 2, shape.width, shape.height);
+                            
+                            // Draw border
+                            if (shape.strokeWidth > 0 && shape.stroke && shape.stroke !== 'none' && shape.stroke !== 'transparent') {
+                                ctx.strokeStyle = shape.stroke;
+                                ctx.lineWidth = shape.strokeWidth;
+                                ctx.globalAlpha = (shape.strokeOpacity ?? 1) * opacity;
+                                if (shape.strokeDasharray && shape.strokeDasharray !== "none") {
+                                    ctx.setLineDash(shape.strokeDasharray.split(",").map(Number));
+                                } else {
+                                    ctx.setLineDash([]);
+                                }
+                                ctx.strokeRect(-shape.width / 2, -shape.height / 2, shape.width, shape.height);
+                            }
                         } else {
                             ctx.drawImage(img, shape.x, shape.y, shape.width, shape.height);
+                            
+                            // Draw border
+                            if (shape.strokeWidth > 0 && shape.stroke && shape.stroke !== 'none' && shape.stroke !== 'transparent') {
+                                ctx.strokeStyle = shape.stroke;
+                                ctx.lineWidth = shape.strokeWidth;
+                                ctx.globalAlpha = (shape.strokeOpacity ?? 1) * opacity;
+                                if (shape.strokeDasharray && shape.strokeDasharray !== "none") {
+                                    ctx.setLineDash(shape.strokeDasharray.split(",").map(Number));
+                                } else {
+                                    ctx.setLineDash([]);
+                                }
+                                ctx.strokeRect(shape.x, shape.y, shape.width, shape.height);
+                            }
                         }
                         ctx.restore();
                     }

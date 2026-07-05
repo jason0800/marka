@@ -5,7 +5,7 @@ import { calculateDistance, calculatePolygonArea } from "../geometry/transforms"
 import { findShapeAtPoint, findItemAtPoint } from "../geometry/hitTest";
 import OverlayCanvasLayer from "./OverlayCanvasLayer";
 import * as pdfjsLib from 'pdfjs-dist';
-import { Scissors, Copy, Clipboard, Trash2, Sliders, XCircle, CheckSquare, Layers, Star } from 'lucide-react';
+import { Scissors, Copy, Clipboard, Trash2, Sliders, XCircle, CheckSquare, Layers, Star, Paintbrush } from 'lucide-react';
 
 // Helper: Calculate knee position from standard rules
 // Returns { x, y }
@@ -169,6 +169,7 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
         leftPanelActiveTab,
         setLeftPanelActiveTab,
         formatPaintStyle,
+        setFormatPaintStyle,
     } = useAppStore();
 
     const viewScale = (viewport && viewport.scale) ? viewport.scale : propViewScale;
@@ -248,6 +249,14 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
         const handlePaste = (e) => {
             if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
 
+            // Prioritize pasting from the app's internal memory clipboard if it contains items
+            if (clipboard && clipboard.length > 0) {
+                e.preventDefault();
+                paste();
+                pushHistory();
+                return;
+            }
+
             const items = e.clipboardData?.items;
             if (items) {
                 let hasImage = false;
@@ -317,7 +326,7 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
             window.removeEventListener('pointerdown', handleWindowClick);
             window.removeEventListener('paste', handlePaste);
         };
-    }, [pageIndex, addShape, setSelectedIds, pushHistory]);
+    }, [pageIndex, addShape, setSelectedIds, pushHistory, clipboard, paste]);
 
     const duplicateSelected = () => {
         const selectedShapes = shapes.filter(s => selectedIds.includes(s.id));
@@ -1545,7 +1554,7 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
             if (handle.includes("w")) newL += localDx;
             if (handle.includes("e")) newR += localDx;
 
-            if (e.shiftKey && (startShape.type === "rectangle" || startShape.type === "circle")) {
+            if (e.shiftKey && (startShape.type === "rectangle" || startShape.type === "circle" || startShape.type === "image")) {
                 const aspect = w0 / h0;
                 const candidateW = newR - newL;
                 const candidateH = newB - newT;
@@ -2417,23 +2426,41 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                         width={s.width}
                         height={s.height}
                         fill="#cbd5e1"
-                        fillOpacity={0.4}
-                        stroke="#94a3b8"
-                        strokeWidth={1.5}
+                        fillOpacity={0.15}
+                        stroke="#cbd5e1"
+                        strokeWidth={1}
                     />
                 );
             } else {
-                elem = (
-                    <image
-                        href={s.src}
+                const borderRect = (s.strokeWidth > 0 && s.stroke && s.stroke !== 'none' && s.stroke !== 'transparent') ? (
+                    <rect
                         x={0}
                         y={0}
                         width={s.width}
                         height={s.height}
-                        opacity={s.opacity ?? 1}
-                        style={{ cursor: "move", pointerEvents: "all" }}
-                        data-shape-id={s.id}
+                        fill="none"
+                        stroke={s.stroke}
+                        strokeWidth={s.strokeWidth}
+                        strokeDasharray={s.strokeDasharray === 'none' ? undefined : s.strokeDasharray}
+                        strokeOpacity={s.strokeOpacity ?? 1}
+                        pointerEvents="none"
                     />
+                ) : null;
+
+                elem = (
+                    <g>
+                        <image
+                            href={s.src}
+                            x={0}
+                            y={0}
+                            width={s.width}
+                            height={s.height}
+                            opacity={s.opacity ?? 1}
+                            style={{ cursor: "move", pointerEvents: "all" }}
+                            data-shape-id={s.id}
+                        />
+                        {borderRect}
+                    </g>
                 );
             }
         }
@@ -3609,7 +3636,7 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                                 </span>
                                 <span className="text-[11px] text-[var(--text-secondary)] font-mono ml-4">Del</span>
                             </button>
-                            <button
+                             <button
                                 className="bg-transparent border-none text-[var(--text-primary)] px-3 py-1.5 text-left cursor-pointer text-[13px] flex items-center justify-between w-full hover:bg-[var(--btn-hover)] disabled:opacity-50 disabled:cursor-default"
                                 onClick={() => {
                                     setLeftPanelActiveTab('properties');
@@ -3619,6 +3646,36 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                                 <span className="flex items-center gap-2">
                                     <Sliders size={14} className="text-[var(--text-secondary)]" />
                                     <span>Properties</span>
+                                </span>
+                            </button>
+                            <button
+                                className="bg-transparent border-none text-[var(--text-primary)] px-3 py-1.5 text-left cursor-pointer text-[13px] flex items-center justify-between w-full hover:bg-[var(--btn-hover)] disabled:opacity-50 disabled:cursor-default"
+                                onClick={() => {
+                                    const source = pageShapes.find(s => selectedIds.includes(s.id)) || pageMeasurements.find(m => selectedIds.includes(m.id));
+                                    if (source) {
+                                        setFormatPaintStyle({
+                                            stroke: source.stroke,
+                                            strokeWidth: source.strokeWidth,
+                                            strokeDasharray: source.strokeDasharray,
+                                            fill: source.fill,
+                                            opacity: source.opacity,
+                                            strokeOpacity: source.strokeOpacity,
+                                            textOpacity: source.textOpacity,
+                                            fontSize: source.fontSize,
+                                            bold: source.bold,
+                                            italic: source.italic,
+                                            underline: source.underline,
+                                            crossout: source.crossout,
+                                            textColor: source.textColor,
+                                        });
+                                        setActiveTool("format-painter");
+                                    }
+                                    setCanvasContextMenu(null);
+                                }}
+                            >
+                                <span className="flex items-center gap-2">
+                                    <Paintbrush size={14} className="text-[var(--text-secondary)]" />
+                                    <span>Format Painter</span>
                                 </span>
                             </button>
                             <div className="h-px bg-[var(--border-color)] my-1" />

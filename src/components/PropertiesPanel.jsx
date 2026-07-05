@@ -98,7 +98,7 @@ const PropertiesPanel = () => {
 
     const stroke = source?.stroke || defaultShapeStyle.stroke;
     const fill = source?.fill || defaultShapeStyle.fill;
-    const strokeWidth = source?.strokeWidth || defaultShapeStyle.strokeWidth;
+    const strokeWidth = source?.strokeWidth !== undefined ? source.strokeWidth : defaultShapeStyle.strokeWidth;
     const strokeDasharray = source?.strokeDasharray || defaultShapeStyle.strokeDasharray;
     const opacity = source?.opacity ?? defaultShapeStyle.opacity;
     const strokeOpacity = source?.strokeOpacity ?? defaultShapeStyle.strokeOpacity ?? 1;
@@ -272,7 +272,7 @@ const PropertiesPanel = () => {
                     </div>
 
                     {/* Fill / Background - Hidden for Lines/Arrows/Length */}
-                    {!['line', 'arrow', 'length'].includes(source?.type) && (
+                    {!['line', 'arrow', 'length', 'image'].includes(source?.type) && (
                         <div className="flex flex-col gap-1">
                             <label className="text-xs text-[var(--text-secondary)] font-medium">
                                 {['text', 'callout', 'comment'].includes(source?.type) ? 'Background' : 'Fill'}
@@ -316,11 +316,14 @@ const PropertiesPanel = () => {
                         <div className="flex items-center bg-[var(--bg-color)] px-2 py-0.5 rounded border border-transparent focus-within:border-[var(--primary-color)] transition-colors h-7 w-[80px]">
                             <input
                                 type="number"
-                                min="0.5"
+                                min="0"
                                 max="20"
                                 step="0.25"
                                 value={strokeWidth}
-                                onChange={(e) => updateProp('strokeWidth', parseFloat(e.target.value) || 2)}
+                                onChange={(e) => {
+                                    const val = parseFloat(e.target.value);
+                                    updateProp('strokeWidth', isNaN(val) ? 2 : val);
+                                }}
                                 className="w-full text-xs text-[var(--text-primary)] bg-transparent outline-none font-mono"
                             />
                             <span className="text-xs text-[var(--text-secondary)] ml-1 select-none">px</span>
@@ -368,7 +371,9 @@ const PropertiesPanel = () => {
                     {!['line', 'arrow', 'length'].includes(source?.type) && (
                         <div className="flex flex-col gap-2">
                             <div className="flex justify-between items-center mb-1">
-                                <label className="text-xs text-[var(--text-secondary)] font-medium">Fill Opacity</label>
+                                <label className="text-xs text-[var(--text-secondary)] font-medium">
+                                    {source?.type === 'image' ? 'Image Opacity' : 'Fill Opacity'}
+                                </label>
                                 <div className="flex items-center bg-[var(--bg-color)] px-1.5 py-0.5 rounded min-w-[12px] border border-transparent focus-within:border-[var(--primary-color)] transition-colors">
                                     <input
                                         type="text"

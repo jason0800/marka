@@ -367,7 +367,7 @@ const useAppStore = create((set, get) => ({
                 // Shape types: rectangle, circle, line, arrow
                 // Measurement types: length, area, perimeter, count, comment
 
-                const isShape = ['rectangle', 'circle', 'line', 'arrow'].includes(item.type);
+                const isShape = ['rectangle', 'circle', 'line', 'arrow', 'polyline', 'polygon', 'image'].includes(item.type);
                 console.log("Paste Item Processing:", item.type, "isShape:", isShape);
 
                 if (isShape) {
@@ -381,6 +381,8 @@ const useAppStore = create((set, get) => ({
                     if (newItem.type === 'line' || newItem.type === 'arrow') {
                         newItem.start = { x: newItem.start.x + offset, y: newItem.start.y + offset };
                         newItem.end = { x: newItem.end.x + offset, y: newItem.end.y + offset };
+                    } else if (newItem.points) {
+                        newItem.points = newItem.points.map(p => ({ x: p.x + offset, y: p.y + offset }));
                     } else {
                         newItem.x += offset;
                         newItem.y += offset;
