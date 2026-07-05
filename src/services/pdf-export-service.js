@@ -359,15 +359,58 @@ export const exportFlattenedPDF = async (
                     font: font,
                     color: border,
                 });
-            } else if (m.type === "count" && m.point) {
-                const r = 8;
-                page.drawCircle({
-                    x: m.point.x,
-                    y: height - m.point.y,
-                    radius: r,
-                    color: fill || hexToRgb("#e67e22"),
-                    borderColor: border,
-                    borderWidth: thickness,
+            } else if (m.type === "count") {
+                const pts = m.points || (m.point ? [m.point] : []);
+                const scale = m.scale !== undefined ? m.scale : 1.0;
+                const r = 8 * scale;
+                const shapeType = m.shape || "circle";
+                const fillColor = fill || hexToRgb("#e67e22");
+
+                pts.forEach((p, idx) => {
+                    const pdfY = height - p.y;
+                    if (shapeType === "square") {
+                        page.drawRectangle({
+                            x: p.x - r,
+                            y: pdfY - r,
+                            width: r * 2,
+                            height: r * 2,
+                            color: fillColor,
+                            borderColor: border,
+                            borderWidth: thickness,
+                        });
+                    } else if (shapeType === "triangle") {
+                        page.drawPolygon({
+                            points: [
+                                { x: p.x, y: pdfY + r * 1.1 },
+                                { x: p.x - r, y: pdfY - r * 0.9 },
+                                { x: p.x + r, y: pdfY - r * 0.9 }
+                            ],
+                            color: fillColor,
+                            borderColor: border,
+                            borderWidth: thickness,
+                        });
+                    } else if (shapeType === "diamond") {
+                        page.drawPolygon({
+                            points: [
+                                { x: p.x, y: pdfY + r * 1.1 },
+                                { x: p.x + r * 1.1, y: pdfY },
+                                { x: p.x, y: pdfY - r * 1.1 },
+                                { x: p.x - r * 1.1, y: pdfY }
+                            ],
+                            color: fillColor,
+                            borderColor: border,
+                            borderWidth: thickness,
+                        });
+                    } else {
+                        page.drawCircle({
+                            x: p.x,
+                            y: pdfY,
+                            radius: r,
+                            color: fillColor,
+                            borderColor: border,
+                            borderWidth: thickness,
+                        });
+                    }
                 });
             } else if (m.type === "text" && m.box) {
                 // Background filled box

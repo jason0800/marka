@@ -183,11 +183,15 @@ export const isPointInMeasurement = (point, m, tolerance = 5) => {
         return inside;
     }
 
-    // Count (Circle)
-    if (m.type === "count" && m.point) {
-        const r = (8 / (m.viewScale || 1)) + tolerance; // approx radius check
-        const d = calculateDistance(point, m.point);
-        return d <= r;
+    // Count (Grouped)
+    if (m.type === "count") {
+        const r = 10 + tolerance;
+        if (m.points) {
+            return m.points.some(p => calculateDistance(point, p) <= r);
+        }
+        if (m.point) {
+            return calculateDistance(point, m.point) <= r;
+        }
     }
 
     // Comment

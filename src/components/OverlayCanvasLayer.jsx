@@ -101,10 +101,15 @@ const OverlayCanvasLayer = ({
                 const maxY = Math.max(...item.points.map(p => p.y));
                 return minX < 0 || minY < 0 || maxX > width || maxY > height;
             }
-            if (item.type === "count" && item.point) {
-                const { x, y } = item.point;
+            if (item.type === "count") {
+                const pts = item.points || (item.point ? [item.point] : []);
+                if (pts.length === 0) return false;
+                const minX = Math.min(...pts.map(p => p.x));
+                const maxX = Math.max(...pts.map(p => p.x));
+                const minY = Math.min(...pts.map(p => p.y));
+                const maxY = Math.max(...pts.map(p => p.y));
                 const r = 8;
-                return x - r < 0 || y - r < 0 || x + r > width || y + r > height;
+                return minX - r < 0 || minY - r < 0 || maxX + r > width || maxY + r > height;
             }
 
             // Box based
@@ -410,13 +415,37 @@ const OverlayCanvasLayer = ({
                 ctx.textAlign = "center";
                 ctx.fillText(`${angleDeg.toFixed(1)}°`, p1.x, p1.y - 12 - textOffset);
 
-            } else if (m.type === "count" && m.point) {
-                const r = 8 / safeScale;
+            } else if (m.type === "count") {
+                const pts = m.points || (m.point ? [m.point] : []);
+                const scale = m.scale !== undefined ? m.scale : 1.0;
+                const r = (8 / safeScale) * scale;
+                const shapeType = m.shape || "circle";
 
-                ctx.beginPath();
-                ctx.arc(m.point.x, m.point.y, r, 0, Math.PI * 2);
-                ctx.fill();
-                ctx.stroke();
+                ctx.fillStyle = fillColor === "none" ? "transparent" : fillColor;
+                ctx.strokeStyle = strokeColor;
+                ctx.lineWidth = rawStrokeWidth;
+
+                pts.forEach((p, idx) => {
+                    ctx.beginPath();
+                    if (shapeType === "square") {
+                        ctx.rect(p.x - r, p.y - r, r * 2, r * 2);
+                    } else if (shapeType === "triangle") {
+                        ctx.moveTo(p.x, p.y - r * 1.1);
+                        ctx.lineTo(p.x - r, p.y + r * 0.9);
+                        ctx.lineTo(p.x + r, p.y + r * 0.9);
+                        ctx.closePath();
+                    } else if (shapeType === "diamond") {
+                        ctx.moveTo(p.x, p.y - r * 1.1);
+                        ctx.lineTo(p.x + r * 1.1, p.y);
+                        ctx.lineTo(p.x, p.y + r * 1.1);
+                        ctx.lineTo(p.x - r * 1.1, p.y);
+                        ctx.closePath();
+                    } else {
+                        ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+                    }
+                    ctx.fill();
+                    ctx.stroke();
+                });
             } else if (m.type === "comment" && m.tip && m.box) {
                 const midX = m.box.x + m.box.w / 2;
                 const midY = m.box.y + m.box.h / 2;

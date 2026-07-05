@@ -5,7 +5,7 @@ import { calculateDistance, calculatePolygonArea, getCloudPath } from "../geomet
 import { findShapeAtPoint, findItemAtPoint } from "../geometry/hitTest";
 import OverlayCanvasLayer from "./OverlayCanvasLayer";
 import * as pdfjsLib from 'pdfjs-dist';
-import { Scissors, Copy, Clipboard, Trash2, Sliders, XCircle, CheckSquare, Layers, Star, Paintbrush } from 'lucide-react';
+import { Scissors, Copy, Clipboard, Trash2, Sliders, XCircle, CheckSquare, Layers, Star, Paintbrush, Play } from 'lucide-react';
 
 // Helper: Calculate knee position from standard rules
 // Returns { x, y }
@@ -238,6 +238,15 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
     // Context menu state
     const [canvasContextMenu, setCanvasContextMenu] = useState(null);
 
+    // Active count group reference
+    const activeCountGroupIdRef = useRef(null);
+
+    useEffect(() => {
+        if (activeTool !== "count") {
+            activeCountGroupIdRef.current = null;
+        }
+    }, [activeTool]);
+
     // Auto-close context menu on click elsewhere & handle image paste
     useEffect(() => {
         const handleWindowClick = (e) => {
@@ -417,6 +426,8 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
             if (target.opacity !== undefined) newDefaults.opacity = target.opacity;
             if (target.fontSize !== undefined) newDefaults.fontSize = target.fontSize;
             if (target.textColor !== undefined) newDefaults.textColor = target.textColor;
+            if (target.shape !== undefined) newDefaults.shape = target.shape;
+            if (target.scale !== undefined) newDefaults.scale = target.scale;
 
             setDefaultShapeStyle(newDefaults);
         }
@@ -830,17 +841,31 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
         setActiveTool("select");
     }, [activeTool, drawingPoints, addMeasurement, addShape, defaultShapeStyle, pageIndex, pushHistory, setActiveTool, setIsDrawing, viewScale]);
 
+    const editingIdRef = useRef(editingId);
+    useEffect(() => {
+        editingIdRef.current = editingId;
+    }, [editingId]);
+
+    const finishDrawingRef = useRef(finishDrawing);
+    useEffect(() => {
+        finishDrawingRef.current = finishDrawing;
+    }, [finishDrawing]);
+
     // Keyboard shortcuts
     useEffect(() => {
         const onKeyDown = (e) => {
-            if (editingId) return;
+            if (editingIdRef.current) return;
             if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
 
-            if (e.key === "Enter") finishDrawing();
+            if (e.key === "Enter") {
+                if (finishDrawingRef.current) finishDrawingRef.current();
+            }
 
             if (e.key === "Delete" || e.key === "Backspace") {
+                const { shapes, measurements, selectedIds, deleteShape, deleteMeasurement, setSelectedIds, pushHistory } = useAppStore.getState();
                 if (selectedIds.length > 0) {
-                    // Check if shapes or measurements
+                    const pageShapes = shapes.filter(s => s.pageIndex === pageIndex);
+                    const pageMeasurements = measurements.filter(m => m.pageIndex === pageIndex);
                     const shapeIds = selectedIds.filter(id => pageShapes.some(s => s.id === id));
                     const measIds = selectedIds.filter(id => pageMeasurements.some(m => m.id === id));
 
@@ -852,6 +877,7 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
             }
 
             if (e.key === "Escape") {
+                const { undo, setActiveTool, setSelectedIds } = useAppStore.getState();
                 if (resizingStateRef.current || isDraggingItemsRef.current) {
                     undo();
                     setResizingState(null);
@@ -865,13 +891,14 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                 setEditingId(null);
                 setSelectionStart(null);
                 setSelectedIds([]);
+                activeCountGroupIdRef.current = null;
                 setActiveTool('select'); // Return to select mode
             }
         };
 
         window.addEventListener("keydown", onKeyDown);
         return () => window.removeEventListener("keydown", onKeyDown);
-    }, [editingId, finishDrawing, selectedIds, pageShapes, pageMeasurements, deleteShape, deleteMeasurement, setSelectedIds, pushHistory, undo, redo, setIsDrawing]);
+    }, []);
 
     // Pointer handlers
     const handlePointerDown = (e) => {
@@ -916,7 +943,7 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                 } else if (m && m.points) {
                     const newPoints = [...m.points];
                     newPoints.splice(vertexIdx, 1);
-                    const minPts = m.type === 'area' ? 3 : 2;
+                    const minPts = m.type === 'count' ? 1 : (m.type === 'area' ? 3 : 2);
                     if (newPoints.length < minPts) {
                         deleteMeasurement(resizeId);
                         setSelectedIds([]);
@@ -1034,7 +1061,7 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
             } else {
                 // Check measurements
                 const meas = pageMeasurements.find(m => m.id === resizeId);
-                if (meas && ['text', 'callout', 'length', 'area', 'perimeter', 'angle'].includes(meas.type)) {
+                if (meas && ['text', 'callout', 'length', 'area', 'perimeter', 'angle', 'count'].includes(meas.type)) {
                     pushHistory();
                     // Normalize to shape-like for resizing logic
                     const startShape = {
@@ -1065,6 +1092,22 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
             const targetShapeId = targetShapeRef?.getAttribute("data-shape-id");
             const targetMeasId = targetMeasRef?.getAttribute("data-meas-id");
             const hitId = targetShapeId || targetMeasId;
+
+            if (isShift && !hitId) {
+                const selectedCountId = selectedIds.find(id => {
+                    const m = pageMeasurements.find(x => x.id === id);
+                    return m && m.type === "count";
+                });
+                if (selectedCountId) {
+                    const existingGroup = pageMeasurements.find(x => x.id === selectedCountId);
+                    if (existingGroup && existingGroup.points) {
+                        const newPoints = [...existingGroup.points, { x: point.x, y: point.y }];
+                        updateMeasurement(selectedCountId, { points: newPoints });
+                        pushHistory();
+                        return;
+                    }
+                }
+            }
 
             if (hitId) {
                 // DOM Hit (SVG element)
@@ -1247,9 +1290,29 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
         // 4) Measurement tools
         if (["length", "calibrate", "area", "perimeter", "angle", "polyline", "polygon", "count", "comment"].includes(activeTool)) {
             if (activeTool === "count") {
-                addMeasurement({ id: crypto.randomUUID(), type: "count", pageIndex, point });
-                pushHistory();
-                setActiveTool("select"); // Auto-switch to select
+                const activeId = activeCountGroupIdRef.current;
+                const existingGroup = activeId ? pageMeasurements.find(m => m.id === activeId) : null;
+                if (existingGroup && existingGroup.points) {
+                    const newPoints = [...existingGroup.points, { x: point.x, y: point.y }];
+                    updateMeasurement(activeId, { points: newPoints });
+                    pushHistory();
+                } else {
+                    const newId = crypto.randomUUID();
+                    activeCountGroupIdRef.current = newId;
+                    addMeasurement({
+                        id: newId,
+                        type: "count",
+                        pageIndex,
+                        points: [{ x: point.x, y: point.y }],
+                        shape: defaultShapeStyle.shape || "circle",
+                        scale: defaultShapeStyle.scale !== undefined ? defaultShapeStyle.scale : 1.0,
+                        fill: defaultShapeStyle.fill || "#e67e22",
+                        stroke: defaultShapeStyle.stroke || "#ffffff",
+                        strokeWidth: defaultShapeStyle.strokeWidth !== undefined ? defaultShapeStyle.strokeWidth : 2,
+                        opacity: defaultShapeStyle.opacity !== undefined ? defaultShapeStyle.opacity : 1
+                    });
+                    pushHistory();
+                }
                 return;
             }
 
@@ -1484,8 +1547,8 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                 return;
             }
 
-            // Area, perimeter, angle, polyline, and polygon vertex dragging
-            if (["area", "perimeter", "angle", "polyline", "polygon"].includes(startShape.type) && handle.startsWith("vertex-")) {
+            // Area, perimeter, angle, polyline, polygon, and count vertex dragging
+            if (["area", "perimeter", "angle", "polyline", "polygon", "count"].includes(startShape.type) && handle.startsWith("vertex-")) {
                 const vertexIndex = parseInt(handle.split("-")[1]);
                 const newPoints = [...startShape.points];
                 let targetPt = {
@@ -1858,9 +1921,14 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                                         updateMeasurement(id, { box: newBox });
                                     }
                                 } else if (meas.points) {
-                                    // Length, Area, Perimeter
+                                    // Length, Area, Perimeter, Count (Grouped)
                                     const newPoints = meas.points.map(p => ({ x: p.x + dx, y: p.y + dy }));
                                     updateMeasurement(id, { points: newPoints });
+                                } else if (meas.point) {
+                                    // Count (Single)
+                                    updateMeasurement(id, {
+                                        point: { x: meas.point.x + dx, y: meas.point.y + dy }
+                                    });
                                 }
                             }
                         }
@@ -2511,6 +2579,7 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
             const strokeWidth = m.strokeWidth || 2;
             const strokeDasharray = isShadow ? undefined : (m.strokeDasharray === 'none' ? undefined : (m.strokeDasharray === 'dashed' ? '12, 12' : (m.strokeDasharray === 'dotted' ? '2, 8' : m.strokeDasharray)));
             const fontSize = m.fontSize || 14;
+            const textColor = isShadow ? "#cbd5e1" : (m.textColor || strokeColor);
             const strokeOpacity = isShadow ? 0.7 : (m.strokeOpacity ?? 1);
             const textOpacity = isShadow ? 0.7 : (m.textOpacity ?? 1);
 
@@ -2752,25 +2821,72 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
             );
         }
 
-        if (m.type === "count" && m.point) {
-            const fillColor = isShadow ? "none" : "var(--primary-color)";
-            const strokeColor = isShadow ? "#cbd5e1" : "white";
-            const fillOpacity = isShadow ? 0.7 : (m.opacity ?? 1);
-            const strokeOpacity = isShadow ? 0.7 : (m.strokeOpacity ?? 1);
+        if (m.type === "count") {
+            const pts = m.points || (m.point ? [m.point] : []);
+            const renderCountPoint = (p, idx, m, isShadow, measCommon) => {
+                const shapeType = m.shape || "circle";
+                const fillColor = isShadow ? "none" : (m.fill || "var(--primary-color)");
+                const strokeColor = isShadow ? "#cbd5e1" : (m.stroke || "white");
+                const fillOpacity = isShadow ? 0.7 : (m.opacity ?? 1);
+                const strokeOpacity = isShadow ? 0.7 : (m.strokeOpacity ?? 1);
+                const strokeWidth = m.strokeWidth !== undefined ? m.strokeWidth : 2;
+                const scale = m.scale !== undefined ? m.scale : 1.0;
+                const r = 8 * scale;
+
+                const commonProps = {
+                    "data-meas-id": isShadow ? undefined : m.id,
+                    fill: fillColor,
+                    fillOpacity: fillOpacity,
+                    stroke: strokeColor,
+                    strokeWidth: strokeWidth,
+                    strokeOpacity: strokeOpacity,
+                    style: { ...measCommon.style },
+                    key: `${m.id}-pt-${idx}${isShadow ? "-shadow" : ""}`,
+                };
+
+                if (shapeType === "square") {
+                    return (
+                        <rect
+                            x={p.x - r}
+                            y={p.y - r}
+                            width={r * 2}
+                            height={r * 2}
+                            {...commonProps}
+                        />
+                    );
+                }
+                if (shapeType === "triangle") {
+                    const points = `${p.x},${p.y - r * 1.1} ${p.x - r},${p.y + r * 0.9} ${p.x + r},${p.y + r * 0.9}`;
+                    return (
+                        <polygon
+                            points={points}
+                            {...commonProps}
+                        />
+                    );
+                }
+                if (shapeType === "diamond") {
+                    const points = `${p.x},${p.y - r * 1.1} ${p.x + r * 1.1},${p.y} ${p.x},${p.y + r * 1.1} ${p.x - r * 1.1},${p.y}`;
+                    return (
+                        <polygon
+                            points={points}
+                            {...commonProps}
+                        />
+                    );
+                }
+                return (
+                    <circle
+                        cx={p.x}
+                        cy={p.y}
+                        r={r}
+                        {...commonProps}
+                    />
+                );
+            };
+
             return (
-                <circle
-                    key={m.id + (isShadow ? "-shadow" : "")}
-                    {...measCommon}
-                    cx={m.point.x}
-                    cy={m.point.y}
-                    r={8}
-                    fill={fillColor}
-                    fillOpacity={fillOpacity}
-                    stroke={strokeColor}
-                    strokeWidth={2}
-                    strokeOpacity={strokeOpacity}
-                    style={{ ...measCommon.style }}
-                />
+                <g key={m.id + (isShadow ? "-shadow" : "")} {...measCommon}>
+                    {pts.map((p, idx) => renderCountPoint(p, idx, m, isShadow, measCommon))}
+                </g>
             );
         }
 
@@ -3481,7 +3597,36 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                                     ...m,
                                     points: m.points.map(p => ({ x: p.x + dx, y: p.y + dy }))
                                 };
+                            } else if (m.point) {
+                                measToRender = {
+                                    ...m,
+                                    point: { x: m.point.x + dx, y: m.point.y + dy }
+                                };
                             }
+                        }
+
+                        if (measToRender.type === "count") {
+                            const pts = measToRender.points || (measToRender.point ? [measToRender.point] : []);
+                            return (
+                                <g key={`handles-${m.id}`}>
+                                    {pts.map((p, idx) => (
+                                        <circle
+                                            key={`count-handle-${idx}-${p.x}-${p.y}`}
+                                            cx={p.x}
+                                            cy={p.y}
+                                            r={handleSize / 2}
+                                            fill="#b4e6a0"
+                                            stroke="#3a6b24"
+                                            strokeWidth={1 / Math.max(1e-6, viewScale)}
+                                            vectorEffect="non-scaling-stroke"
+                                            cursor="default"
+                                            data-resize-id={m.id}
+                                            data-resize-handle={`vertex-${idx}`}
+                                            data-meas-id={m.id}
+                                        />
+                                    ))}
+                                </g>
+                            );
                         }
 
                         if (["area", "perimeter", "angle", "length", "calibrate"].includes(measToRender.type) && measToRender.points?.length >= 2) {
@@ -3652,6 +3797,28 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                                     <span>Set as Default</span>
                                 </span>
                             </button>
+                            {(() => {
+                                const targetId = canvasContextMenu.targetId;
+                                const item = pageMeasurements.find(m => m.id === targetId);
+                                if (item && item.type === "count") {
+                                    return (
+                                        <button
+                                            className="bg-transparent border-none text-[var(--text-primary)] px-3 py-1.5 text-left cursor-pointer text-[13px] flex items-center justify-between w-full hover:bg-[var(--btn-hover)]"
+                                            onClick={() => {
+                                                activeCountGroupIdRef.current = item.id;
+                                                setActiveTool("count");
+                                                setCanvasContextMenu(null);
+                                            }}
+                                        >
+                                            <span className="flex items-center gap-2">
+                                                <Play size={14} className="text-[var(--text-secondary)]" />
+                                                <span>Resume Count</span>
+                                            </span>
+                                        </button>
+                                    );
+                                }
+                                return null;
+                            })()}
                             <button
                                 className="bg-transparent border-none text-[var(--text-primary)] px-3 py-1.5 text-left cursor-pointer text-[13px] flex items-center justify-between w-full hover:bg-[var(--btn-hover)] disabled:opacity-50 disabled:cursor-default"
                                 onClick={handleDelete}

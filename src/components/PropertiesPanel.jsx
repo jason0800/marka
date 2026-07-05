@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Trash2, ChevronDown, ChevronUp, Copy, Minus, Plus, Palette, MoreHorizontal } from 'lucide-react';
+import { Trash2, ChevronDown, ChevronUp, Copy, Minus, Plus, Palette, MoreHorizontal, Circle, Square, Triangle, Diamond } from 'lucide-react';
 import useAppStore from '../stores/useAppStore';
 import { calculatePolygonArea } from '../geometry/transforms';
 import ColorGrid from './ColorGrid';
@@ -242,7 +242,7 @@ const PropertiesPanel = () => {
 
                     <div className="flex flex-col gap-1">
                         <label className="text-xs text-[var(--text-secondary)] font-medium">
-                            {source?.type === 'callout' ? 'Line Color' : (source?.type === 'text' ? 'Border Color' : 'Border')}
+                            {source?.type === 'callout' ? 'Line Color' : (source?.type === 'text' ? 'Border Color' : 'Stroke')}
                         </label>
                         <div className="flex gap-2 items-center">
                             {STROKE_COLORS.map(c => (
@@ -310,9 +310,68 @@ const PropertiesPanel = () => {
                         </div>
                     )}
 
+                    {/* Count Value Display */}
+                    {source?.type === 'count' && (
+                        <div className="flex flex-col gap-1">
+                            <label className="text-xs text-[var(--text-secondary)] font-medium">Count Value</label>
+                            <div className="text-sm font-semibold font-mono text-[var(--text-primary)] bg-[var(--bg-color)] px-2.5 py-1 rounded border border-[var(--border-color)] w-max select-none">
+                                {source?.points ? source.points.length : (source?.point ? 1 : 0)}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Symbol Selection */}
+                    {source?.type === 'count' && (
+                        <div className="flex flex-col gap-1">
+                            <label className="text-xs text-[var(--text-secondary)] font-medium">Symbol</label>
+                            <div className="flex gap-1 bg-[var(--bg-color)] p-0.5 rounded border border-[var(--border-color)] w-max">
+                                {[
+                                    { id: 'circle', icon: Circle },
+                                    { id: 'square', icon: Square },
+                                    { id: 'triangle', icon: Triangle },
+                                    { id: 'diamond', icon: Diamond },
+                                ].map(({ id, icon: Icon }) => (
+                                    <button
+                                        key={id}
+                                        onClick={() => updateProp('shape', id)}
+                                        className={`w-7 h-7 flex items-center justify-center rounded transition-colors cursor-pointer ${
+                                            (source?.shape || 'circle') === id
+                                                ? 'bg-[var(--primary-color)] text-white'
+                                                : 'text-[var(--text-secondary)] hover:bg-[var(--btn-hover)] hover:text-[var(--text-primary)]'
+                                        }`}
+                                        title={id}
+                                    >
+                                        <Icon size={14} />
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Count Scale Selection */}
+                    {source?.type === 'count' && (
+                        <div className="flex flex-col gap-1">
+                            <label className="text-xs text-[var(--text-secondary)] font-medium">Scale (Size)</label>
+                            <div className="flex items-center bg-[var(--bg-color)] px-2 py-0.5 rounded border border-transparent focus-within:border-[var(--primary-color)] transition-colors h-7 w-[80px]">
+                                <input
+                                    type="number"
+                                    min="0.1"
+                                    max="10"
+                                    step="0.1"
+                                    value={source?.scale !== undefined ? source.scale : 1.0}
+                                    onChange={(e) => {
+                                        const val = parseFloat(e.target.value);
+                                        updateProp('scale', isNaN(val) ? 1.0 : val);
+                                    }}
+                                    className="w-full text-xs text-[var(--text-primary)] bg-transparent outline-none font-mono"
+                                />
+                            </div>
+                        </div>
+                    )}
+
                     {/* Stroke Width */}
                     <div className="flex flex-col gap-1">
-                        <label className="text-xs text-[var(--text-secondary)] font-medium">Border Width</label>
+                        <label className="text-xs text-[var(--text-secondary)] font-medium">Stroke Width</label>
                         <div className="flex items-center bg-[var(--bg-color)] px-2 py-0.5 rounded border border-transparent focus-within:border-[var(--primary-color)] transition-colors h-7 w-[80px]">
                             <input
                                 type="number"
@@ -331,41 +390,43 @@ const PropertiesPanel = () => {
                     </div>
 
                     {/* // line styles */}
-                    <div className="flex flex-col gap-1">
-                        <label className="text-xs text-[var(--text-secondary)] font-medium">Border Style</label>
-                        <div className="flex gap-1 bg-[var(--bg-color)] p-0.5 rounded-md border border-[var(--border-color)]">
-                            <button
-                                className={`flex-1 h-7 border-none bg-transparent rounded cursor-pointer flex items-center justify-center text-[var(--text-secondary)] hover:bg-[var(--btn-hover)] hover:text-[var(--text-primary)] ${strokeDasharray === 'none' ? '!bg-[var(--primary-color)] !text-[var(--text-active)] shadow-[0_0_10px_rgba(var(--primary-color-rgb),0.25)]' : ''}`}
-                                onClick={() => updateProp('strokeDasharray', 'none')}
-                                title="Continuous"
-                                aria-pressed={strokeDasharray === 'none'}
-                            >
-                                <svg width="24" height="4" style={{ display: 'block', overflow: 'visible' }}>
-                                    <line x1="0" y1="2" x2="24" y2="2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                                </svg>
-                            </button>
-                            <button
-                                className={`flex-1 h-7 border-none bg-transparent rounded cursor-pointer flex items-center justify-center text-[var(--text-secondary)] hover:bg-[var(--btn-hover)] hover:text-[var(--text-primary)] ${strokeDasharray === '8,12' ? '!bg-[var(--primary-color)] !text-[var(--text-active)] shadow-[0_0_10px_rgba(var(--primary-color-rgb),0.25)]' : ''}`}
-                                onClick={() => updateProp('strokeDasharray', '8,12')}
-                                title="Dashed"
-                                aria-pressed={strokeDasharray === '8,12'}
-                            >
-                                <svg width="24" height="4" style={{ display: 'block', overflow: 'visible' }}>
-                                    <line x1="0" y1="2" x2="24" y2="2" stroke="currentColor" strokeWidth="2" strokeDasharray="4,6" strokeLinecap="round" />
-                                </svg>
-                            </button>
-                            <button
-                                className={`flex-1 h-7 border-none bg-transparent rounded cursor-pointer flex items-center justify-center text-[var(--text-secondary)] hover:bg-[var(--btn-hover)] hover:text-[var(--text-primary)] ${strokeDasharray === '0,10' ? '!bg-[var(--primary-color)] !text-[var(--text-active)] shadow-[0_0_10px_rgba(var(--primary-color-rgb),0.25)]' : ''}`}
-                                onClick={() => updateProp('strokeDasharray', '0,10')}
-                                title="Dotted"
-                                aria-pressed={strokeDasharray === '0,10'}
-                            >
-                                <svg width="24" height="4" style={{ display: 'block', overflow: 'visible' }}>
-                                    <line x1="0" y1="2" x2="24" y2="2" stroke="currentColor" strokeWidth="3" strokeDasharray="1,9" strokeLinecap="round" />
-                                </svg>
-                            </button>
+                    {source?.type !== 'count' && (
+                        <div className="flex flex-col gap-1">
+                            <label className="text-xs text-[var(--text-secondary)] font-medium">Stroke Style</label>
+                            <div className="flex gap-1 bg-[var(--bg-color)] p-0.5 rounded-md border border-[var(--border-color)]">
+                                <button
+                                    className={`flex-1 h-7 border-none bg-transparent rounded cursor-pointer flex items-center justify-center text-[var(--text-secondary)] hover:bg-[var(--btn-hover)] hover:text-[var(--text-primary)] ${strokeDasharray === 'none' ? '!bg-[var(--primary-color)] !text-[var(--text-active)] shadow-[0_0_10px_rgba(var(--primary-color-rgb),0.25)]' : ''}`}
+                                    onClick={() => updateProp('strokeDasharray', 'none')}
+                                    title="Continuous"
+                                    aria-pressed={strokeDasharray === 'none'}
+                                >
+                                    <svg width="24" height="4" style={{ display: 'block', overflow: 'visible' }}>
+                                        <line x1="0" y1="2" x2="24" y2="2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                                    </svg>
+                                </button>
+                                <button
+                                    className={`flex-1 h-7 border-none bg-transparent rounded cursor-pointer flex items-center justify-center text-[var(--text-secondary)] hover:bg-[var(--btn-hover)] hover:text-[var(--text-primary)] ${strokeDasharray === '8,12' ? '!bg-[var(--primary-color)] !text-[var(--text-active)] shadow-[0_0_10px_rgba(var(--primary-color-rgb),0.25)]' : ''}`}
+                                    onClick={() => updateProp('strokeDasharray', '8,12')}
+                                    title="Dashed"
+                                    aria-pressed={strokeDasharray === '8,12'}
+                                >
+                                    <svg width="24" height="4" style={{ display: 'block', overflow: 'visible' }}>
+                                        <line x1="0" y1="2" x2="24" y2="2" stroke="currentColor" strokeWidth="2" strokeDasharray="4,6" strokeLinecap="round" />
+                                    </svg>
+                                </button>
+                                <button
+                                    className={`flex-1 h-7 border-none bg-transparent rounded cursor-pointer flex items-center justify-center text-[var(--text-secondary)] hover:bg-[var(--btn-hover)] hover:text-[var(--text-primary)] ${strokeDasharray === '0,10' ? '!bg-[var(--primary-color)] !text-[var(--text-active)] shadow-[0_0_10px_rgba(var(--primary-color-rgb),0.25)]' : ''}`}
+                                    onClick={() => updateProp('strokeDasharray', '0,10')}
+                                    title="Dotted"
+                                    aria-pressed={strokeDasharray === '0,10'}
+                                >
+                                    <svg width="24" height="4" style={{ display: 'block', overflow: 'visible' }}>
+                                        <line x1="0" y1="2" x2="24" y2="2" stroke="currentColor" strokeWidth="3" strokeDasharray="1,9" strokeLinecap="round" />
+                                    </svg>
+                                </button>
+                            </div>
                         </div>
-                    </div>
+                    )}
 
                     {/* Fill Opacity Control - Hidden for Lines/Arrows/Length */}
                     {!['line', 'arrow', 'length'].includes(source?.type) && (
@@ -461,7 +522,7 @@ const PropertiesPanel = () => {
                     )}
 
                     {/* Rotation Control - Hidden for Lines/Arrows/Length */}
-                    {!['line', 'arrow', 'length'].includes(source?.type) && (
+                    {!['line', 'arrow', 'length', 'count'].includes(source?.type) && (
                         <div className="flex flex-col gap-1">
                             <div className="flex justify-between items-center">
                                 <label className="text-xs text-[var(--text-secondary)] font-medium">Rotation</label>
