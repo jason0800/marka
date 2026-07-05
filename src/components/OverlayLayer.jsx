@@ -695,7 +695,8 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
         point.y = e.clientY;
         const matrix = svg.getScreenCTM()?.inverse();
         if (!matrix) return null;
-        return point.matrixTransform(matrix);
+        const transformed = point.matrixTransform(matrix);
+        return { x: transformed.x, y: transformed.y };
     }, []);
 
     // Get snapped coordinates from a raw page point
