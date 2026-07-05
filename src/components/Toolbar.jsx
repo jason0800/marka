@@ -44,7 +44,6 @@ const TOOLBAR = [
             { id: 'rectangle', icon: RectangleHorizontal, label: 'Rectangle' },
             { id: 'circle', icon: Circle, label: 'Circle' },
             { id: 'polygon', icon: PolygonIcon, label: 'Polygon' },
-            { id: 'polyline', icon: PolylineIcon, label: 'Polyline' },
         ],
     },
     {
@@ -52,6 +51,7 @@ const TOOLBAR = [
         children: [
             { id: 'line', icon: Minus, label: 'Line' },
             { id: 'arrow', icon: ArrowRight, label: 'Arrow' },
+            { id: 'polyline', icon: PolylineIcon, label: 'Polyline' },
         ],
     },
 ];
@@ -138,6 +138,23 @@ const Toolbar = () => {
         window.addEventListener('keydown', onKeyDown);
         return () => window.removeEventListener('keydown', onKeyDown);
     }, [shortcuts, handleToolSelect]);
+
+    // ── Sync groupActive with activeTool ─────────────────────────────────────
+    useEffect(() => {
+        for (const item of TOOLBAR) {
+            if (item.type === 'group') {
+                const child = item.children.find(c => c.id === activeTool);
+                if (child) {
+                    setGroupActive(prev => {
+                        if (prev[item.groupId] !== activeTool) {
+                            return { ...prev, [item.groupId]: activeTool };
+                        }
+                        return prev;
+                    });
+                }
+            }
+        }
+    }, [activeTool]);
 
     // ── Close flyout on outside click ────────────────────────────────────────
     // IMPORTANT: use bubble phase (no capture flag) so that onMouseDown+stopPropagation

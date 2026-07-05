@@ -760,24 +760,29 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
     const finishDrawing = useCallback((isDoubleClick = false) => {
         if (!isDrawingRef.current) return;
 
-        // Filter out coincident or extremely close consecutive points
+        let pointsToProcess = [...drawingPoints];
+
+        // If finishing via double click, the last point is the second click of the double-click gesture.
+        // We want to discard it so that we don't end up with a duplicate or micro-segment at the end.
+        if (isDoubleClick && pointsToProcess.length > 1) {
+            pointsToProcess.pop();
+        }
+
+        // Filter out coincident or extremely close consecutive points in screen coordinates
         let pts = [];
-        for (const p of drawingPoints) {
+        const scale = viewScale || 1.0;
+        const screenThreshold = 2; // 2 screen pixels is enough for micro-movements
+        for (const p of pointsToProcess) {
             if (pts.length === 0) {
                 pts.push(p);
             } else {
                 const prev = pts[pts.length - 1];
-                const dist = Math.hypot(p.x - prev.x, p.y - prev.y);
-                if (dist > 2) {
+                const distPage = Math.hypot(p.x - prev.x, p.y - prev.y);
+                const distScreen = distPage * scale;
+                if (distScreen > screenThreshold) {
                     pts.push(p);
                 }
             }
-        }
-
-        // Double-click gesture first click adds the point, second click fires double click.
-        // If finishing via double click, pop the extra coordinate that got added.
-        if (isDoubleClick && pts.length > 1) {
-            pts.pop();
         }
 
         if (activeTool === "area" && pts.length >= 3) {
@@ -822,7 +827,7 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
 
         // Auto-switch to select mode after drawing
         setActiveTool("select");
-    }, [activeTool, drawingPoints, addMeasurement, addShape, defaultShapeStyle, pageIndex, pushHistory, setActiveTool, setIsDrawing]);
+    }, [activeTool, drawingPoints, addMeasurement, addShape, defaultShapeStyle, pageIndex, pushHistory, setActiveTool, setIsDrawing, viewScale]);
 
     // Keyboard shortcuts
     useEffect(() => {
