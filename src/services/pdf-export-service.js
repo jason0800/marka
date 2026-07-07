@@ -136,14 +136,15 @@ export const exportFlattenedPDF = async (
                     borderOpacity: s.opacity ?? 1,
                 });
             } else if (s.type === "circle") {
-                const cx = s.cx || (s.x + s.width / 2);
-                const cy = s.cy || (s.y + s.height / 2);
-                const rx = s.rx || (s.width / 2) || 10;
+                const cx = s.x + s.width / 2;
+                const cy = s.y + s.height / 2;
+                const rx = s.width / 2;
+                const ry = s.height / 2;
                 page.drawEllipse({
                     x: cx,
                     y: height - cy,
                     xRadius: rx,
-                    yRadius: rx,
+                    yRadius: ry,
                     borderColor: border,
                     borderWidth: thickness,
                     color: fill || undefined,
@@ -154,27 +155,69 @@ export const exportFlattenedPDF = async (
             } else if (s.type === "line" || s.type === "arrow") {
                 const startPt = toPdfPoint(s.start);
                 const endPt = toPdfPoint(s.end);
-                page.drawLine({
-                    start: startPt,
-                    end: endPt,
-                    color: border,
-                    thickness: thickness,
-                    opacity: s.opacity ?? 1,
-                    ...dashStyle
-                });
 
                 if (s.type === "arrow") {
-                    const angle = Math.atan2(endPt.y - startPt.y, endPt.x - startPt.x);
-                    const headLength = 12;
-                    const headAngle = Math.PI / 6;
-                    const h1x = endPt.x - headLength * Math.cos(angle - headAngle);
-                    const h1y = endPt.y - headLength * Math.sin(angle - headAngle);
-                    const h2x = endPt.x - headLength * Math.cos(angle + headAngle);
-                    const h2y = endPt.y - headLength * Math.sin(angle + headAngle);
+                    const dx = endPt.x - startPt.x;
+                    const dy = endPt.y - startPt.y;
+                    const dist = Math.hypot(dx, dy);
+                    const sw = thickness;
 
-                    // Draw arrowhead paths
-                    page.drawLine({ start: endPt, end: { x: h1x, y: h1y }, color: border, thickness: thickness });
-                    page.drawLine({ start: endPt, end: { x: h2x, y: h2y }, color: border, thickness: thickness });
+                    if (dist > 1e-6) {
+                        const ux = dx / dist;
+                        const uy = dy / dist;
+                        const px = -uy;
+                        const py = ux;
+
+                        const arrowTip = endPt;
+                        const arrowC1 = {
+                            x: endPt.x - 6 * sw * ux + 2 * sw * px,
+                            y: endPt.y - 6 * sw * uy + 2 * sw * py
+                        };
+                        const arrowC2 = {
+                            x: endPt.x - 6 * sw * ux - 2 * sw * px,
+                            y: endPt.y - 6 * sw * uy - 2 * sw * py
+                        };
+
+                        // Shorten the line so it ends inside the arrowhead
+                        const lineEndPt = {
+                            x: endPt.x - 4 * sw * ux,
+                            y: endPt.y - 4 * sw * uy
+                        };
+
+                        page.drawLine({
+                            start: startPt,
+                            end: lineEndPt,
+                            color: border,
+                            thickness: thickness,
+                            opacity: s.opacity ?? 1,
+                            ...dashStyle
+                        });
+
+                        page.drawPolygon({
+                            coordinates: [arrowTip, arrowC1, arrowC2],
+                            color: border,
+                            borderWidth: 0,
+                            opacity: s.opacity ?? 1,
+                        });
+                    } else {
+                        page.drawLine({
+                            start: startPt,
+                            end: endPt,
+                            color: border,
+                            thickness: thickness,
+                            opacity: s.opacity ?? 1,
+                            ...dashStyle
+                        });
+                    }
+                } else {
+                    page.drawLine({
+                        start: startPt,
+                        end: endPt,
+                        color: border,
+                        thickness: thickness,
+                        opacity: s.opacity ?? 1,
+                        ...dashStyle
+                    });
                 }
             } else if (s.type === "polyline" && s.points?.length >= 2) {
                 for (let j = 0; j < s.points.length - 1; j++) {
@@ -472,16 +515,36 @@ export const exportFlattenedPDF = async (
                 let kx = m.knee ? m.knee.x : (cx + m.tip.x) / 2;
                 let ky = m.knee ? m.knee.y : (cy + m.tip.y) / 2;
 
+                const tipPt = toPdfPoint(m.tip);
+                const kneePt = toPdfPoint({ x: kx, y: ky });
+
+                const tipDx = tipPt.x - kneePt.x;
+                const tipDy = tipPt.y - kneePt.y;
+                const len = Math.hypot(tipDx, tipDy);
+                const sw = thickness;
+                const offset = 4 * sw;
+
+                let lineEndPt = tipPt;
+                if (len > offset) {
+                    const t = (len - offset) / len;
+                    lineEndPt = {
+                        x: kneePt.x + tipDx * t,
+                        y: kneePt.y + tipDy * t
+                    };
+                } else {
+                    lineEndPt = kneePt;
+                }
+
                 // Draw Leader Lines
                 page.drawLine({
-                    start: toPdfPoint(m.tip),
-                    end: toPdfPoint({ x: kx, y: ky }),
+                    start: kneePt,
+                    end: lineEndPt,
                     color: border,
                     thickness: thickness,
                     ...dashStyle
                 });
                 page.drawLine({
-                    start: toPdfPoint({ x: kx, y: ky }),
+                    start: kneePt,
                     end: toPdfPoint({ x: cx, y: cy }),
                     color: border,
                     thickness: thickness,
@@ -489,16 +552,29 @@ export const exportFlattenedPDF = async (
                 });
 
                 // Leader arrowhead
-                const angle = Math.atan2(ky - m.tip.y, kx - m.tip.x);
-                const headLength = 10;
-                const headAngle = Math.PI / 6;
-                const h1x = m.tip.x + headLength * Math.cos(angle - headAngle);
-                const h1y = m.tip.y + headLength * Math.sin(angle - headAngle);
-                const h2x = m.tip.x + headLength * Math.cos(angle + headAngle);
-                const h2y = m.tip.y + headLength * Math.sin(angle + headAngle);
+                if (len > 1e-6) {
+                    const ux = tipDx / len;
+                    const uy = tipDy / len;
+                    const px = -uy;
+                    const py = ux;
 
-                page.drawLine({ start: toPdfPoint(m.tip), end: toPdfPoint({ x: h1x, y: h1y }), color: border, thickness: thickness });
-                page.drawLine({ start: toPdfPoint(m.tip), end: toPdfPoint({ x: h2x, y: h2y }), color: border, thickness: thickness });
+                    const arrowTip = tipPt;
+                    const arrowC1 = {
+                        x: tipPt.x - 8 * sw * ux + 3 * sw * px,
+                        y: tipPt.y - 8 * sw * uy + 3 * sw * py
+                    };
+                    const arrowC2 = {
+                        x: tipPt.x - 8 * sw * ux - 3 * sw * px,
+                        y: tipPt.y - 8 * sw * uy - 3 * sw * py
+                    };
+
+                    page.drawPolygon({
+                        coordinates: [arrowTip, arrowC1, arrowC2],
+                        color: border,
+                        borderWidth: 0,
+                        opacity: m.opacity ?? 1,
+                    });
+                }
 
                 // Callout Box
                 const boxBg = m.fill && m.fill !== 'none' ? hexToRgb(m.fill) : rgb(1, 1, 1);

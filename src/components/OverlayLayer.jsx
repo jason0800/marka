@@ -172,6 +172,7 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
         setLeftPanelActiveTab,
         formatPaintStyle,
         setFormatPaintStyle,
+        currentPage,
     } = useAppStore();
 
     const viewScale = (viewport && viewport.scale) ? viewport.scale : propViewScale;
@@ -285,16 +286,10 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
         };
 
         const handlePaste = (e) => {
+            if (pageIndex !== currentPage) return;
             if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
 
-            // Prioritize pasting from the app's internal memory clipboard if it contains items
-            if (clipboard && clipboard.length > 0) {
-                e.preventDefault();
-                paste();
-                pushHistory();
-                return;
-            }
-
+            // 1. Check for image pasting in system clipboard first
             const items = e.clipboardData?.items;
             if (items) {
                 let hasImage = false;
@@ -349,10 +344,13 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                 if (hasImage) return;
             }
 
-            // Fallback: regular paste of markup shapes from the app store clipboard
-            e.preventDefault();
-            paste();
-            pushHistory();
+            // 2. Fallback to app's internal memory clipboard if it contains items
+            if (clipboard && clipboard.length > 0) {
+                e.preventDefault();
+                paste();
+                pushHistory();
+                return;
+            }
         };
 
         window.addEventListener('click', handleWindowClick);
@@ -364,7 +362,7 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
             window.removeEventListener('pointerdown', handleWindowClick);
             window.removeEventListener('paste', handlePaste);
         };
-    }, [pageIndex, addShape, setSelectedIds, pushHistory, clipboard, paste]);
+    }, [pageIndex, currentPage, addShape, setSelectedIds, pushHistory, clipboard, paste]);
 
     const duplicateSelected = () => {
         const selectedShapes = shapes.filter(s => selectedIds.includes(s.id));
