@@ -19,7 +19,11 @@ Marka is a powerful PDF annotation and measurement tool built for professionals.
   - **Line Styles**: Continuous, Dashed, or Dotted lines.
   - **Opacity**: Fine-grained transparency control.
   - **Rotation**: Precise angle adjustment (hidden for simple lines/arrows).
+- **Text & Callouts**: Add text boxes and leader line callouts with customizable styles:
+  - **Text Alignment**: Align text left, middle/center, or right inside the boxes.
+  - **Multi-line and Top-aligned**: Perfectly rendered multi-line content top-aligned on both the canvas and printed PDF outputs.
 - **Comments**: Add text notes to specific areas of the document.
+- **Clipboard Operations**: Copy, cut, and paste shapes using standard keyboard shortcuts (`Ctrl+C`, `Ctrl+X`, `Ctrl+V`). Intercepts system clipboards to allow pasting native images, with clipboard syncing that prevents stale OS image overrides.
 
 ### 📐 Measurement & Quantification
 - **Calibration**: Set custom scales to measure accurately on technical drawings.
@@ -27,31 +31,9 @@ Marka is a powerful PDF annotation and measurement tool built for professionals.
 - **Area**: Calculate polygon areas.
 - **Perimeter**: Measure path lengths.
 - **Count**: Place markers to tally items quickly.
+- **Proportional Thumbnails**: Sheet thumbnails in the sidebar automatically scale relative to the largest page in the document, letting you visually compare different page sizes (e.g. A3 landscape vs A4 portrait).
 
-### 🛠 Tech Stack
-- **Framework**: React + Vite
-- **Styling**: Tailwind CSS
-- **PDF Core**: `react-pdf`, `jspdf`, `pdf-lib`
-- **Icons**: `lucide-react`
 
-## 🚀 Getting Started
+## 📄 License
 
-1. **Install Dependencies**
-   ```bash
-   npm install
-   ```
-
-2. **Run Development Server**
-   ```bash
-   npm run dev
-   ```
-
-3. **Build for Production**
-   ```bash
-   npm run build
-   ```
-
-## 🎨 UI/UX Highlights
-- **Dark/Light Mode**: Fully theme-aware interface.
-- **Responsive Design**: Polished layout with adjustable panels.
-- **Shortcuts**: Keyboard shortcuts for efficient workflows.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
