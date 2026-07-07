@@ -289,7 +289,25 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
             if (pageIndex !== currentPage) return;
             if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
 
-            // 1. Check for image pasting in system clipboard first
+            // 1. Check if the system clipboard has Marka JSON data (i.e. user copied a shape inside Marka)
+            const text = e.clipboardData?.getData('text/plain');
+            if (text) {
+                try {
+                    const parsed = JSON.parse(text);
+                    if (parsed && parsed.source === 'marka' && Array.isArray(parsed.items)) {
+                        // Synchronize store's internal clipboard state
+                        useAppStore.setState({ clipboard: parsed.items });
+                        e.preventDefault();
+                        paste();
+                        pushHistory();
+                        return;
+                    }
+                } catch (err) {
+                    // Not JSON or parsing failed
+                }
+            }
+
+            // 2. Check for image pasting in system clipboard
             const items = e.clipboardData?.items;
             if (items) {
                 let hasImage = false;
@@ -344,8 +362,8 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                 if (hasImage) return;
             }
 
-            // 2. Fallback to app's internal memory clipboard if it contains items
-            if (clipboard && clipboard.length > 0) {
+            // 3. Fallback: only paste from internal clipboard if the system clipboard does NOT have text or images
+            if (!text && clipboard && clipboard.length > 0) {
                 e.preventDefault();
                 paste();
                 pushHistory();
@@ -3186,7 +3204,8 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                                             fontFamily: 'sans-serif',
                                             pointerEvents: 'auto',
                                             lineHeight: "1.2",
-                                            overflow: "hidden"
+                                            overflow: "hidden",
+                                            textAlign: m.textAlign || 'left'
                                         }}
                                         defaultValue={m.text}
                                         onBlur={(ev) => {
@@ -3223,7 +3242,8 @@ const OverlayLayer = ({ page, width, height, viewScale: propViewScale = 1.0, ren
                                             cursor: activeTool === "select" ? "move" : "pointer",
                                             pointerEvents: 'auto',
                                             userSelect: 'none',
-                                            lineHeight: "1.2"
+                                            lineHeight: "1.2",
+                                            textAlign: m.textAlign || 'left'
                                         }}
                                         onDoubleClick={(ev) => {
                                             ev.stopPropagation();

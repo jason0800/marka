@@ -7,12 +7,26 @@ const PDFThumbnail = memo(function PDFThumbnail({
     width = 180,
     isActive,
     onSelect, // (pageNumber) => void
+    maxSheetWidth,
+    maxSheetHeight,
 }) {
     const containerRef = useRef(null);
     const canvasRef = useRef(null);
     const [page, setPage] = useState(null);
     const [isVisible, setIsVisible] = useState(false);
     const renderTaskRef = useRef(null);
+
+    // Compute dimensions relative to the largest page in the document
+    const maxW = maxSheetWidth || 800;
+    const maxH = maxSheetHeight || 1100;
+    const boxWidth = Math.max(30, width - 16);
+    const boxHeight = boxWidth;
+    const sheetW = sheet ? (sheet.width || 800) : 800;
+    const sheetH = sheet ? (sheet.height || 1100) : 1100;
+
+    const globalScale = Math.min(boxWidth / maxW, boxHeight / maxH);
+    const targetW = Math.max(15, Math.floor(sheetW * globalScale));
+    const targetH = Math.max(15, Math.floor(sheetH * globalScale));
 
     // Click handler reads dataset to avoid any stale closure weirdness
     const handleClick = useCallback((e) => {
@@ -90,9 +104,8 @@ const PDFThumbnail = memo(function PDFThumbnail({
         } catch { }
         renderTaskRef.current = null;
 
-        const thumbWidth = Math.max(30, width - 16);
         const vp1 = page.getViewport({ scale: 1 });
-        const scale = thumbWidth / vp1.width;
+        const scale = targetW / vp1.width;
         const vp = page.getViewport({ scale });
 
         // Backing store in device pixels (optional DPR for sharper thumbs)
@@ -129,9 +142,7 @@ const PDFThumbnail = memo(function PDFThumbnail({
                 task.cancel?.();
             } catch { }
         };
-    }, [page, width]);
-
-    const aspect = sheet ? (sheet.height / sheet.width) : 1.4;
+    }, [page, targetW]);
 
     return (
         <button
@@ -143,21 +154,27 @@ const PDFThumbnail = memo(function PDFThumbnail({
             style={{ width }}
         >
             <div
-                className={`relative bg-white shadow-sm border transition-all duration-0 ${isActive
-                        ? "border-[var(--primary-color)] ring-2 ring-[var(--primary-color)] ring-opacity-50"
-                        : "border-[#b0b0b0] dark:border-[#555]"
-                    }`}
+                style={{ width: boxWidth, height: boxHeight }}
+                className="flex items-center justify-center bg-transparent"
             >
-                {!page && (
-                    <div
-                        style={{ width: Math.max(30, width - 16), height: Math.max(30, width - 16) * aspect }}
-                        className="flex items-center justify-center bg-[var(--bg-secondary)] text-[var(--text-secondary)] text-xs"
-                    >
-                        Loading...
-                    </div>
-                )}
+                <div
+                    className={`relative bg-white shadow-sm border transition-all duration-0 ${isActive
+                            ? "border-[var(--primary-color)] ring-2 ring-[var(--primary-color)] ring-opacity-50"
+                            : "border-[#b0b0b0] dark:border-[#555]"
+                        }`}
+                    style={{ width: targetW, height: targetH }}
+                >
+                    {!page && (
+                        <div
+                            style={{ width: targetW, height: targetH }}
+                            className="flex items-center justify-center bg-[var(--bg-secondary)] text-[var(--text-secondary)] text-xs"
+                        >
+                            Loading...
+                        </div>
+                    )}
 
-                <canvas ref={canvasRef} className="block" style={{ display: page ? 'block' : 'none' }} />
+                    <canvas ref={canvasRef} style={{ display: page ? 'block' : 'none', width: targetW, height: targetH }} />
+                </div>
             </div>
 
             <span className="text-xs text-[var(--text-secondary)] font-medium">

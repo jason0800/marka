@@ -143,8 +143,8 @@ export const exportFlattenedPDF = async (
                 page.drawEllipse({
                     x: cx,
                     y: height - cy,
-                    xRadius: rx,
-                    yRadius: ry,
+                    xScale: rx,
+                    yScale: ry,
                     borderColor: border,
                     borderWidth: thickness,
                     color: fill || undefined,
@@ -157,8 +157,8 @@ export const exportFlattenedPDF = async (
                 const endPt = toPdfPoint(s.end);
 
                 if (s.type === "arrow") {
-                    const dx = endPt.x - startPt.x;
-                    const dy = endPt.y - startPt.y;
+                    const dx = s.end.x - s.start.x;
+                    const dy = s.end.y - s.start.y;
                     const dist = Math.hypot(dx, dy);
                     const sw = thickness;
 
@@ -168,20 +168,26 @@ export const exportFlattenedPDF = async (
                         const px = -uy;
                         const py = ux;
 
-                        const arrowTip = endPt;
+                        const arrowTip = s.end;
                         const arrowC1 = {
-                            x: endPt.x - 6 * sw * ux + 2 * sw * px,
-                            y: endPt.y - 6 * sw * uy + 2 * sw * py
+                            x: s.end.x - 6 * sw * ux + 2 * sw * px,
+                            y: s.end.y - 6 * sw * uy + 2 * sw * py
                         };
                         const arrowC2 = {
-                            x: endPt.x - 6 * sw * ux - 2 * sw * px,
-                            y: endPt.y - 6 * sw * uy - 2 * sw * py
+                            x: s.end.x - 6 * sw * ux - 2 * sw * px,
+                            y: s.end.y - 6 * sw * uy - 2 * sw * py
                         };
 
-                        // Shorten the line so it ends inside the arrowhead
+                        // Shorten the line so it ends inside the arrowhead in PDF space
+                        const pdfDx = endPt.x - startPt.x;
+                        const pdfDy = endPt.y - startPt.y;
+                        const pdfDist = Math.hypot(pdfDx, pdfDy);
+                        const pdfUx = pdfDx / pdfDist;
+                        const pdfUy = pdfDy / pdfDist;
+
                         const lineEndPt = {
-                            x: endPt.x - 4 * sw * ux,
-                            y: endPt.y - 4 * sw * uy
+                            x: endPt.x - 4 * sw * pdfUx,
+                            y: endPt.y - 4 * sw * pdfUy
                         };
 
                         page.drawLine({
@@ -193,10 +199,11 @@ export const exportFlattenedPDF = async (
                             ...dashStyle
                         });
 
-                        page.drawPolygon({
-                            coordinates: [arrowTip, arrowC1, arrowC2],
+                        const pathStr = `M ${arrowTip.x} ${arrowTip.y} L ${arrowC1.x} ${arrowC1.y} L ${arrowC2.x} ${arrowC2.y} Z`;
+                        page.drawSvgPath(pathStr, {
+                            x: 0,
+                            y: height,
                             color: border,
-                            borderWidth: 0,
                             opacity: s.opacity ?? 1,
                         });
                     } else {
@@ -231,14 +238,17 @@ export const exportFlattenedPDF = async (
                     });
                 }
             } else if (s.type === "polygon" && s.points?.length >= 3) {
-                const pdfPts = s.points.map(p => [p.x, height - p.y]);
-                page.drawPolygon({
-                    coordinates: pdfPts,
+                const pathStr = `M ${s.points[0].x} ${s.points[0].y} ` +
+                    s.points.slice(1).map(p => `L ${p.x} ${p.y}`).join(' ') +
+                    ' Z';
+                page.drawSvgPath(pathStr, {
+                    x: 0,
+                    y: height,
                     borderColor: border,
                     borderWidth: thickness,
                     color: fill || undefined,
                     opacity: s.opacity ?? 1,
-                    borderColorOpacity: s.opacity ?? 1,
+                    borderOpacity: s.opacity ?? 1,
                 });
             }
         });
@@ -373,14 +383,17 @@ export const exportFlattenedPDF = async (
                 }
                 area = Math.abs(area / 2);
 
-                const pdfPts = m.points.map(p => [p.x, height - p.y]);
-                page.drawPolygon({
-                    coordinates: pdfPts,
+                const pathStr = `M ${m.points[0].x} ${m.points[0].y} ` +
+                    m.points.slice(1).map(p => `L ${p.x} ${p.y}`).join(' ') +
+                    ' Z';
+                page.drawSvgPath(pathStr, {
+                    x: 0,
+                    y: height,
                     borderColor: border,
                     borderWidth: thickness,
                     color: fill || undefined,
                     opacity: m.opacity ?? 0.8,
-                    borderColorOpacity: m.opacity ?? 1,
+                    borderOpacity: m.opacity ?? 1,
                 });
 
                 const label = m.text ? m.text : `${toUnits2(area).toFixed(2)} ${unitLabel}²`;
@@ -454,24 +467,19 @@ export const exportFlattenedPDF = async (
                             borderWidth: thickness,
                         });
                     } else if (shapeType === "triangle") {
-                        page.drawPolygon({
-                            points: [
-                                { x: p.x, y: pdfY + r * 1.1 },
-                                { x: p.x - r, y: pdfY - r * 0.9 },
-                                { x: p.x + r, y: pdfY - r * 0.9 }
-                            ],
+                        const pathStr = `M ${p.x} ${p.y - r * 1.1} L ${p.x - r} ${p.y + r * 0.9} L ${p.x + r} ${p.y + r * 0.9} Z`;
+                        page.drawSvgPath(pathStr, {
+                            x: 0,
+                            y: height,
                             color: fillColor,
                             borderColor: border,
                             borderWidth: thickness,
                         });
                     } else if (shapeType === "diamond") {
-                        page.drawPolygon({
-                            points: [
-                                { x: p.x, y: pdfY + r * 1.1 },
-                                { x: p.x + r * 1.1, y: pdfY },
-                                { x: p.x, y: pdfY - r * 1.1 },
-                                { x: p.x - r * 1.1, y: pdfY }
-                            ],
+                        const pathStr = `M ${p.x} ${p.y - r * 1.1} L ${p.x + r * 1.1} ${p.y} L ${p.x} ${p.y + r * 1.1} L ${p.x - r * 1.1} ${p.y} Z`;
+                        page.drawSvgPath(pathStr, {
+                            x: 0,
+                            y: height,
                             color: fillColor,
                             borderColor: border,
                             borderWidth: thickness,
@@ -501,12 +509,30 @@ export const exportFlattenedPDF = async (
 
                 if (m.text) {
                     const fontSize = m.fontSize || 12;
-                    page.drawText(m.text, {
-                        x: m.box.x + 6,
-                        y: height - (m.box.y + m.box.h / 2 + fontSize / 3),
-                        size: fontSize,
-                        font: font,
-                        color: rgb(0, 0, 0),
+                    const lines = m.text.split('\n');
+                    const textAlignment = m.textAlign || 'left';
+                    const textCol = hexToRgb(m.textColor || "#000000");
+
+                    lines.forEach((lineText, lineIdx) => {
+                        const textWidth = font.widthOfTextAtSize(lineText, fontSize);
+                        let lineX = m.box.x + 6;
+                        if (textAlignment === 'center') {
+                            lineX = m.box.x + m.box.w / 2 - textWidth / 2;
+                        } else if (textAlignment === 'right') {
+                            lineX = m.box.x + m.box.w - 6 - textWidth;
+                        }
+
+                        const lineY = height - m.box.y - 4 - fontSize - (lineIdx * fontSize * 1.2);
+                        // Ensure we don't draw outside the bottom of the box
+                        if (lineY >= height - m.box.y - m.box.h) {
+                            page.drawText(lineText, {
+                                x: lineX,
+                                y: lineY,
+                                size: fontSize,
+                                font: font,
+                                color: textCol,
+                            });
+                        }
                     });
                 }
             } else if (m.type === "callout" && m.box && m.tip) {
@@ -552,26 +578,30 @@ export const exportFlattenedPDF = async (
                 });
 
                 // Leader arrowhead
-                if (len > 1e-6) {
-                    const ux = tipDx / len;
-                    const uy = tipDy / len;
+                const calloutTipDx = m.tip.x - kx;
+                const calloutTipDy = m.tip.y - ky;
+                const calloutLen = Math.hypot(calloutTipDx, calloutTipDy);
+                if (calloutLen > 1e-6) {
+                    const ux = calloutTipDx / calloutLen;
+                    const uy = calloutTipDy / calloutLen;
                     const px = -uy;
                     const py = ux;
 
-                    const arrowTip = tipPt;
+                    const arrowTip = m.tip;
                     const arrowC1 = {
-                        x: tipPt.x - 8 * sw * ux + 3 * sw * px,
-                        y: tipPt.y - 8 * sw * uy + 3 * sw * py
+                        x: m.tip.x - 8 * sw * ux + 3 * sw * px,
+                        y: m.tip.y - 8 * sw * uy + 3 * sw * py
                     };
                     const arrowC2 = {
-                        x: tipPt.x - 8 * sw * ux - 3 * sw * px,
-                        y: tipPt.y - 8 * sw * uy - 3 * sw * py
+                        x: m.tip.x - 8 * sw * ux - 3 * sw * px,
+                        y: m.tip.y - 8 * sw * uy - 3 * sw * py
                     };
 
-                    page.drawPolygon({
-                        coordinates: [arrowTip, arrowC1, arrowC2],
+                    const pathStr = `M ${arrowTip.x} ${arrowTip.y} L ${arrowC1.x} ${arrowC1.y} L ${arrowC2.x} ${arrowC2.y} Z`;
+                    page.drawSvgPath(pathStr, {
+                        x: 0,
+                        y: height,
                         color: border,
-                        borderWidth: 0,
                         opacity: m.opacity ?? 1,
                     });
                 }
@@ -591,12 +621,29 @@ export const exportFlattenedPDF = async (
                 // Callout text
                 if (m.text) {
                     const fontSize = m.fontSize || 12;
-                    page.drawText(m.text, {
-                        x: m.box.x + 6,
-                        y: height - (m.box.y + m.box.h / 2 + fontSize / 3),
-                        size: fontSize,
-                        font: font,
-                        color: rgb(0, 0, 0),
+                    const lines = m.text.split('\n');
+                    const textAlignment = m.textAlign || 'left';
+
+                    lines.forEach((lineText, lineIdx) => {
+                        const textWidth = font.widthOfTextAtSize(lineText, fontSize);
+                        let lineX = m.box.x + 6;
+                        if (textAlignment === 'center') {
+                            lineX = m.box.x + m.box.w / 2 - textWidth / 2;
+                        } else if (textAlignment === 'right') {
+                            lineX = m.box.x + m.box.w - 6 - textWidth;
+                        }
+
+                        const lineY = height - m.box.y - 4 - fontSize - (lineIdx * fontSize * 1.2);
+                        // Ensure we don't draw outside the bottom of the box
+                        if (lineY >= height - m.box.y - m.box.h) {
+                            page.drawText(lineText, {
+                                x: lineX,
+                                y: lineY,
+                                size: fontSize,
+                                font: font,
+                                color: textCol,
+                            });
+                        }
                     });
                 }
             }

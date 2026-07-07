@@ -237,6 +237,36 @@ const PropertiesPanel = () => {
                                     </button>
                                 </div>
                             </div>
+
+                            {/* Text Align */}
+                            {['text', 'callout'].includes(source?.type) && (
+                                <div className="flex flex-col gap-1">
+                                    <label className="text-xs text-[var(--text-secondary)] font-medium">Text Align</label>
+                                    <div className="flex gap-1 bg-[var(--bg-color)] p-0.5 rounded border border-[var(--border-color)] w-max">
+                                        <button
+                                            onClick={() => updateProp('textAlign', 'left')}
+                                            className={`px-2 h-7 flex items-center justify-center text-xs rounded transition-colors ${(source?.textAlign || 'left') === 'left' ? 'bg-[var(--primary-color)] text-white' : 'text-[var(--text-secondary)] hover:bg-[var(--btn-hover)] hover:text-[var(--text-primary)]'}`}
+                                            title="Left Align"
+                                        >
+                                            Left
+                                        </button>
+                                        <button
+                                            onClick={() => updateProp('textAlign', 'center')}
+                                            className={`px-2 h-7 flex items-center justify-center text-xs rounded transition-colors ${source?.textAlign === 'center' ? 'bg-[var(--primary-color)] text-white' : 'text-[var(--text-secondary)] hover:bg-[var(--btn-hover)] hover:text-[var(--text-primary)]'}`}
+                                            title="Middle Align"
+                                        >
+                                            Middle
+                                        </button>
+                                        <button
+                                            onClick={() => updateProp('textAlign', 'right')}
+                                            className={`px-2 h-7 flex items-center justify-center text-xs rounded transition-colors ${source?.textAlign === 'right' ? 'bg-[var(--primary-color)] text-white' : 'text-[var(--text-secondary)] hover:bg-[var(--btn-hover)] hover:text-[var(--text-primary)]'}`}
+                                            title="Right Align"
+                                        >
+                                            Right
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
                         </>
                     )}
 

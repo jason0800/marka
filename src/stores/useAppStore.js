@@ -343,8 +343,17 @@ const useAppStore = create((set, get) => ({
             const selectedMeasurements = state.measurements.filter((m) =>
                 state.selectedIds.includes(m.id)
             );
+            const items = [...selectedShapes, ...selectedMeasurements];
+            if (items.length > 0) {
+                try {
+                    const jsonStr = JSON.stringify({ source: 'marka', version: '1.0', items });
+                    navigator.clipboard.writeText(jsonStr);
+                } catch (err) {
+                    console.warn("Failed to write to system clipboard during copy:", err);
+                }
+            }
             return {
-                clipboard: [...selectedShapes, ...selectedMeasurements],
+                clipboard: items,
             };
         }),
 
@@ -446,6 +455,14 @@ const useAppStore = create((set, get) => ({
             if (selectedShapes.length === 0 && selectedMeasurements.length === 0) return {};
 
             const clipboard = [...selectedShapes, ...selectedMeasurements];
+            if (clipboard.length > 0) {
+                try {
+                    const jsonStr = JSON.stringify({ source: 'marka', version: '1.0', items: clipboard });
+                    navigator.clipboard.writeText(jsonStr);
+                } catch (err) {
+                    console.warn("Failed to write to system clipboard during cut:", err);
+                }
+            }
 
             const remainingShapes = state.shapes.filter(s => !state.selectedIds.includes(s.id));
             const remainingMeasurements = state.measurements.filter(m => !state.selectedIds.includes(m.id));

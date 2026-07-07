@@ -124,27 +124,34 @@ const ThumbnailsPanel = ({ pdfDocument }) => {
                 className="flex-1 p-4 flex flex-wrap justify-center content-start gap-4 overflow-y-auto overflow-x-hidden"
                 style={{ opacity: isReady ? 1 : 0 }}
             >
-                {sheets.map((sheet, index) => {
-                    const pageNum = index + 1;
-                    return (
-                        <div 
-                            key={sheet.id} 
-                            data-page={pageNum} 
-                            onContextMenu={(e) => handleContextMenu(e, index)}
-                            className="relative p-1"
-                            style={{ width: sliderVal + 8 }}
-                        >
-                            <PDFThumbnail
-                                document={pdfDocument}
-                                pageNumber={pageNum}
-                                sheet={sheet}
-                                isActive={currentPage === pageNum}
-                                onSelect={(n) => setJumpToPage(n)}
-                                width={sliderVal}
-                            />
-                        </div>
-                    );
-                })}
+                {(() => {
+                    const maxSheetWidth = Math.max(1, ...sheets.map(s => s.width || 800));
+                    const maxSheetHeight = Math.max(1, ...sheets.map(s => s.height || 1100));
+
+                    return sheets.map((sheet, index) => {
+                        const pageNum = index + 1;
+                        return (
+                            <div 
+                                key={sheet.id} 
+                                data-page={pageNum} 
+                                onContextMenu={(e) => handleContextMenu(e, index)}
+                                className="relative p-1"
+                                style={{ width: sliderVal + 8 }}
+                            >
+                                <PDFThumbnail
+                                    document={pdfDocument}
+                                    pageNumber={pageNum}
+                                    sheet={sheet}
+                                    isActive={currentPage === pageNum}
+                                    onSelect={(n) => setJumpToPage(n)}
+                                    width={sliderVal}
+                                    maxSheetWidth={maxSheetWidth}
+                                    maxSheetHeight={maxSheetHeight}
+                                />
+                            </div>
+                        );
+                    });
+                })()}
             </div>
 
             <div className="p-3 px-4 border-t border-[var(--border-color)] bg-[var(--bg-secondary)] shrink-0">
